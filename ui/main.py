@@ -7,6 +7,7 @@ class Application(tk.Frame):
         self.grid(padx=10, pady=10)
         self.createWidgets()
         self.showImage()
+        self.tag_dict = dict()
 
     def createWidgets(self):
 
@@ -20,9 +21,14 @@ class Application(tk.Frame):
         self.saveButton.grid(row=1, column=1)
 
         # Set up label log table
-        self.labelTable = tk.Text(self, height=30, width=30)
-        self.labelTable.grid(row=2, columnspan=2)
-        self.labelTable.insert('end', 'X\tY\tTag\n')
+        # self.labelTable = tk.Text(self, height=30, width=30)
+        # self.labelTable.grid(row=2, columnspan=2)
+        # self.labelTable.insert('end', 'X\tY\tTag\n')
+
+        # Set up label listbox
+        self.labelBox = tk.Listbox(self)
+        self.labelBox.grid(row=2, columnspan=2)
+        # self.labelBox.bind('<Button-1>', self.selectLabel)
 
     def showImage(self):
         photo = ImageTk.PhotoImage(Image.open('sample.jpeg'))
@@ -48,8 +54,11 @@ class Application(tk.Frame):
         canvas = event.widget
         x = canvas.canvasx(event.x)
         y = canvas.canvasy(event.y)
-        tag = canvas.find_closest(x, y)
-        self.labelTable.insert('end', '{}\t{}\t{}\n'.format(x,y,tag))
+        marker_tag = canvas.find_closest(x, y)
+        self.labelBox.insert(tk.END, '({},{})'.format(x,y))
+        # self.tag_dict[marker_tag] = self.labelTable.tag_config(marker_tag, foreground="blue", underline=1)
+        # self.labelTable.insert('end', '{}\t{}\t{}\n'.format(x,y,marker_tag), (marker_tag))
+
 
     def save(self):
         # Get coordinates of all labels and write to file as metadata for image tile
