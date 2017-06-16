@@ -8,43 +8,46 @@ class Application(tk.Frame):
         self.createWidgets()
         self.showImage()
         self.marker_dict = dict()
-        self.deleteMode = False
+        self.currentMode = 0
 
     def createWidgets(self):
 
         self.canvas = tk.Canvas(self, width=256, height=256, bd=5)
         self.canvas.grid(row=0, column=1, columnspan=3)
 
-        self.canvas.bind('<Button-1>', self.addLabel)
+        self.canvas.bind('<Button-1>', self.editLabel)
 
-        # Mark as Maybe with right click
-        self.canvas.bind('<Button-2>', self.editLabel)  # for Mac
-        self.canvas.bind('<Button-3>', self.editLabel)
+        # Mode buttons
+        self.modes = tk.LabelFrame(self, text='Mode', padx=5, pady=5)
+        self.modeButtons = []
+        for i, mode in enumerate(['Label', 'Delete', 'Maybe']):
+            self.modeButtons[i] = tk.Button(self.modes, text=mode, command=self.activateMode(i))
+        self.modes.grid(row=0, column=2)
 
-        # Buttons
-        self.deleteButton = tk.Button(self, text='Delete Mode', command=self.deleteMode)
-        self.deleteButton.grid(row=1, column=1)
-        self.saveButton = tk.Button(self, text='Save')
-        self.saveButton.grid(row=1, column=2)
-        self.quitButton = tk.Button(self, text='Quit', command=self.quit)
-        self.quitButton.grid(row=1, column=3)
+        # # Buttons
+        # self.deleteButton = tk.Button(self, text='Delete Mode', command=self.deleteMode)
+        # self.deleteButton.grid(row=1, column=1)
+        # self.saveButton = tk.Button(self, text='Save')
+        # self.saveButton.grid(row=1, column=2)
+        # self.quitButton = tk.Button(self, text='Quit', command=self.quit)
+        # self.quitButton.grid(row=1, column=3)
 
-        self.option_add('*tearOff', False)
-        self.editMenu = tk.Menu(self)
-        self.editMenu.add_command(label='Mark as Maybe', command=self.markAsMaybe)
-        self.editMenu.add_command(label='Delete label', command=self.deleteMarker)
+        # # Set up label listbox
+        # self.labelBox = tk.Listbox(self)
+        # self.labelBox.grid(row=2, columnspan=3)
 
-        # Set up label listbox
-        self.labelBox = tk.Listbox(self)
-        self.labelBox.grid(row=2, columnspan=3)
-
-    def deleteMode(self):
-        self.deleteMode = True if self.deleteMode is True else False
 
     def showImage(self):
         photo = ImageTk.PhotoImage(Image.open('sample.jpeg'))
         self.canvas.create_image(0, 0, anchor='nw', image=photo)
         self.canvas.current_image = photo
+
+    def activateMode(self, mode):
+        for button in self.modeButtons:
+            button.config(relief=tk.RAISED)
+        self.modeButtons[mode].config(relief=tk.SUNKEN)
+        self.currentMode = mode
+
 
     def editLabel(self, event):
         # marker = self.canvas.gettags(tk.CURRENT)
@@ -53,11 +56,6 @@ class Application(tk.Frame):
         # self.labelBox.delete(self.marker_dict[marker[0]])
         # self.labelBox.insert(self.marker_dict[marker[0]], '({},{}) MAYBE'.format(x, y))
         self.editMenu.post(event.x_root, event.y_root)
-
-    def markAsMaybe(self):
-        rad = 5
-        self.canvas.addtag_overlapping(tk.CURRENT)
-
 
     def addLabel(self, event):
         # Specify size of marker
