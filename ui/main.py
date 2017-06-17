@@ -41,12 +41,15 @@ class Application(tk.Frame):
         self.canvas.grid(row=3, column=1)
         self.canvas.bind('<Button-1>', self.editLabel)
 
-
-        # Set up label listbox
-        self.coordTitle = tk.Label(self, text='Labels')
-        self.coordTitle.grid(row=4, column=1)
+        # Row 4-5 coordinate list
+        coordTitle = tk.Label(self, text='Labels')
+        coordTitle.grid(row=4, column=1)
         self.coordList = tk.Listbox(self, width=30)
         self.coordList.grid(row=5, column=1)
+
+        # Row 6 save coordinates
+        saveButton = tk.Button(self, text='Save', command=self.save)
+        saveButton.grid(row=6, column=1)
 
     def showImage(self):
         photo = ImageTk.PhotoImage(Image.open('sample.jpeg'))
@@ -104,8 +107,7 @@ class Application(tk.Frame):
 
     def save(self):
         # Get coordinates of all labels and write to file as metadata for image tile
-        return None
-
+        print(self.coordList.get(0,tk.END))
 
 
 
