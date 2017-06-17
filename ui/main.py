@@ -47,12 +47,19 @@ class Application(tk.Frame):
         self.coordList = tk.Listbox(self, width=30)
         self.coordList.grid(row=5, column=1)
 
-        # Row 6 save coordinates
-        saveButton = tk.Button(self, text='Save', command=self.save)
-        saveButton.grid(row=6, column=1)
+        # Row 6 save coordinates / next image
+        navBox = tk.Frame(self)
+        navBox.grid(row=6, column=1)
+        prevButton = tk.Button(navBox, text='Back', command=self.prevImage)
+        prevButton.grid(row=1, column=0)
+        saveButton = tk.Button(navBox, text='Save', command=self.saveCoords)
+        saveButton.grid(row=1, column=1)
+        nextButton = tk.Button(navBox, text='Next', command=self.nextImage)
+        nextButton.grid(row=1, column=2)
 
-    def showImage(self):
-        photo = ImageTk.PhotoImage(Image.open('sample.jpeg'))
+
+    def showImage(self, path='sample.jpeg'):
+        photo = ImageTk.PhotoImage(Image.open(path))
         self.canvas.create_image(0, 0, anchor='nw', image=photo)
         self.canvas.current_image = photo
 
@@ -105,11 +112,15 @@ class Application(tk.Frame):
         return label_str
 
 
-    def save(self):
+    def saveCoords(self):
         # Get coordinates of all labels and write to file as metadata for image tile
         print(self.coordList.get(0,tk.END))
 
+    def nextImage(self):
+        return None
 
+    def prevImage(self):
+        return None
 
 app = Application()
 app.master.title('Termite Mound Labeller')
