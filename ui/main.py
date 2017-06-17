@@ -78,28 +78,28 @@ class Application(tk.Frame):
             # If the closest marker is the canvas itself, add red
             if closest_marker[0] == 1:
                 marker = self.canvas.create_oval(x1, y1, x2, y2, fill='red')
-                self.addCoords(event, marker)
+                label_str = self.getCoords(event, marker) + ' (maybe)'
+                self.coordList.insert(tk.END, label_str)
             # if in the space of the dot, make red
             else:
-                self.canvas.itemconfig(closest_marker, fill='red')
+                marker = self.canvas.itemconfig(closest_marker, fill='red')
+                self.coordList.delete(self.marker_dict[closest_marker[0]])
+                label_str = self.getCoords(event, marker) + ' (maybe)'
+                self.coordList.insert(self.marker_dict[closest_marker[0]], label_str)
         else:
             # Create dot
             marker = self.canvas.create_oval(x1, y1, x2, y2, fill='blue')
-            self.addCoords(event, marker)
+            label_str = self.getCoords(event, marker)
+            self.coordList.insert(tk.END, label_str)
 
-    def addCoords(self, event, marker):
+    def getCoords(self, event, marker):
         # Find coordinates in image and print to table
+        self.marker_dict[marker] = self.coordList.size()
         canvas = event.widget
         x = canvas.canvasx(event.x)
         y = canvas.canvasy(event.y)
         label_str = '{},{}'.format(x,y)
-        if self.currentMode.get() == 1:
-            label_str += ' (maybe)'
-        self.marker_dict[marker] = self.coordList.size()
-        self.coordList.insert(tk.END, label_str)
-
-        print(self.marker_dict)
-
+        return label_str
 
 
     def save(self):
