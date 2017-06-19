@@ -13,12 +13,13 @@ def deg2num(lat_deg, lon_deg, zoom):
     ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
     return (xtile, ytile)
 
-# def num2deg(x, y, zoom):
-#     """Tile numbers, zoom level to lon./lat."""
-#     n = 2.0 ** zoom
-#     lon_deg = x * (360.0 * n) - 180.0
-#
-#
+def num2deg(xtile, ytile, zoom):
+  n = 2.0 ** zoom
+  lon_deg = xtile / n * 360.0 - 180.0
+  lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+  lat_deg = math.degrees(lat_rad)
+  return (lat_deg, lon_deg)
+
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -136,11 +137,14 @@ class Application(tk.Frame):
         print(local_filename)
         return local_filename
 
-    # def updateCoordsFromCurrentTile(self):
-    #
+    def updateCoordsFromCurrentTile(self):
+        lat_deg, lon_deg = num2deg(self.loc['xtile'], self.loc['ytile'], self.loc['zl'].get())
+        self.loc['lat'].set(str(lat_deg))
+        self.loc['lon'].set(str(lon_deg))
 
     def showImage(self, path='sample.jpeg'):
         # need to tag this as 1
+        self.updateCoordsFromCurrentTile()
         photo = ImageTk.PhotoImage(Image.open(path))
         self.current_image = self.canvas.create_image(0, 0, anchor='nw', image=photo)
         self.canvas.current_image = photo
@@ -194,7 +198,7 @@ class Application(tk.Frame):
         # Writes to file with timestamp (take latest)
         print(self.coord_list.get(0, tk.END))
 
-    def nextImage(self):
+    def clearCanvas(self):
         # delete markers using marker dictionary keys
         for k in self.marker_dict.keys():
             self.canvas.delete(k)
@@ -205,16 +209,20 @@ class Application(tk.Frame):
         # clear marker dictionary
         self.marker_dict = dict()
 
-        xnew = self.loc['xtile']+1
+    def nextImage(self):
+        self.clearCanvas()
+        self.loc['xtile'] += 1
+        xnew = self.loc['xtile']
         ynew = self.loc['ytile']
         znew = self.loc['zl'].get()
         local_filename = self.getLocalImage(xnew, ynew, znew)
         self.showImage(local_filename)
-        # self.showImage('sample_airplanes.jpeg')
 
 
     def prevImage(self):
-        return None
+        self.clearCanvas()
+        self.showImage('sample_airplanes.jpeg')
+
 
 
 
