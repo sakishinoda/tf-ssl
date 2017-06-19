@@ -13,6 +13,13 @@ def deg2num(lat_deg, lon_deg, zoom):
     ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
     return (xtile, ytile)
 
+# def num2deg(x, y, zoom):
+#     """Tile numbers, zoom level to lon./lat."""
+#     n = 2.0 ** zoom
+#     lon_deg = x * (360.0 * n) - 180.0
+#
+#
+
 class Application(tk.Frame):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
@@ -25,10 +32,21 @@ class Application(tk.Frame):
 
         # Create marker dict
         self.marker_dict = dict()
-        self.loc = (tk.StringVar(), tk.StringVar(), tk.IntVar())
-        self.loc[0].set('15.0')
-        self.loc[1].set('-13.0')
-        self.loc[2].set(18)
+        self.loc = dict(
+            lat=tk.StringVar(),
+            lon=tk.StringVar(),
+            zl=tk.IntVar(),
+            xtile=0,
+            ytile=0
+        )
+
+        self.loc['lat'].set('15.0')
+        self.loc['lon'].set('-13.0')
+        self.loc['zl'].set(18)
+        self.loc['xtile'], self.loc['ytile'] = deg2num(
+            float(self.loc['lat'].get()),
+            float(self.loc['lon'].get()),
+            int(self.loc['zl'].get()))
 
         self.createWidgets()
         self.showImage()
@@ -38,23 +56,22 @@ class Application(tk.Frame):
         # Make widgets
         # Coordinate entry
         coord_box = tk.LabelFrame(self, text='Location', width=256, labelanchor='n')
-        lat = tk.Entry(coord_box, textvariable=self.loc[0])
-        long = tk.Entry(coord_box, textvariable=self.loc[1])
-        zl = tk.Entry(coord_box, textvariable=self.loc[2])
+        lat = tk.Entry(coord_box, textvariable=self.loc['lat'])
+        lon = tk.Entry(coord_box, textvariable=self.loc['lon'])
+        zl = tk.Entry(coord_box, textvariable=self.loc['zl'])
 
         lat.grid(row=0, column=1)
-        long.grid(row=1, column=1)
+        lon.grid(row=1, column=1)
         zl.grid(row=2, column=1)
 
         lat_label = tk.Label(coord_box, text='Latitude')
         lat_label.grid(row=0, column=0)
-        long_label = tk.Label(coord_box, text='Longitude')
-        long_label.grid(row=1, column=0)
+        lon_label = tk.Label(coord_box, text='Longitude')
+        lon_label.grid(row=1, column=0)
         zoom_label = tk.Label(coord_box, text='Zoom Level')
         zoom_label.grid(row=2, column=0)
 
-
-        fetch_button = tk.Button(coord_box, text='Fetch image', command=self.fetchImage)
+        fetch_button = tk.Button(coord_box, text='Fetch image', command=self.loadImageFromCoords)
         fetch_button.grid(row=3, columnspan=2)
 
         # Mode radio buttons
@@ -100,18 +117,27 @@ class Application(tk.Frame):
         self.coord_list.grid(row=5, column=1)
         nav_box.grid(row=6, column=1)
 
-    def fetchImage(self):
-        lat = float(self.loc[0].get())
-        long = float(self.loc[1].get())
-        zl = int(self.loc[2].get())
+    def loadImageFromCoords(self):
+        lat = float(self.loc['lat'].get())
+        lon = float(self.loc['lon'].get())
+        zl = int(self.loc['zl'].get())
         # zoom = 18
-        x, y = deg2num(lat, long, zl)
+        x, y = deg2num(lat, lon, zl)
+        self.loc['xtile'] = x
+        self.loc['ytile'] = y
+        local_filename = self.getLocalImage(x, y, zl)
+        self.showImage(local_filename)
+
+    @staticmethod
+    def getLocalImage(x, y, zl):
         path = "https://mt2.google.com/vt/lyrs=s&x={}&y={}&z={}".format(x, y, zl)
         print(path)
         local_filename, _ = urllib.request.urlretrieve(path)
         print(local_filename)
-        self.showImage(local_filename)
+        return local_filename
 
+    # def updateCoordsFromCurrentTile(self):
+    #
 
     def showImage(self, path='sample.jpeg'):
         # need to tag this as 1
@@ -135,7 +161,6 @@ class Application(tk.Frame):
 
             # Remove entry from backend dictionary
             self.marker_dict.pop(closest_marker[0])
-
 
         elif self.current_mode.get() == 1:
             # If the closest marker is the canvas itself, add red
@@ -180,7 +205,13 @@ class Application(tk.Frame):
         # clear marker dictionary
         self.marker_dict = dict()
 
-        self.showImage('sample_airplanes.jpeg')
+        xnew = self.loc['xtile']+1
+        ynew = self.loc['ytile']
+        znew = self.loc['zl'].get()
+        local_filename = self.getLocalImage(xnew, ynew, znew)
+        self.showImage(local_filename)
+        # self.showImage('sample_airplanes.jpeg')
+
 
     def prevImage(self):
         return None
