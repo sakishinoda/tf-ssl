@@ -1,7 +1,9 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 import math
+from random import randint
 import urllib.request
+from collections import defaultdict
 
 
 def deg2num(lat_deg, lon_deg, zoom):
@@ -14,17 +16,115 @@ def deg2num(lat_deg, lon_deg, zoom):
     return (xtile, ytile)
 
 def num2deg(xtile, ytile, zoom):
-  n = 2.0 ** zoom
-  lon_deg = xtile / n * 360.0 - 180.0
-  lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-  lat_deg = math.degrees(lat_rad)
-  return (lat_deg, lon_deg)
+    n = 2.0 ** zoom
+    lon_deg = xtile / n * 360.0 - 180.0
+    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+    lat_deg = math.degrees(lat_rad)
+    return (lat_deg, lon_deg)
+
+class DataCollector(object):
+    def __init__(self):
+        """
+        Metadata to collect during data collection
+            * Time stamp
+            * Tile numbers (x, y, z)
+            * Coordinates (lat_deg, lon_deg)
+            * Annotations
+
+        Image tile dictionary
+        Key is the tuple (x, y, z)
+        Nested dictionary of visit number
+        Elements are dictionary with:
+            * URL
+            * URL fetch time
+            * HTTP headers
+            * Local filepath
+            * Labels (dictionary)
+        """
+
+        self.data = dict()
+
+    def createEntry(self, tile_tuple, fetch_url, headers, local_filename):
+
+        self.current_tile = tile_tuple
+
+        if tile_tuple in self.data.keys():
+            self.data[tile_tuple]['visit_count'] += 1
+        else:
+            self.data[tile_tuple] = {'visit_count': 0}
+
+        visit_no = self.data[tile_tuple]['visit_count']
+
+        self.current_visit = visit_no
+
+        self.data[tile_tuple][visit_no] = {
+            'url': fetch_url,
+            'response': headers,
+            'local': local_filename
+        }
+
+    def updateEntry(self, tile_tuple, label_list):
+        visit_no = self.data[tile_tuple]['visit_count']
+        self.data[tile_tuple][visit_no]['labels'] = label_list
+
+
+
+class TileQueue(object):
+    def __init__(self):
+        self.tiles = defaultdict(dict)
+
+    def generateQuery(self, tile_tuple):
+
+        # Generate server number 0-3
+        n = randint(0, 4)
+        # Extract tile numbers
+        x, y, z = tile_tuple
+        # Generate path
+        path = "https://mt{}.google.com/vt/lyrs=s&x={}&y={}&z={}".format(n, x, y, z)
+
+        # Add path to dictionary
+        self.tiles[tile_tuple]['url'] = path
+
+        # Compute latitude/longitude
+        self.tiles[tile_tuple]['lat'], self.tiles[tile_tuple]['lon'] = num2deg(x, y, z)
+
+        return path
+
+    def fetchTile(self, tile_tuple):
+
+        if 'url' in self.tiles[tile_tuple].keys():
+            path = self.tiles[tile_tuple]['url']
+        else:
+            path = self.generateQuery(tile_tuple)
+
+        local_filename, headers = urllib.request.urlretrieve(path)
+
+        self.tiles[tile_tuple]['local'] = local_filename
+        self.tiles[tile_tuple]['headers'] = headers
+
+        return local_filename
+
+
 
 
 class Application(tk.Frame):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
         self.grid(padx=10, pady=10)
+
+        # Set up tile queue and data collector
+        self.Queue = list()
+        base_lat = 15.0
+        base_lon = -13.0
+        zl = 18
+        for i in range(-5, 5, 1):
+            for j in range(-5, 5, 1):
+                lat = base_lat + i*0.1
+                lon = base_lat + j*0.1
+                x, y = deg2num(lat, lon, zl)
+                self.Queue.append((x, y, zl))
+
+        self.Data = DataCollector()
 
         # Set up mode state
         self.current_mode = tk.IntVar()
@@ -41,9 +141,9 @@ class Application(tk.Frame):
             ytile=0
         )
 
-        self.loc['lat'].set('15.0')
-        self.loc['lon'].set('-13.0')
-        self.loc['zl'].set(18)
+        self.loc['lat'].set(base_lat)
+        self.loc['lon'].set(base_lon)
+        self.loc['zl'].set(zl)
         self.loc['xtile'], self.loc['ytile'] = deg2num(
             float(self.loc['lat'].get()),
             float(self.loc['lon'].get()),
@@ -52,15 +152,55 @@ class Application(tk.Frame):
         self.createWidgets()
         self.showImage()
 
-    def createWidgets(self):
+    def createLabelWidgets(self):
+        self.label_box = tk.Frame(self)
+        # Mode radio buttons
+        mode_box = tk.LabelFrame(self.label_box, text='Mode', width=256, labelanchor='n')
 
-        # Make widgets
+        modes = [
+            ("Label", 2),
+            ("Delete", 0),
+            ("Maybe", 1)
+        ]
+        for text, mode in modes:
+            b = tk.Radiobutton(mode_box, text=text,
+                               variable=self.current_mode, value=mode, indicatoron=0)
+            b.grid(row=0, column=mode)
+
+        # Coordinate list
+        coord_title = tk.Label(self.label_box, text='Labels')
+        self.coord_list = tk.Listbox(self.label_box, width=30)
+
+        # Nav box: Save coordinates / next image
+        nav_box = tk.Frame(self.label_box)
+        prev_button = tk.Button(nav_box, text='Back', command=self.prevImage)
+        save_button = tk.Button(nav_box, text='Save', command=self.saveCoords)
+        next_button = tk.Button(nav_box, text='Next', command=self.nextImage)
+        prev_button.grid(row=3, column=0)
+        save_button.grid(row=3, column=1)
+        next_button.grid(row=3, column=2)
+
+        # Title
+        label_title = tk.Label(self.label_box, text='Label', fg='blue')
+        label_title.grid(row=0, columnspan=3)
+
+        # Place labelling components
+        mode_box.grid(row=1, columnspan=3)
+        coord_title.grid(row=2, columnspan=3)
+        self.coord_list.grid(row=3, columnspan=3)
+        nav_box.grid(row=4, columnspan=3)
+
+    def createDiscoverWidgets(self):
+
+        self.discover_box = tk.Frame(self)
+
         # Coordinate entry
-        coord_box = tk.LabelFrame(self, text='Location', width=256, labelanchor='n')
+        coord_box = tk.LabelFrame(self.discover_box, text='Location', width=256, labelanchor='n')
         lat = tk.Entry(coord_box, textvariable=self.loc['lat'])
         lon = tk.Entry(coord_box, textvariable=self.loc['lon'])
         zl = tk.Entry(coord_box, textvariable=self.loc['zl'])
 
+        # Coord_box
         lat.grid(row=0, column=1)
         lon.grid(row=1, column=1)
         zl.grid(row=2, column=1)
@@ -75,79 +215,56 @@ class Application(tk.Frame):
         fetch_button = tk.Button(coord_box, text='Fetch image', command=self.loadImageFromCoords)
         fetch_button.grid(row=3, columnspan=2)
 
-        # Mode radio buttons
-        mode_box = tk.LabelFrame(self, text='Mode', width=256, labelanchor='n')
+        # Compass box
+        cps_box = tk.LabelFrame(self.discover_box, text='Compass', labelanchor='n', width=256)
+        n_button = tk.Button(cps_box, text='North', command=self.goNorth)
+        s_button = tk.Button(cps_box, text='South', command=self.goSouth)
+        w_button = tk.Button(cps_box, text='West', command=self.goWest)
+        e_button = tk.Button(cps_box, text='East', command=self.goEast)
+        n_button.grid(row=0, column=1)
+        w_button.grid(row=1, column=0)
+        e_button.grid(row=1, column=2)
+        s_button.grid(row=2, column=1)
 
-        modes = [
-            ("Label", 2),
-            ("Delete", 0),
-            ("Maybe", 1)
-        ]
-        for text, mode in modes:
-            b = tk.Radiobutton(mode_box, text=text,
-                               variable=self.current_mode, value=mode, indicatoron=0)
-            b.grid(row=0, column=mode)
+        # Title
+        discover_title = tk.Label(self.discover_box, text='Discover', fg='blue')
+        discover_title.grid(row=0, column=1)
 
-        # Row 2 separator
+        # Place discover components
+        coord_box.grid(row=1, column=1)
+        cps_box.grid(row=2, column=1)
+
+    def createWidgets(self):
+
+        # Make widgets
+        self.createLabelWidgets()
+        self.createDiscoverWidgets()
+
         separator = tk.Frame(self, height=5)
-
         # Row 3 canvas
         self.canvas = tk.Canvas(self, width=256, height=256)
         self.canvas.bind('<Button-1>', self.editLabel)
 
-        # Row 4-5 coordinate list
-        coord_title = tk.Label(self, text='Labels')
-        self.coord_list = tk.Listbox(self, width=30)
+        # separator.grid(row=1, column=1)
+        self.canvas.grid(row=1, column=1)
+        self.label_box.grid(row=2, column=1)
+        self.discover_box.grid(row=3, column=1)
 
-        # Row 6 save coordinates / next image
-        nav_box = tk.Frame(self)
-        prev_button = tk.Button(nav_box, text='Back', command=self.prevImage)
-        save_button = tk.Button(nav_box, text='Save', command=self.saveCoords)
-        next_button = tk.Button(nav_box, text='Next', command=self.nextImage)
+    def goNorth(self):
+        self.loc['ytile'] -= 1
+        self.updateImageFromTileNumbers()
 
-        prev_button.grid(row=1, column=0)
-        save_button.grid(row=1, column=1)
-        next_button.grid(row=1, column=2)
+    def goSouth(self):
+        self.loc['ytile'] += 1
+        self.updateImageFromTileNumbers()
 
-        # Order widgets
-        coord_box.grid(row=0, column=1)
-        mode_box.grid(row=1, column=1)
-        separator.grid(row=2, column=1)
-        self.canvas.grid(row=3, column=1)
-        coord_title.grid(row=4, column=1)
-        self.coord_list.grid(row=5, column=1)
-        nav_box.grid(row=6, column=1)
+    def goEast(self):
+        self.loc['xtile'] += 1
+        self.updateImageFromTileNumbers()
 
-    def loadImageFromCoords(self):
-        lat = float(self.loc['lat'].get())
-        lon = float(self.loc['lon'].get())
-        zl = int(self.loc['zl'].get())
-        # zoom = 18
-        x, y = deg2num(lat, lon, zl)
-        self.loc['xtile'] = x
-        self.loc['ytile'] = y
-        local_filename = self.getLocalImage(x, y, zl)
-        self.showImage(local_filename)
-
-    @staticmethod
-    def getLocalImage(x, y, zl):
-        path = "https://mt2.google.com/vt/lyrs=s&x={}&y={}&z={}".format(x, y, zl)
-        print(path)
-        local_filename, _ = urllib.request.urlretrieve(path)
-        print(local_filename)
-        return local_filename
-
-    def updateCoordsFromCurrentTile(self):
-        lat_deg, lon_deg = num2deg(self.loc['xtile'], self.loc['ytile'], self.loc['zl'].get())
-        self.loc['lat'].set(str(lat_deg))
-        self.loc['lon'].set(str(lon_deg))
-
-    def showImage(self, path='sample.jpeg'):
-        # need to tag this as 1
-        self.updateCoordsFromCurrentTile()
-        photo = ImageTk.PhotoImage(Image.open(path))
-        self.current_image = self.canvas.create_image(0, 0, anchor='nw', image=photo)
-        self.canvas.current_image = photo
+    def goWest(self):
+        self.loc['xtile'] -= 1
+        self.updateImageFromTileNumbers()
 
     def editLabel(self, event):
         # Specify size of marker
@@ -170,21 +287,54 @@ class Application(tk.Frame):
             # If the closest marker is the canvas itself, add red
             if closest_marker[0] == self.current_image:
                 marker = self.canvas.create_oval(x1, y1, x2, y2, fill='red', tags=('marker',))
-                label_str = self.getCoords(event, marker) + ' (maybe)'
+                label_str = self.getLabelString(event, marker) + ' (maybe)'
                 self.coord_list.insert(tk.END, label_str)
             # if in the space of the dot, make red
             else:
                 marker = self.canvas.itemconfig(closest_marker, fill='red')
                 self.coord_list.delete(self.marker_dict[closest_marker[0]])
-                label_str = self.getCoords(event, marker) + ' (maybe)'
+                label_str = self.getLabelString(event, marker) + ' (maybe)'
                 self.coord_list.insert(self.marker_dict[closest_marker[0]], label_str)
         else:
             # Create dot
             marker = self.canvas.create_oval(x1, y1, x2, y2, fill='blue', tags=('marker',))
-            label_str = self.getCoords(event, marker)
+            label_str = self.getLabelString(event, marker)
             self.coord_list.insert(tk.END, label_str)
 
-    def getCoords(self, event, marker):
+    def showImage(self, path='sample.jpeg'):
+        # need to tag this as 1
+        # self.updateCoordsFromCurrentTile()
+        photo = ImageTk.PhotoImage(Image.open(path))
+        self.current_image = self.canvas.create_image(0, 0, anchor='nw', image=photo)
+        self.canvas.current_image = photo  # maintain reference to prevent garbage collection
+
+    def updateImageFromTileNumbers(self):
+        path = self.downloadImage(self.loc['xtile'], self.loc['ytile'], self.loc['zl'].get())
+        self.showImage(path)
+        self.updateCoordsFromCurrentTile()
+
+    def downloadImage(self, x, y, zl):
+        n = randint(0, 3)
+        path = "https://mt{}.google.com/vt/lyrs=s&x={}&y={}&z={}".format(n, x, y, zl)
+        local_filename, headers = urllib.request.urlretrieve(path)
+        self.Data.createEntry((x, y, zl), path, headers, local_filename)
+        return local_filename
+
+    def loadImageFromCoords(self):
+        lat = float(self.loc['lat'].get())
+        lon = float(self.loc['lon'].get())
+        zl = int(self.loc['zl'].get())
+        x, y = deg2num(lat, lon, zl)
+        self.loc['xtile'] = x
+        self.loc['ytile'] = y
+        self.updateImageFromTileNumbers()
+
+    def updateCoordsFromCurrentTile(self):
+        lat_deg, lon_deg = num2deg(self.loc['xtile'], self.loc['ytile'], self.loc['zl'].get())
+        self.loc['lat'].set(str(lat_deg))
+        self.loc['lon'].set(str(lon_deg))
+
+    def getLabelString(self, event, marker):
         # Find coordinates in image and print to table
         self.marker_dict[marker] = self.coord_list.size()
         canvas = event.widget
@@ -196,7 +346,10 @@ class Application(tk.Frame):
     def saveCoords(self):
         # Get coordinates of all labels and write to file as metadata for image tile
         # Writes to file with timestamp (take latest)
-        print(self.coord_list.get(0, tk.END))
+        tile_tuple = (self.loc['xtile'], self.loc['ytile'], self.loc['zl'].get())
+        label_list = self.coord_list.get(0, tk.END)
+        self.Data.updateEntry(tile_tuple, label_list)
+        print(label_list)
 
     def clearCanvas(self):
         # delete markers using marker dictionary keys
@@ -215,9 +368,8 @@ class Application(tk.Frame):
         xnew = self.loc['xtile']
         ynew = self.loc['ytile']
         znew = self.loc['zl'].get()
-        local_filename = self.getLocalImage(xnew, ynew, znew)
+        local_filename = self.downloadImage(xnew, ynew, znew)
         self.showImage(local_filename)
-
 
     def prevImage(self):
         self.clearCanvas()
@@ -228,7 +380,7 @@ class Application(tk.Frame):
 
 
 app = Application()
-app.master.title('Termite Mound Labeller')
+app.master.title('Labeller')
 app.mainloop()
 
 
