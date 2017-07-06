@@ -183,7 +183,7 @@ class Decoder(object):
 
     def build(self, u_l):
 
-        for l in range(self.noisy.n_layers, -1, -1):
+        for l in range(self.noisy.n_layers-1, -1, -1):
             u_l, rc_cost = self.compute_rc_cost(l, u_l)
             self.rc_cost += rc_cost
 
@@ -213,4 +213,4 @@ class Decoder(object):
 
 class GammaDecoder(Decoder):
     def build(self, u_l):
-        _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers, u_l)
+        _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers-1, u_l)
