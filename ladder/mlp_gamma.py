@@ -15,7 +15,7 @@ BATCH_SIZE = 100
 INPUT_SIZE = 784
 TRAIN_FLAG = True
 OUTPUT_SIZE = 10
-EX_ID = 'enc_save'
+EX_ID = 'mlp_gamma_all'
 N = mnist.train.num_examples
 # MAX_ITER = 100
 MAX_EPOCHS = 100
@@ -78,6 +78,7 @@ recons = combinator.outputs
 rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(recons) - target_z), axis=-1)
 
 
+
 # test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
 # with tf.Session() as sess:
 #     sess.run(tf.global_variables_initializer())
@@ -122,7 +123,7 @@ tf.summary.scalar('error', err_op)
 merged = tf.summary.merge_all()
 
 test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
-print('Epoch', 'Step', 'TrainErr', 'TestErr', sep='\t')
+print('Epoch', 'Step', 'TrainErr(%)', 'TestErr(%)', sep='\t')
 # Training
 for step in range(decay_end):
     train_dict = make_feed(*mnist.train.next_batch(BATCH_SIZE))
@@ -136,10 +137,10 @@ for step in range(decay_end):
             sess.run([merged, err_op], train_dict)
         test_summary, test_acc = \
             sess.run([merged, err_op], test_dict)
-        train_writer.add_summary(train_summary, step)
-        test_writer.add_summary(test_summary, step)
+        train_writer.add_summary(train_summary, global_step=step)
+        test_writer.add_summary(test_summary, global_step=step)
 
-        print(epoch, step, train_acc, test_acc, sep='\t')
+        print(epoch, step, train_acc*100, test_acc*100, sep='\t')
 
 # Save final model
 saved_to = saver.save(sess, save_to)

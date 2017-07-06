@@ -83,8 +83,8 @@ class Encoder(object):
                                        noise_sd=noise_sd,
                                        reuse=reuse) for i in range(self.n_layers)]
 
-        self.wts_init = layers.xavier_initializer()
-        self.bias_init = tf.truncated_normal_initializer(stddev=1e-6)
+        # self.wts_init = layers.xavier_initializer()
+        # self.bias_init = tf.truncated_normal_initializer(stddev=1e-6)
 
         self.loss, self.predict = self.build(training)
 
@@ -96,7 +96,7 @@ class Encoder(object):
         for l in range(1, self.n_layers):
             size_out = self.layer_sizes[l]
             bn = self.bn_layers[l]
-            self.z_pre[l] = fclayer(self.h[l-1], size_out, self.wts_init, self.bias_init, self.reuse, self.scope+str(l))
+            self.z_pre[l] = fclayer(self.h[l-1], size_out, reuse=self.reuse, scope=self.scope+str(l))
 
             if l == self.n_layers - 1:
                 self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
@@ -114,7 +114,7 @@ class Encoder(object):
 
 
 class Combinator(object):
-    def __init__(self, inputs, layer_sizes=(2,2,2), stddev=0.006):
+    def __init__(self, inputs, layer_sizes=(2,2,2), stddev=0.006, scope='com'):
         """
         :param inputs:
         :param layer_sizes: Hidden layers
@@ -123,7 +123,7 @@ class Combinator(object):
         self.wts_init = tf.random_normal_initializer(stddev=stddev)
         self.bias_init = tf.truncated_normal_initializer(stddev=1e-6)
         self.reuse = None
-        self.scope = 'com'
+        self.scope = scope
         self.outputs = self.build(inputs, layer_sizes)
 
 
@@ -169,3 +169,48 @@ def fclayer(input,
 
 def lrelu(x, alpha=0.1):
     return tf.maximum(x, alpha*x)
+
+
+class Decoder(object):
+    def __init__(self, noisy, clean):
+
+        self.scope = 'dec'
+        self.noisy = noisy
+        self.clean = clean
+        self.rc_cost = 0
+        u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
+        self.build(u_l)
+
+    def build(self, u_l):
+
+        for l in range(self.noisy.n_layers, -1, -1):
+            u_l, rc_cost = self.compute_rc_cost(l, u_l)
+            self.rc_cost += rc_cost
+
+    def compute_rc_cost(self, l, v_l):
+        noisy, clean = self.noisy, self.clean
+
+        # Use decoder weights to upsample the signal from above
+        size_out = noisy.layer_sizes[l]
+        u_l = fclayer(v_l, size_out, scope=self.scope + str(l))
+
+        # Unbatch-normalized activations from parallel layer in noisy encoder
+        z_l = noisy.z[l]
+
+        # Unbatch-normalized target activations from parallel layer in clean encoder
+        target_z = clean.z[l]
+
+        # Augmented multiplicative term
+        uz_l = tf.multiply(u_l, z_l)
+
+        inputs = tf.stack([u_l, z_l, uz_l], axis=-1)
+        combinator = Combinator(inputs, layer_sizes=(2, 2, 1), stddev=0.025, scope='com' + str(l) + '_')
+        recons = combinator.outputs
+        rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(recons) - target_z), axis=-1)
+
+        return v_l, rc_cost
+
+
+class GammaDecoder(Decoder):
+    def build(self, u_l):
+        _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers, u_l)
