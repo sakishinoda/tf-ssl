@@ -7,7 +7,7 @@ Performance benchmarks on MNIST, CIFAR-10, CIFAR-100, SVHN below (and [here](htt
 ---
 
 
-#### Permutation Invariant MNIST
+#### Permutation Invariant MNIST (Average Error Rate, %)
 
 | 100 labels  | 1000 labels   | All labels | Method   | Year  |
 |---|---|---|---|---| 
