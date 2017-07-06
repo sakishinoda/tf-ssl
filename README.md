@@ -2,7 +2,7 @@
 
 Implementations of the state-of-the-art for semi-supervised deep learning.
 
-Performance benchmarks on MNIST, CIFAR-10, CIFAR-100, SVHN [on my blog](http://www.sakishinoda.com/2017/07/05/semisupervised-deep-learning-classification-results.html) and below. 
+Performance benchmarks on MNIST, CIFAR-10, CIFAR-100, SVHN below (and [here](http://www.sakishinoda.com/2017/07/05/semisupervised-deep-learning-classification-results.html)). 
 
 ---
 
