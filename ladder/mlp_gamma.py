@@ -1,116 +1,12 @@
-import tensorflow as tf
-import tensorflow.contrib.layers as layers
-from collections import OrderedDict
 
-class NoisyBNLayer(object):
-
-    def __init__(self, scope_name, size, noise_sd=None, decay=0.99, var_ep=1e-5):
-        self.scope_name = scope_name
-        self.size = size
-        self.noise_sd = noise_sd
-        self.decay = decay
-        self.var_ep = var_ep
-        with tf.variable_scope(scope_name, reuse=False):
-            self.scale = tf.get_variable('NormScale', initializer=tf.ones([size]))
-            self.beta = tf.get_variable('NormOffset', initializer=tf.zeros([size]))
-            self.pop_mean = tf.get_variable('PopulationMean', initializer=tf.zeros([size]), trainable=False)
-            self.pop_var = tf.get_variable('PopulationVariance', initializer=tf.fill([size], 1e-2), trainable=False)
-        # self.batch_mean, self.batch_var = None, None
-
-    def normalize(self, x, training=True):
-        eps = self.var_ep
-        if training:
-            batch_mean, batch_var = tf.nn.moments(x, [0])
-            # self.batch_mean, self.batch_var = batch_mean, batch_var
-            train_mean_op = tf.assign(self.pop_mean,
-                                      self.pop_mean * self.decay + batch_mean * (1 - self.decay))
-            train_var_op = tf.assign(self.pop_var,
-                                     self.pop_var * self.decay + batch_var * (1 - self.decay))
-
-            with tf.control_dependencies([train_mean_op, train_var_op]):
-                return tf.divide(tf.subtract(x, batch_mean), tf.add(tf.sqrt(batch_var), eps))
-
-        else:
-            return tf.divide(tf.subtract(x, self.pop_mean), tf.add(tf.sqrt(self.pop_var), eps))
-
-    def add_noise(self, x):
-        if self.noise_sd is not None:
-            noise = tf.random_normal(shape=(BATCH_SIZE, self.size), mean=0.0, stddev=self.noise_sd)
-            return x + noise
-        else
-            return x
-
-    def apply_shift_scale(self, x, shift=True, scale=True):
-        if shift:
-            x = tf.add(x, self.beta)
-        if scale:
-            x = tf.multiply(self.scale, x)
-        return x
+from source import *
+from math import floor
+from tensorflow.examples.tutorials.mnist import input_data
+mnist = input_data.read_data_sets('../data/mnist/', one_hot=True)
 
 
-class Encoder(object):
-    def __init__(self, x, y, layer_sizes, noise_sd=None, reuse=None):
-        """
-
-        :param scope:
-        :param x:
-        :param y:
-        :param layer_sizes:
-        :param noise_sd: only a single scalar for all levels at this point
-        """
-        self.scope = 'enc'
-        self.reuse = reuse
-        self.n_layers = len(layer_sizes)
-        self.layer_sizes = layer_sizes
-
-        self.x = x
-        self.z_pre = list()
-        self.z = list()
-        self.h = list()
-        self.y = y
-
-        self.bn_layers = [NoisyBNLayer(scope_name=self.scope+'_bn'+str(i),
-                                       size=layer_sizes[i],
-                                       noise_sd=noise_sd) for i in range(self.n_layers)]
-
-        self.s_cost = None
-
-        self.wts_init = layers.xavier_initializer()
-        self.bias_init = tf.truncated_normal_initializer(stddev=1e-6)
-
-    def forward_pass(self, training=True):
-        for l in range(1, self.n_layers):
-            output_size = self.layer_sizes[l]
-            bn = self.bn_layers[l]
-
-            self.z_pre[l] = layers.fully_connected(
-                inputs=self.h[l - 1],
-                num_outputs=output_size,
-                activation_fn=None,
-                normalizer_fn=None,
-                normalizer_params=None,
-                weights_initializer=self.wts_init,
-                weights_regularizer=None,
-                biases_initializer=self.bias_init,
-                biases_regularizer=None,
-                reuse=self.reuse,
-                variables_collections=None,
-                outputs_collections=None,
-                trainable=True,
-                scope=self.scope+str(l)
-            )
-
-            if l == self.n_layers - 1:
-                self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
-                self.h[l] = tf.nn.softmax(logits=bn.apply_shift_scale(self.z[l], shift=True, scale=True))
-            else:
-                # Do not need to apply scaling to RELU
-                self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
-                self.h[l] = tf.nn.relu(bn.apply_shift_scale(self.z[l], shift=True, scale=False))
-
-    def compute_supervised_cost(self):
-        self.s_cost = tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.z[self.n_layers-1])
-
+def make_feed(images, labels):
+    return {x: images, y: labels}
 
 # ===========================
 # PARAMETERS
@@ -119,6 +15,15 @@ BATCH_SIZE = 100
 INPUT_SIZE = 784
 TRAIN_FLAG = True
 OUTPUT_SIZE = 10
+EX_ID = 'enc_save'
+N = mnist.train.num_examples
+# MAX_ITER = 100
+MAX_EPOCHS = 100
+
+
+iter_per_epoch = int(N / BATCH_SIZE)
+MAX_ITER = MAX_EPOCHS * iter_per_epoch
+
 
 # ===========================
 # ENCODER
@@ -133,24 +38,109 @@ y = tf.placeholder(tf.float32, shape=(BATCH_SIZE, OUTPUT_SIZE))
 
 
 # CLEAN ENCODER
-clean_encoder = Encoder(x, y, enc_layers, noise_sd=None, reuse=None)
-clean_encoder.forward_pass(TRAIN_FLAG)
+clean = Encoder(x, y, enc_layers, noise_sd=None, reuse=False, training=TRAIN_FLAG)
 
-
+# ===========================
 # CORRUPTED ENCODER
-noisy_encoder = Encoder(x, y, enc_layers, noise_sd=0.3, reuse=True)
-noisy_encoder.forward_pass(TRAIN_FLAG)
+noisy = Encoder(x, y, enc_layers, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
 
-# Do we share batch norm weights
+# Do we share batch norm weights?
 
 # ===========================
 # GAMMA DECODER
 # ===========================
-u_L = noisy_encoder.h[-1]
-z_L = noisy_encoder.z[-1]
+# Each of these are BATCH_SIZE x OUTPUT_SIZE (or more generally enc_layers[l])
+L = clean.n_layers
+l = L - 1
+
+# Batch normalized signal from layer above in decoder (v)
+if l < noisy.last:
+    v_L = noisy.h[l + 1]
+else:
+    v_L = tf.expand_dims(tf.cast(noisy.predict, tf.float32), axis=-1)  # label, with dim matching
+# Use decoder weights to upsample the signal from above
+size_out = enc_layers[l]
+u_L = fclayer(v_L, size_out, scope='dec'+str(l))
+
+# Unbatch-normalized activations from parallel layer in noisy encoder
+z_L = noisy.z[l]
+
+# Unbatch-normalized target activations from parallel layer in clean encoder
+target_z = clean.z[l]
+
+uz_L = tf.multiply(u_L, z_L)
+
+inputs = tf.stack([u_L, z_L, uz_L], axis=-1)
+combinator = Combinator(inputs, layer_sizes=(2,2,1), stddev=0.025)
+
+recons = combinator.outputs
+
+rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(recons) - target_z), axis=-1)
+
+
+# test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
+# with tf.Session() as sess:
+#     sess.run(tf.global_variables_initializer())
+#     outs = sess.run([target_z, u_L, z_L, uz_L, inputs, recons, rc_cost, noisy.loss], test_dict)
+#     print([x.shape for x in outs])
+#     # outs = sess.run(, test_dict)
+#     # print(outs.shape)
 
 
 
+# ===========================
+# TRAINING
+# ===========================
+# loss = clean.loss
+# err_op = 1 - tf.reduce_mean(tf.cast(tf.equal(clean.predict, tf.argmax(y, 1)), tf.float32))
+loss = noisy.loss + rc_cost
+err_op = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict, tf.argmax(y, 1)), tf.float32))
 
+# Set up decay learning rate
+global_step = tf.Variable(0, trainable=False)
+lr_init = 0.0002
+decay_start = MAX_ITER
+decay_duration = 50
+decay_step = lr_init/decay_duration
+decay_end = decay_start + decay_duration
+boundaries = [b for b in range(MAX_ITER, decay_end, 1)]
+values = [lr_init - (t * decay_step) for t in range(decay_duration+1)]
+learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
 
+# Passing global_step to minimize() will increment it at each step.
+opt_op = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
 
+saver = tf.train.Saver()
+save_to = 'models/' + EX_ID
+sess = tf.Session()
+sess.run(tf.global_variables_initializer())
+
+train_writer = tf.summary.FileWriter('logs/' + EX_ID + '/train/', sess.graph)
+test_writer = tf.summary.FileWriter('logs/' + EX_ID + '/test/', sess.graph)
+tf.summary.scalar('loss', tf.reduce_mean(loss))
+tf.summary.scalar('error', err_op)
+merged = tf.summary.merge_all()
+
+test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
+print('Epoch', 'Step', 'TrainErr', 'TestErr', sep='\t')
+# Training
+for step in range(decay_end):
+    train_dict = make_feed(*mnist.train.next_batch(BATCH_SIZE))
+    sess.run(opt_op, feed_dict=train_dict)
+    # Logging during training
+
+    epoch = floor(step * BATCH_SIZE / mnist.train.num_examples)
+
+    if step % 100 == 0:
+        train_summary, train_acc = \
+            sess.run([merged, err_op], train_dict)
+        test_summary, test_acc = \
+            sess.run([merged, err_op], test_dict)
+        train_writer.add_summary(train_summary, step)
+        test_writer.add_summary(test_summary, step)
+
+        print(epoch, step, train_acc, test_acc, sep='\t')
+
+# Save final model
+saved_to = saver.save(sess, save_to)
+print('Model saved to: ', saved_to)
