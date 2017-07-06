@@ -172,11 +172,11 @@ def lrelu(x, alpha=0.1):
 
 
 class Decoder(object):
-    def __init__(self, noisy, clean):
+    def __init__(self, noisy, clean, scope='dec'):
 
-        self.scope = 'dec'
         self.noisy = noisy
         self.clean = clean
+        self.scope = scope
         self.rc_cost = 0
         u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
         self.build(u_l)

@@ -49,36 +49,36 @@ noisy = Encoder(x, y, enc_layers, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
 # ===========================
 # GAMMA DECODER
 # ===========================
+decoder = GammaDecoder(noisy, clean)
+
 # Each of these are BATCH_SIZE x OUTPUT_SIZE (or more generally enc_layers[l])
-L = clean.n_layers
-l = L - 1
-
-# Batch normalized signal from layer above in decoder (v)
-if l < noisy.last:
-    v_L = noisy.h[l + 1]
-else:
-    v_L = tf.expand_dims(tf.cast(noisy.predict, tf.float32), axis=-1)  # label, with dim matching
-# Use decoder weights to upsample the signal from above
-size_out = enc_layers[l]
-u_L = fclayer(v_L, size_out, scope='dec'+str(l))
-
-# Unbatch-normalized activations from parallel layer in noisy encoder
-z_L = noisy.z[l]
-
-# Unbatch-normalized target activations from parallel layer in clean encoder
-target_z = clean.z[l]
-
-uz_L = tf.multiply(u_L, z_L)
-
-inputs = tf.stack([u_L, z_L, uz_L], axis=-1)
-combinator = Combinator(inputs, layer_sizes=(2,2,1), stddev=0.025)
-
-recons = combinator.outputs
-
-rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(recons) - target_z), axis=-1)
-
-
-
+# L = clean.n_layers
+# l = L - 1
+#
+# # Batch normalized signal from layer above in decoder (v)
+# if l < noisy.last:
+#     v_L = noisy.h[l + 1]
+# else:
+#     v_L = tf.expand_dims(tf.cast(noisy.predict, tf.float32), axis=-1)  # label, with dim matching
+# # Use decoder weights to upsample the signal from above
+# size_out = enc_layers[l]
+# u_L = fclayer(v_L, size_out, scope='dec'+str(l))
+#
+# # Unbatch-normalized activations from parallel layer in noisy encoder
+# z_L = noisy.z[l]
+#
+# # Unbatch-normalized target activations from parallel layer in clean encoder
+# target_z = clean.z[l]
+#
+# uz_L = tf.multiply(u_L, z_L)
+#
+# inputs = tf.stack([u_L, z_L, uz_L], axis=-1)
+# combinator = Combinator(inputs, layer_sizes=(2,2,1), stddev=0.025)
+#
+# recons = combinator.outputs
+#
+# rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(recons) - target_z), axis=-1)
+#
 # test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
 # with tf.Session() as sess:
 #     sess.run(tf.global_variables_initializer())
@@ -94,7 +94,7 @@ rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(
 # ===========================
 # loss = clean.loss
 # err_op = 1 - tf.reduce_mean(tf.cast(tf.equal(clean.predict, tf.argmax(y, 1)), tf.float32))
-loss = noisy.loss + rc_cost
+loss = noisy.loss + decoder.rc_cost
 err_op = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict, tf.argmax(y, 1)), tf.float32))
 
 # Set up decay learning rate
@@ -133,15 +133,25 @@ for step in range(decay_end):
     epoch = floor(step * BATCH_SIZE / mnist.train.num_examples)
 
     if step % 100 == 0:
-        train_summary, train_acc = \
+        train_summary, train_err = \
             sess.run([merged, err_op], train_dict)
-        test_summary, test_acc = \
+        test_summary, test_err = \
             sess.run([merged, err_op], test_dict)
         train_writer.add_summary(train_summary, global_step=step)
         test_writer.add_summary(test_summary, global_step=step)
 
-        print(epoch, step, train_acc*100, test_acc*100, sep='\t')
+        print(epoch, step, train_err * 100, test_err * 100, sep='\t')
 
 # Save final model
 saved_to = saver.save(sess, save_to)
 print('Model saved to: ', saved_to)
+
+# ===========================
+# TEST
+# ===========================
+test_steps = int(mnist.test.num_examples / BATCH_SIZE)
+test_err = 0
+for step in range(test_steps):
+    test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
+    test_err += sess.run(err_op, test_dict)
+print('Final test error (%)', 100 * test_err / test_steps)
