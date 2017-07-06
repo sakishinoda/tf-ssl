@@ -104,8 +104,10 @@ decay_start = MAX_ITER
 decay_duration = 50
 decay_step = lr_init/decay_duration
 decay_end = decay_start + decay_duration
-boundaries = [b for b in range(MAX_ITER, decay_end, 1)]
+boundaries = [b * iter_per_epoch for b in range(MAX_EPOCHS, decay_end, 1)]
 values = [lr_init - (t * decay_step) for t in range(decay_duration+1)]
+
+
 learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
 
 # Passing global_step to minimize() will increment it at each step.
