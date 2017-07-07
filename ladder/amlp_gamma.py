@@ -125,9 +125,9 @@ tf.summary.scalar('error', err_op)
 merged = tf.summary.merge_all()
 
 test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
-print('Epoch', 'Step', 'TrainErr(%)', 'TestErr(%)', sep='\t')
+print('Epoch', 'Step', 'TrainErr(%)', 'TestErr(%)', sep='\t', flush=True)
 # Training
-for step in range(decay_end):
+for step in range(decay_end*iter_per_epoch):
     train_dict = make_feed(*mnist.train.next_batch(BATCH_SIZE))
     sess.run(opt_op, feed_dict=train_dict)
     # Logging during training
@@ -142,7 +142,7 @@ for step in range(decay_end):
         train_writer.add_summary(train_summary, global_step=step)
         test_writer.add_summary(test_summary, global_step=step)
 
-        print(epoch, step, train_err * 100, test_err * 100, sep='\t')
+        print(epoch, step, train_err * 100, test_err * 100, sep='\t', flush=True)
 
 # Save final model
 saved_to = saver.save(sess, save_to)
@@ -156,4 +156,4 @@ test_err = 0
 for step in range(test_steps):
     test_dict = make_feed(*mnist.test.next_batch(BATCH_SIZE))
     test_err += sess.run(err_op, test_dict)
-print('Final test error (%)', 100 * test_err / test_steps)
+print('Final test error (%):', 100 * test_err / test_steps, flush=True)
