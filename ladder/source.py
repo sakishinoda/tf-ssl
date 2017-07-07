@@ -114,7 +114,7 @@ class Encoder(object):
 
 
 class Combinator(object):
-    def __init__(self, inputs, layer_sizes=(2,2,2), stddev=0.006, scope='com'):
+    def __init__(self, decoder_input, lateral_input, layer_sizes=(2, 2, 2), stddev=0.006, scope='com'):
         """
         :param inputs:
         :param layer_sizes: Hidden layers
@@ -124,23 +124,29 @@ class Combinator(object):
         self.bias_init = tf.truncated_normal_initializer(stddev=1e-6)
         self.reuse = None
         self.scope = scope
+        inputs = self.stack_input(decoder_input, lateral_input)
         self.outputs = self.build(inputs, layer_sizes)
 
 
     def build(self, inputs, layer_sizes):
-        ls = layer_sizes
-        output = inputs
-        last = len(ls) - 1
-
-        for l, size_out in enumerate(ls):
-            output = fclayer(output, size_out, self.wts_init, self.bias_init, self.reuse, self.scope+str(l))
+        last = len(layer_sizes) - 1
+        for l, size_out in enumerate(layer_sizes):
+            inputs = fclayer(inputs, size_out, self.wts_init, self.bias_init, self.reuse, self.scope+str(l))
 
             if l < last:
-                output = lrelu(output)
+                inputs = lrelu(inputs)
             else:
-                output = tf.squeeze(output)
+                inputs = tf.squeeze(inputs)
+        return inputs
 
-        return output
+
+    def stack_input(self, decoder_input, lateral_input):
+        # Augmented multiplicative term
+        mult_input = tf.multiply(decoder_input, lateral_input)
+        inputs = tf.stack([decoder_input, lateral_input, mult_input], axis=-1)
+        return inputs
+
+
 
 
 def fclayer(input,
@@ -181,36 +187,33 @@ class Decoder(object):
         u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
         self.build(u_l)
 
-    def build(self, u_l):
-
+    def build(self, decoder_activations):
         for l in range(self.noisy.n_layers-1, -1, -1):
-            u_l, rc_cost = self.compute_rc_cost(l, u_l)
+            decoder_activations, rc_cost = self.compute_rc_cost(l, decoder_activations)
             self.rc_cost += rc_cost
 
-    def compute_rc_cost(self, l, v_l):
+    def compute_rc_cost(self, layer, decoder_activations):
         noisy, clean = self.noisy, self.clean
 
         # Use decoder weights to upsample the signal from above
-        size_out = noisy.layer_sizes[l]
-        u_l = fclayer(v_l, size_out, scope=self.scope + str(l))
+        size_out = noisy.layer_sizes[layer]
+        u_l = fclayer(decoder_activations, size_out, scope=self.scope + str(layer))
 
         # Unbatch-normalized activations from parallel layer in noisy encoder
-        z_l = noisy.z[l]
+        z_l = noisy.z[layer]
 
         # Unbatch-normalized target activations from parallel layer in clean encoder
-        target_z = clean.z[l]
+        target_z = clean.z[layer]
 
-        # Augmented multiplicative term
-        uz_l = tf.multiply(u_l, z_l)
+        combinator = Combinator(u_l, z_l, layer_sizes=(2, 2, 1), stddev=0.025, scope='com' + str(layer) + '_')
+        reconstruction = combinator.outputs
+        rc_cost = tf.reduce_sum(
+            tf.square(noisy.bn_layers[layer].normalize_from_saved_stats(reconstruction) - target_z),
+            axis=-1)
 
-        inputs = tf.stack([u_l, z_l, uz_l], axis=-1)
-        combinator = Combinator(inputs, layer_sizes=(2, 2, 1), stddev=0.025, scope='com' + str(l) + '_')
-        recons = combinator.outputs
-        rc_cost = tf.reduce_sum(tf.square(noisy.bn_layers[l].normalize_from_saved_stats(recons) - target_z), axis=-1)
-
-        return v_l, rc_cost
+        return decoder_activations, rc_cost
 
 
 class GammaDecoder(Decoder):
-    def build(self, u_l):
-        _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers-1, u_l)
+    def build(self, decoder_activations):
+        _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers - 1, decoder_activations)
