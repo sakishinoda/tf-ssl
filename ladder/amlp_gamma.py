@@ -17,6 +17,9 @@ def make_feed(images, labels):
 parser = argparse.ArgumentParser()
 parser.add_argument('--id', default='ladder')
 parser.add_argument('--training', action='store_true')
+parser.add_argument('--decay_start_epoch', default=100, type=int)
+parser.add_argument('--end_epoch', default=150, type=int)
+parser.add_argument('--print_interval', default=100, type=int)
 args = parser.parse_args()
 
 TRAIN_BATCH_SIZE = 100
@@ -25,12 +28,13 @@ INPUT_SIZE = 784
 TRAIN_FLAG = args.training
 OUTPUT_SIZE = 10
 EX_ID = args.id
+PRINT_INTERVAL = args.print_interval
 
 NUM_EXAMPLES = mnist.train.num_examples
 
-DECAY_START_EPOCH = 100
-DECAY_EPOCHS = 50
-END_EPOCH = DECAY_START_EPOCH + DECAY_EPOCHS
+DECAY_START_EPOCH = args.decay_start_epoch
+END_EPOCH = args.end_epoch
+DECAY_EPOCHS = END_EPOCH - DECAY_START_EPOCH
 
 ITER_PER_EPOCH = int(NUM_EXAMPLES / TRAIN_BATCH_SIZE)
 
@@ -106,7 +110,7 @@ while global_step < END_STEP:
 
     epoch = mnist.train.epochs_completed
 
-    if global_step % 100 == 0:
+    if global_step % PRINT_INTERVAL == 0:
         train_summary, train_err = \
             sess.run([merged, avg_err_rate], train_dict)
         test_summary, test_err = \
