@@ -22,6 +22,7 @@ parser.add_argument('--end_epoch', default=150, type=int)
 parser.add_argument('--print_interval', default=100, type=int)
 parser.add_argument('--test_batch_size', default=100, type=int)
 parser.add_argument('--batch_size', default=100, type=int)
+parser.add_argument('--gamma', action='store_true')
 args = parser.parse_args()
 
 TRAIN_BATCH_SIZE = args.batch_size
@@ -31,6 +32,7 @@ TRAIN_FLAG = args.training
 OUTPUT_SIZE = 10
 EX_ID = args.id
 PRINT_INTERVAL = args.print_interval
+USE_GAMMA_DECODER = args.gamma
 
 NUM_EXAMPLES = mnist.train.num_examples
 
@@ -72,9 +74,12 @@ clean = Encoder(x, y, layer_sizes, noise_sd=None, reuse=False, training=TRAIN_FL
 noisy = Encoder(x, y, layer_sizes, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
 
 # ===========================
-# GAMMA DECODER
+# DECODER
 # ===========================
-decoder = GammaDecoder(noisy, clean)
+if USE_GAMMA_DECODER:
+    decoder = GammaDecoder(noisy, clean)
+else:
+    decoder = Decoder(noisy, clean)
 
 # ===========================
 # TRAINING
