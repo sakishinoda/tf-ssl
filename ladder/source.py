@@ -3,6 +3,9 @@ import tensorflow.contrib.layers as layers
 from collections import OrderedDict
 
 
+
+
+##
 class NoisyBNLayer(object):
 
     def __init__(self, scope_name, size, noise_sd=None, decay=0.99, var_ep=1e-5, reuse=None):
@@ -147,36 +150,6 @@ class Combinator(object):
         return inputs
 
 
-
-
-def fclayer(input,
-            size_out,
-            wts_init=layers.xavier_initializer(),
-            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
-            reuse=None,
-            scope=None):
-    return layers.fully_connected(
-        inputs=input,
-        num_outputs=size_out,
-        activation_fn=None,
-        normalizer_fn=None,
-        normalizer_params=None,
-        weights_initializer=wts_init,
-        weights_regularizer=None,
-        biases_initializer=bias_init,
-        biases_regularizer=None,
-        reuse=reuse,
-        variables_collections=None,
-        outputs_collections=None,
-        trainable=True,
-        scope=scope
-    )
-
-
-def lrelu(x, alpha=0.1):
-    return tf.maximum(x, alpha*x)
-
-
 class Decoder(object):
     def __init__(self, noisy, clean, scope='dec'):
 
@@ -217,3 +190,32 @@ class Decoder(object):
 class GammaDecoder(Decoder):
     def build(self, decoder_activations):
         _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers - 1, decoder_activations)
+
+
+
+def fclayer(input,
+            size_out,
+            wts_init=layers.xavier_initializer(),
+            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
+            reuse=None,
+            scope=None):
+    return layers.fully_connected(
+        inputs=input,
+        num_outputs=size_out,
+        activation_fn=None,
+        normalizer_fn=None,
+        normalizer_params=None,
+        weights_initializer=wts_init,
+        weights_regularizer=None,
+        biases_initializer=bias_init,
+        biases_regularizer=None,
+        reuse=reuse,
+        variables_collections=None,
+        outputs_collections=None,
+        trainable=True,
+        scope=scope
+    )
+
+
+def lrelu(x, alpha=0.1):
+    return tf.maximum(x, alpha*x)
