@@ -20,10 +20,12 @@ parser.add_argument('--training', action='store_true')
 parser.add_argument('--decay_start_epoch', default=100, type=int)
 parser.add_argument('--end_epoch', default=150, type=int)
 parser.add_argument('--print_interval', default=100, type=int)
+parser.add_argument('--test_batch_size', default=100, type=int)
+parser.add_argument('--batch_size', default=100, type=int)
 args = parser.parse_args()
 
-TRAIN_BATCH_SIZE = 100
-TEST_BATCH_SIZE = 1000
+TRAIN_BATCH_SIZE = args.batch_size
+TEST_BATCH_SIZE = args.test_batch_size
 INPUT_SIZE = 784
 TRAIN_FLAG = args.training
 OUTPUT_SIZE = 10
@@ -102,23 +104,24 @@ merged = tf.summary.merge_all()
 
 test_dict = make_feed(*mnist.test.next_batch(TEST_BATCH_SIZE))
 print('Epoch', 'Step', 'TrainErr(%)', 'TestErr(%)', sep='\t', flush=True)
-# Training
-while global_step < END_STEP:
+
+# Training (using a separate step to count)
+for step in range(END_STEP):
     train_dict = make_feed(*mnist.train.next_batch(TRAIN_BATCH_SIZE))
     sess.run(opt_op, feed_dict=train_dict)
     # Logging during training
 
     epoch = mnist.train.epochs_completed
 
-    if global_step % PRINT_INTERVAL == 0:
+    if (step+1) % PRINT_INTERVAL == 0:
         train_summary, train_err = \
             sess.run([merged, avg_err_rate], train_dict)
         test_summary, test_err = \
             sess.run([merged, avg_err_rate], test_dict)
-        train_writer.add_summary(train_summary, global_step=global_step)
-        test_writer.add_summary(test_summary, global_step=global_step)
+        train_writer.add_summary(train_summary, global_step=step)
+        test_writer.add_summary(test_summary, global_step=step)
 
-        print(epoch, global_step, train_err * 100, test_err * 100, sep='\t', flush=True)
+        print(epoch, step, train_err * 100, test_err * 100, sep='\t', flush=True)
 
     global_step += 1
 
@@ -129,9 +132,9 @@ print('Model saved to: ', saved_to)
 # ===========================
 # TEST
 # ===========================
-test_steps = int(mnist.test.num_examples / TRAIN_BATCH_SIZE)
+test_steps = int(mnist.test.num_examples / TEST_BATCH_SIZE)
 test_err = 0
 for step in range(test_steps):
-    test_dict = make_feed(*mnist.test.next_batch(TRAIN_BATCH_SIZE))
+    test_dict = make_feed(*mnist.test.next_batch(TEST_BATCH_SIZE))
     test_err += sess.run(avg_err_rate, test_dict)
 print('Final test error (%):', 100 * test_err / test_steps, flush=True)
