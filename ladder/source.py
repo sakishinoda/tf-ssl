@@ -161,7 +161,7 @@ class Decoder(object):
         self.build(u_l)
 
     def build(self, decoder_activations):
-        for l in range(self.noisy.n_layers-1, -1, -1):
+        for l in self.noisy.z.keys():
             decoder_activations, rc_cost = self.compute_rc_cost(l, decoder_activations)
             self.rc_cost += rc_cost
 
