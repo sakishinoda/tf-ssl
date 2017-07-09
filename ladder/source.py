@@ -156,14 +156,13 @@ class Decoder(object):
         self.noisy = noisy
         self.clean = clean
         self.scope = scope
-        self.rc_cost = 0
+        self.rc_cost = OrderedDict()
         u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
         self.build(u_l)
 
     def build(self, decoder_activations):
         for l in self.noisy.z.keys():
-            decoder_activations, rc_cost = self.compute_rc_cost(l, decoder_activations)
-            self.rc_cost += rc_cost
+            decoder_activations, self.rc_cost[l] = self.compute_rc_cost(l, decoder_activations)
 
     def compute_rc_cost(self, layer, decoder_activations):
         noisy, clean = self.noisy, self.clean
@@ -189,7 +188,9 @@ class Decoder(object):
 
 class GammaDecoder(Decoder):
     def build(self, decoder_activations):
-        _, self.rc_cost = self.compute_rc_cost(self.noisy.n_layers - 1, decoder_activations)
+        l = self.noisy.n_layers-1
+        _, self.rc_cost[l] = self.compute_rc_cost(l, decoder_activations)
+
 
 
 

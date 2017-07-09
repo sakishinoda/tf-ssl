@@ -23,6 +23,7 @@ parser.add_argument('--print_interval', default=100, type=int)
 parser.add_argument('--test_batch_size', default=100, type=int)
 parser.add_argument('--batch_size', default=100, type=int)
 parser.add_argument('--gamma', action='store_true')
+
 args = parser.parse_args()
 
 TRAIN_BATCH_SIZE = args.batch_size
@@ -33,15 +34,18 @@ OUTPUT_SIZE = 10
 EX_ID = args.id
 PRINT_INTERVAL = args.print_interval
 USE_GAMMA_DECODER = args.gamma
-
 NUM_EXAMPLES = mnist.train.num_examples
+
+
+# Specify base structure
+LAYER_SIZES = [INPUT_SIZE, 1000, 500, 250, 250, 250, OUTPUT_SIZE]
+SC_WEIGHT = 1000
+RC_WEIGHTS = {0:0.0, 1:0.0, 2:0.0, 3:0.0, 4:0.0, 5:0.0, 6:1.0}
 
 DECAY_START_EPOCH = args.decay_start_epoch
 END_EPOCH = args.end_epoch
 DECAY_EPOCHS = END_EPOCH - DECAY_START_EPOCH
-
 ITER_PER_EPOCH = int(NUM_EXAMPLES / TRAIN_BATCH_SIZE)
-
 DECAY_START_STEP = DECAY_START_EPOCH * ITER_PER_EPOCH
 END_STEP = END_EPOCH * ITER_PER_EPOCH
 
@@ -58,8 +62,6 @@ learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
 # ===========================
 # ENCODER
 # ===========================
-# Start with a tuple specifying layer sizes
-layer_sizes = [INPUT_SIZE, 1000, 500, 250, 250, 250, OUTPUT_SIZE]
 
 # Input placeholder
 x = tf.placeholder(tf.float32, shape=(None, INPUT_SIZE))
@@ -67,11 +69,11 @@ x = tf.placeholder(tf.float32, shape=(None, INPUT_SIZE))
 y = tf.placeholder(tf.float32, shape=(None, OUTPUT_SIZE))
 
 # CLEAN ENCODER
-clean = Encoder(x, y, layer_sizes, noise_sd=None, reuse=False, training=TRAIN_FLAG)
+clean = Encoder(x, y, LAYER_SIZES, noise_sd=None, reuse=False, training=TRAIN_FLAG)
 
 # ===========================
 # CORRUPTED ENCODER
-noisy = Encoder(x, y, layer_sizes, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
+noisy = Encoder(x, y, LAYER_SIZES, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
 
 # ===========================
 # DECODER
@@ -86,7 +88,7 @@ else:
 # ===========================
 # loss = clean.loss
 # err_op = 1 - tf.reduce_mean(tf.cast(tf.equal(clean.predict, tf.argmax(y, 1)), tf.float32))
-total_loss = noisy.loss + decoder.rc_cost
+total_loss = SC_WEIGHT * noisy.loss + sum([decoder.rc_cost[l] * RC_WEIGHTS[l] for l in decoder.rc_cost.keys()])
 avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict, tf.argmax(y, 1)), tf.float32))
 
 # Passing global_step to minimize() will increment it at each step.
