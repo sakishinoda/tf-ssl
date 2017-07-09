@@ -9,6 +9,11 @@ mnist = input_data.read_data_sets('../data/mnist/', one_hot=True)
 def make_feed(images, labels):
     return {x: images, y: labels}
 
+def to_steps(epoch):
+    return epoch * ITER_PER_EPOCH
+
+def to_epochs(step):
+    return step / ITER_PER_EPOCH
 
 # ===========================
 # PARAMETERS
@@ -20,6 +25,7 @@ parser.add_argument('--training', action='store_true')
 parser.add_argument('--decay_start_epoch', default=100, type=int)
 parser.add_argument('--end_epoch', default=150, type=int)
 parser.add_argument('--print_interval', default=100, type=int)
+parser.add_argument('--save_interval', default=None, type=int)
 parser.add_argument('--test_batch_size', default=100, type=int)
 parser.add_argument('--batch_size', default=100, type=int)
 parser.add_argument('--gamma', action='store_true')
@@ -33,6 +39,7 @@ TRAIN_FLAG = args.training
 OUTPUT_SIZE = 10
 EX_ID = args.id
 PRINT_INTERVAL = args.print_interval
+SAVE_INTERVAL = args.save_interval
 USE_GAMMA_DECODER = args.gamma
 NUM_EXAMPLES = mnist.train.num_examples
 
@@ -46,8 +53,9 @@ DECAY_START_EPOCH = args.decay_start_epoch
 END_EPOCH = args.end_epoch
 DECAY_EPOCHS = END_EPOCH - DECAY_START_EPOCH
 ITER_PER_EPOCH = int(NUM_EXAMPLES / TRAIN_BATCH_SIZE)
-DECAY_START_STEP = DECAY_START_EPOCH * ITER_PER_EPOCH
-END_STEP = END_EPOCH * ITER_PER_EPOCH
+DECAY_START_STEP = to_steps(DECAY_START_EPOCH)
+END_STEP = to_steps(END_EPOCH)
+
 
 # Set up decaying learning rate
 INITIAL_LEARNING_RATE = 0.0002
@@ -129,6 +137,9 @@ for step in range(END_STEP):
         test_writer.add_summary(test_summary, global_step=step)
 
         print(epoch, step, train_err * 100, test_err * 100, sep='\t', flush=True)
+
+    if SAVE_INTERVAL is not None and step % SAVE_INTERVAL == 0:
+        saver.save(sess, save_to, global_step=step)
 
     global_step += 1
 
