@@ -33,6 +33,8 @@ parser.add_argument('--gamma', action='store_true')
 args = parser.parse_args()
 
 TRAIN_BATCH_SIZE = args.batch_size
+LABEL_BATCH_SIZE = TRAIN_BATCH_SIZE
+UNLABEL_BATCH_SIZE = TRAIN_BATCH_SIZE
 TEST_BATCH_SIZE = args.test_batch_size
 INPUT_SIZE = 784
 TRAIN_FLAG = args.training
@@ -94,10 +96,15 @@ else:
 # ===========================
 # TRAINING
 # ===========================
-# loss = clean.loss
-# err_op = 1 - tf.reduce_mean(tf.cast(tf.equal(clean.predict, tf.argmax(y, 1)), tf.float32))
-total_loss = SC_WEIGHT * noisy.loss + sum([decoder.rc_cost[l] * RC_WEIGHTS[l] for l in decoder.rc_cost.keys()])
-avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict, tf.argmax(y, 1)), tf.float32))
+
+# Compute supervised loss on labeled only
+noisy_loss = tf.nn.softmax_cross_entropy_with_logits(
+    labels=y, logits=noisy.z[noisy.n_layers - 1][:LABEL_BATCH_SIZE,:])
+total_loss = SC_WEIGHT * noisy_loss + sum([decoder.rc_cost[l] * RC_WEIGHTS[l] for l in decoder.rc_cost.keys()])
+
+noisy_predict = tf.argmax(noisy.h[noisy.n_layers-1][:LABEL_BATCH_SIZE,:], axis=-1)
+# Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
+avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy_predict, tf.argmax(y, 1)), tf.float32))
 
 # Passing global_step to minimize() will increment it at each step.
 opt_op = tf.train.AdamOptimizer(INITIAL_LEARNING_RATE).minimize(total_loss, global_step=global_step)

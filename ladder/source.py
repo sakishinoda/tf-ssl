@@ -5,6 +5,8 @@ from collections import OrderedDict
 
 
 
+
+
 ##
 class NoisyBNLayer(object):
 
@@ -89,7 +91,8 @@ class Encoder(object):
         # self.wts_init = layers.xavier_initializer()
         # self.bias_init = tf.truncated_normal_initializer(stddev=1e-6)
 
-        self.loss, self.predict = self.build(training)
+        # self.loss, self.predict = self.build(training)
+        self.build(training)
 
 
     def build(self, training=True):
@@ -109,11 +112,12 @@ class Encoder(object):
                 self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
                 self.h[l] = tf.nn.relu(bn.apply_shift_scale(self.z[l], shift=True, scale=False))
 
-        loss = tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.z[self.n_layers - 1])
+        # loss = tf.nn.softmax_cross_entropy_with_logits(
+        #     labels=self.y, logits=self.z[self.n_layers - 1])
 
-        predict = tf.argmax(self.h[self.n_layers-1], axis=-1)
+        # predict = tf.argmax(self.h[self.n_layers-1], axis=-1)
 
-        return loss, predict
+        # return loss, predict
 
 
 class Combinator(object):
