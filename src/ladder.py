@@ -280,4 +280,3 @@ class Ladder(object):
         self.loss = self.supervised_loss + self.unsupervised_loss
         self.mean_loss = tf.reduce_mean(self.loss)
 
-

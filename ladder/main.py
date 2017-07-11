@@ -3,29 +3,10 @@ import argparse
 
 from tensorflow.examples.tutorials.mnist import input_data
 
-from src import feed
+from src import feed, utils
 from src.ladder import *
 
 mnist = input_data.read_data_sets('../data/mnist/', one_hot=True)
-
-def to_steps(epoch):
-    return epoch * ITER_PER_EPOCH
-
-def to_epochs(step):
-    return step / ITER_PER_EPOCH
-
-def decay_learning_rate(initial_learning_rate, decay_start_epoch, end_epoch, global_step):
-    end_step = to_steps(end_epoch)
-    decay_start_step = to_steps(decay_start_epoch)
-
-    decay_epochs = end_epoch - decay_start_epoch
-    boundaries = [x for x in range(decay_start_step, end_step, ITER_PER_EPOCH)]
-    decay_per_epoch = initial_learning_rate / decay_epochs
-    values = [initial_learning_rate - x * decay_per_epoch for x in range(decay_epochs + 1)]
-    assert len(values) == len(boundaries) + 1
-
-    return tf.train.piecewise_constant(global_step, boundaries, values)
-
 
 # ===========================
 # PARAMETERS
@@ -44,38 +25,38 @@ parser.add_argument('--labeled_batch_size', default=100, type=int)
 parser.add_argument('--unlabeled_batch_size', default=250, type=int)
 parser.add_argument('--initial_learning_rate', default=0.0002, type=float)
 parser.add_argument('--gamma', action='store_true')
+parser.add_argument('--layer_sizes', default='784-1000-500-250-250-250-10')
+parser.add_argument('--sc_weight', default=1000, type=float)
+parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')
 
 params = parser.parse_args()
 
-# TRAIN_BATCH_SIZE = params.labeled_batch_size + params.unlabeled_batch_size
-TRAIN_FLAG = params.training
-EX_ID = params.id
-ITER_PER_EPOCH = int(params.num_labeled / params.labeled_batch_size)
-
 # Specify base structure
-INPUT_SIZE = 784
-OUTPUT_SIZE = 10
-LAYER_SIZES = [INPUT_SIZE, 1000, 500, 250, 250, 250, OUTPUT_SIZE]
-SC_WEIGHT = 1000
-RC_WEIGHTS = {0:0.0, 1:0.0, 2:0.0, 3:0.0, 4:0.0, 5:0.0, 6:1.0}
-
+iter_per_epoch = int(params.num_labeled / params.labeled_batch_size)
+# input_size = 784
+# output_size = 10
+# layer_sizes = [input_size, 1000, 500, 250, 250, 250, output_size]
+layer_sizes = utils.parse_argstring(params.layer_sizes)
+sc_weight = params.sc_weight
+rc_weights = utils.parse_argstring(params.rc_weights, dtype=float)
+rc_weights = zip(range(len(rc_weights)), rc_weights)
 
 # Set up decaying learning rate
 global_step = tf.get_variable('global_step', initializer=0, trainable=False)
-learning_rate = decay_learning_rate(
-    params.initial_learning_rate,
-    params.decay_start_epoch,
-    params.end_epoch,
-    global_step)
+learning_rate = utils.decay_learning_rate(
+    initial_learning_rate=params.initial_learning_rate,
+    decay_start_epoch=params.decay_start_epoch,
+    end_epoch=params.end_epoch,
+    iter_per_epoch=iter_per_epoch,
+    global_step=global_step)
 
-
-param_dict = {'layer_sizes': LAYER_SIZES,
-              'train_flag': TRAIN_FLAG,
+param_dict = {'layer_sizes': layer_sizes,
+              'train_flag': params.training,
               'labeled_batch_size': params.labeled_batch_size,
               'gamma_flag': params.gamma,
               'unlabeled_batch_size': params.unlabeled_batch_size,
-              'sc_weight': SC_WEIGHT,
-              'rc_weights': RC_WEIGHTS}
+              'sc_weight': sc_weight,
+              'rc_weights': rc_weights}
 
 ladder = Ladder(param_dict)
 
@@ -87,14 +68,14 @@ opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.loss, global_step
 
 # Set up saver
 saver = tf.train.Saver()
-save_to = 'models/' + EX_ID
+save_to = 'models/' + params.id
 
 # Start session and initialize
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 # Create summaries
-train_writer = tf.summary.FileWriter('logs/' + EX_ID + '/train/', sess.graph)
+train_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
 tf.summary.scalar('loss', ladder.mean_loss)
 tf.summary.scalar('error', ladder.aer)
 merged = tf.summary.merge_all()
@@ -104,7 +85,7 @@ sf = feed.MNIST(mnist.train.images, mnist.train.labels, params.num_labeled)
 
 print('Labeled Epoch', 'Unlabeled Epoch', 'Step', 'Loss', 'TrainErr(%)', sep='\t', flush=True)
 # Training (using a separate step to count)
-end_step = to_steps(params.end_epoch)
+end_step = params.end_epoch * iter_per_epoch
 for step in range(end_step):
     x, y = sf.next_batch(params.labeled_batch_size, params.unlabeled_batch_size)
     train_dict = {ladder.x: x, ladder.y: y}
