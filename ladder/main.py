@@ -70,7 +70,7 @@ learning_rate = decay_learning_rate(
 
 
 param_dict = {'layer_sizes': LAYER_SIZES,
-              'train_flag': TRAIN_FLAG
+              'train_flag': TRAIN_FLAG,
               'labeled_batch_size': params.labeled_batch_size,
               'gamma_flag': params.gamma,
               'unlabeled_batch_size': params.unlabeled_batch_size,
