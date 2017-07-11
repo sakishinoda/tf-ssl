@@ -17,6 +17,19 @@ def to_steps(epoch):
 def to_epochs(step):
     return step / ITER_PER_EPOCH
 
+def decay_learning_rate(initial_learning_rate, decay_start_epoch, end_epoch, global_step):
+    end_step = to_steps(end_epoch)
+    decay_start_step = to_steps(decay_start_epoch)
+
+    decay_epochs = end_epoch - decay_start_epoch
+    boundaries = [x for x in range(decay_start_step, end_step, ITER_PER_EPOCH)]
+    decay_per_epoch = initial_learning_rate / decay_epochs
+    values = [initial_learning_rate - x * decay_per_epoch for x in range(decay_epochs + 1)]
+    assert len(values) == len(boundaries) + 1
+
+    return tf.train.piecewise_constant(global_step, boundaries, values)
+
+
 # ===========================
 # PARAMETERS
 # ===========================
@@ -32,6 +45,7 @@ parser.add_argument('--num_labeled', default=100, type=int)
 parser.add_argument('--test_batch_size', default=100, type=int)
 parser.add_argument('--labeled_batch_size', default=100, type=int)
 parser.add_argument('--unlabeled_batch_size', default=250, type=int)
+parser.add_argument('--initial_learning_rate', default=0.0002, type=float)
 parser.add_argument('--gamma', action='store_true')
 
 params = parser.parse_args()
@@ -40,41 +54,26 @@ NUM_LABELED = params.num_labeled
 LABELED_BATCH_SIZE = params.labeled_batch_size
 UNLABELED_BATCH_SIZE = params.unlabeled_batch_size
 TRAIN_BATCH_SIZE = LABELED_BATCH_SIZE + UNLABELED_BATCH_SIZE
-TEST_BATCH_SIZE = LABELED_BATCH_SIZE
-
-
-INPUT_SIZE = 784
 TRAIN_FLAG = params.training
-OUTPUT_SIZE = 10
 EX_ID = params.id
-PRINT_INTERVAL = params.print_interval
-SAVE_INTERVAL = params.save_interval
-USE_GAMMA_DECODER = params.gamma
-NUM_EXAMPLES = mnist.train.num_examples
-
+ITER_PER_EPOCH = int(NUM_LABELED / LABELED_BATCH_SIZE)
 
 # Specify base structure
+INPUT_SIZE = 784
+OUTPUT_SIZE = 10
 LAYER_SIZES = [INPUT_SIZE, 1000, 500, 250, 250, 250, OUTPUT_SIZE]
 SC_WEIGHT = 1000
 RC_WEIGHTS = {0:0.0, 1:0.0, 2:0.0, 3:0.0, 4:0.0, 5:0.0, 6:1.0}
 
-DECAY_START_EPOCH = params.decay_start_epoch
-END_EPOCH = params.end_epoch
-DECAY_EPOCHS = END_EPOCH - DECAY_START_EPOCH
-ITER_PER_EPOCH = int(NUM_EXAMPLES / TRAIN_BATCH_SIZE)
-DECAY_START_STEP = to_steps(DECAY_START_EPOCH)
-END_STEP = to_steps(END_EPOCH)
-
 
 # Set up decaying learning rate
-INITIAL_LEARNING_RATE = 0.0002
-boundaries = [x for x in range(DECAY_START_STEP, END_STEP, ITER_PER_EPOCH)]
-DECAY_PER_EPOCH = INITIAL_LEARNING_RATE / DECAY_EPOCHS
-values = [INITIAL_LEARNING_RATE - x * DECAY_PER_EPOCH for x in range(DECAY_EPOCHS + 1)]
-assert len(values) == len(boundaries) + 1
-
 global_step = tf.get_variable('global_step', initializer=0, trainable=False)
-learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
+learning_rate = decay_learning_rate(
+    params.initial_learning_rate,
+    params.decay_start_epoch,
+    params.end_epoch,
+    global_step)
+
 
 # ===========================
 # ENCODER
@@ -101,7 +100,7 @@ avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict[:LABELED_BATCH_
 # ===========================
 # DECODER
 # ===========================
-if USE_GAMMA_DECODER:
+if params.gamma:
     decoder = GammaDecoder(noisy, clean)
 else:
     decoder = Decoder(noisy, clean)
@@ -113,9 +112,10 @@ unsupervised_loss = decoder.unsupervised_loss(RC_WEIGHTS)
 # ===========================
 # Total loss
 total_loss = supervised_loss + unsupervised_loss
+mean_loss = tf.reduce_mean(total_loss)
 
 # Passing global_step to minimize() will increment it at each step.
-opt_op = tf.train.AdamOptimizer(INITIAL_LEARNING_RATE).minimize(total_loss, global_step=global_step)
+opt_op = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, global_step=global_step)
 
 # Set up saver
 saver = tf.train.Saver()
@@ -127,32 +127,29 @@ sess.run(tf.global_variables_initializer())
 
 # Create summaries
 train_writer = tf.summary.FileWriter('logs/' + EX_ID + '/train/', sess.graph)
-test_writer = tf.summary.FileWriter('logs/' + EX_ID + '/test/', sess.graph)
-tf.summary.scalar('loss', tf.reduce_mean(total_loss))
+tf.summary.scalar('loss', mean_loss)
 tf.summary.scalar('error', avg_err_rate)
 merged = tf.summary.merge_all()
 
-test_dict = make_feed(*mnist.validation.next_batch(TEST_BATCH_SIZE))
+
 sf = feed.MNIST(mnist.train.images, mnist.train.labels, params.num_labeled)
-print('Epoch', 'Step', 'TrainErr(%)', 'TestErr(%)', sep='\t', flush=True)
+
+print('Labeled Epoch', 'Unlabeled Epoch', 'Step', 'Loss', 'TrainErr(%)', sep='\t', flush=True)
 # Training (using a separate step to count)
-for step in range(END_STEP):
+end_step = to_steps(params.end_epoch)
+for step in range(end_step):
     train_dict = make_feed(*sf.next_batch(LABELED_BATCH_SIZE, UNLABELED_BATCH_SIZE))
     sess.run(opt_op, feed_dict=train_dict)
+
     # Logging during training
-
-    epoch = mnist.train.epochs_completed
-
     if (step+1) % params.print_interval == 0:
+        labeled_epoch = sf.labeled.epochs_completed
+        unlabeled_epoch = sf.unlabeled.epochs_completed
         train_summary, train_err = \
-            sess.run([merged, avg_err_rate], train_dict)
-        test_err = 0
-        # test_summary, test_err = \
-        #     sess.run([merged, avg_err_rate], test_dict)
+            sess.run([merged, avg_err_rate, mean_loss], train_dict)
         train_writer.add_summary(train_summary, global_step=step)
-        # test_writer.add_summary(test_summary, global_step=step)
 
-        print(epoch, step, train_err * 100, test_err * 100, sep='\t', flush=True)
+        print(labeled_epoch, unlabeled_epoch, step, mean_loss, train_err * 100, sep='\t', flush=True)
 
     if params.save_interval is not None and step % params.save_interval == 0:
         saver.save(sess, save_to, global_step=step)
@@ -162,13 +159,3 @@ for step in range(END_STEP):
 # Save final model
 saved_to = saver.save(sess, save_to)
 print('Model saved to: ', saved_to)
-
-# ===========================
-# TEST
-# ===========================
-test_steps = int(mnist.test.num_examples / TEST_BATCH_SIZE)
-test_err = 0
-for step in range(test_steps):
-    test_dict = make_feed(*mnist.test.next_batch(TEST_BATCH_SIZE))
-    test_err += sess.run(avg_err_rate, test_dict)
-print('Final test error (%):', 100 * test_err / test_steps, flush=True)
