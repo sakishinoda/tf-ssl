@@ -199,8 +199,6 @@ class GammaDecoder(Decoder):
         _, self.rc_cost[l] = self.compute_rc_cost(l, decoder_activations)
 
 
-
-
 def fclayer(input,
             size_out,
             wts_init=layers.xavier_initializer(),
@@ -227,3 +225,59 @@ def fclayer(input,
 
 def lrelu(x, alpha=0.1):
     return tf.maximum(x, alpha*x)
+
+
+class Ladder(object):
+
+    def __init__(self, param_dict):
+
+        layer_sizes = param_dict['layer_sizes']
+        train_flag = param_dict['train_flag']
+        labeled_batch_size = param_dict['labeled_batch_size']
+        gamma_flag = param_dict['gamma_flag']
+        unlabeled_batch_size = param_dict['unlabeled_batch_size']
+        supervised_weight = param_dict['sc_weight']
+        unsupervised_weights = param_dict['rc_weights']
+
+        # ===========================
+        # ENCODER
+        # ===========================
+
+        # PLACEHOLDERS
+        # Input placeholder
+        self.x = tf.placeholder(tf.float32, shape=(None, layer_sizes[0]))
+        # One-hot targets
+        self.y = tf.placeholder(tf.float32, shape=(None, layer_sizes[-1]))
+
+        # CLEAN ENCODER
+        self.clean = Encoder(self.x, self.y, layer_sizes, noise_sd=None, reuse=False, training=train_flag)
+
+        # CORRUPTED ENCODER
+        self.noisy = Encoder(self.x, self.y, layer_sizes, noise_sd=0.3, reuse=True, training=train_flag)
+        self.predict = self.noisy.predict
+
+        # Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
+        # At test time, number of labeled examples is same as number of examples
+        self.aer = 1 - tf.reduce_mean(
+            tf.cast(tf.equal(self.predict[:labeled_batch_size], tf.argmax(self.y, 1)), tf.float32))
+        # ===========================
+        # DECODER
+        # ===========================
+        if gamma_flag:
+            self.decoder = GammaDecoder(self.noisy, self.clean)
+        else:
+            self.decoder = Decoder(self.noisy, self.clean)
+
+        self.decoder.build(tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1))
+
+
+        # Compute supervised loss on labeled only
+        self.supervised_loss = tf.concat((self.noisy.supervised_loss(labeled_batch_size),
+                                     tf.zeros((unlabeled_batch_size,))), axis=0) * supervised_weight
+
+        self.unsupervised_loss = self.decoder.unsupervised_loss(unsupervised_weights)
+
+        self.loss = self.supervised_loss + self.unsupervised_loss
+        self.mean_loss = tf.reduce_mean(self.loss)
+
+

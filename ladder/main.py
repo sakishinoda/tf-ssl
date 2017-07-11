@@ -8,9 +8,6 @@ from src.ladder import *
 
 mnist = input_data.read_data_sets('../data/mnist/', one_hot=True)
 
-def make_feed(images, labels):
-    return {x: images, y: labels}
-
 def to_steps(epoch):
     return epoch * ITER_PER_EPOCH
 
@@ -50,13 +47,10 @@ parser.add_argument('--gamma', action='store_true')
 
 params = parser.parse_args()
 
-NUM_LABELED = params.num_labeled
-LABELED_BATCH_SIZE = params.labeled_batch_size
-UNLABELED_BATCH_SIZE = params.unlabeled_batch_size
-TRAIN_BATCH_SIZE = LABELED_BATCH_SIZE + UNLABELED_BATCH_SIZE
+# TRAIN_BATCH_SIZE = params.labeled_batch_size + params.unlabeled_batch_size
 TRAIN_FLAG = params.training
 EX_ID = params.id
-ITER_PER_EPOCH = int(NUM_LABELED / LABELED_BATCH_SIZE)
+ITER_PER_EPOCH = int(params.num_labeled / params.labeled_batch_size)
 
 # Specify base structure
 INPUT_SIZE = 784
@@ -75,47 +69,21 @@ learning_rate = decay_learning_rate(
     global_step)
 
 
-# ===========================
-# ENCODER
-# ===========================
+param_dict = {'layer_sizes': LAYER_SIZES,
+              'train_flag': TRAIN_FLAG
+              'labeled_batch_size': params.labeled_batch_size,
+              'gamma_flag': params.gamma,
+              'unlabeled_batch_size': params.unlabeled_batch_size,
+              'sc_weight': SC_WEIGHT,
+              'rc_weights': RC_WEIGHTS}
 
-# Input placeholder
-x = tf.placeholder(tf.float32, shape=(None, INPUT_SIZE))
-# One-hot targets
-y = tf.placeholder(tf.float32, shape=(None, OUTPUT_SIZE))
+ladder = Ladder(param_dict)
 
-# CLEAN ENCODER
-clean = Encoder(x, y, LAYER_SIZES, noise_sd=None, reuse=False, training=TRAIN_FLAG)
-
-# ===========================
-# CORRUPTED ENCODER
-noisy = Encoder(x, y, LAYER_SIZES, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
-
-# Compute supervised loss on labeled only
-supervised_loss = tf.concat((noisy.supervised_loss(LABELED_BATCH_SIZE),
-                             tf.zeros((UNLABELED_BATCH_SIZE,))), axis=0) * SC_WEIGHT
-
-# Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
-avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict[:LABELED_BATCH_SIZE], tf.argmax(y, 1)), tf.float32))
-# ===========================
-# DECODER
-# ===========================
-if params.gamma:
-    decoder = GammaDecoder(noisy, clean)
-else:
-    decoder = Decoder(noisy, clean)
-
-decoder.build(tf.expand_dims(tf.cast(noisy.predict, tf.float32), axis=-1))
-unsupervised_loss = decoder.unsupervised_loss(RC_WEIGHTS)
 # ===========================
 # TRAINING
 # ===========================
-# Total loss
-total_loss = supervised_loss + unsupervised_loss
-mean_loss = tf.reduce_mean(total_loss)
-
 # Passing global_step to minimize() will increment it at each step.
-opt_op = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, global_step=global_step)
+opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.loss, global_step=global_step)
 
 # Set up saver
 saver = tf.train.Saver()
@@ -127,8 +95,8 @@ sess.run(tf.global_variables_initializer())
 
 # Create summaries
 train_writer = tf.summary.FileWriter('logs/' + EX_ID + '/train/', sess.graph)
-tf.summary.scalar('loss', mean_loss)
-tf.summary.scalar('error', avg_err_rate)
+tf.summary.scalar('loss', ladder.mean_loss)
+tf.summary.scalar('error', ladder.aer)
 merged = tf.summary.merge_all()
 
 
@@ -138,7 +106,8 @@ print('Labeled Epoch', 'Unlabeled Epoch', 'Step', 'Loss', 'TrainErr(%)', sep='\t
 # Training (using a separate step to count)
 end_step = to_steps(params.end_epoch)
 for step in range(end_step):
-    train_dict = make_feed(*sf.next_batch(LABELED_BATCH_SIZE, UNLABELED_BATCH_SIZE))
+    x, y = sf.next_batch(params.labeled_batch_size, params.unlabeled_batch_size)
+    train_dict = {ladder.x: x, ladder.y: y}
     sess.run(opt_op, feed_dict=train_dict)
 
     # Logging during training
@@ -146,10 +115,10 @@ for step in range(end_step):
         labeled_epoch = sf.labeled.epochs_completed
         unlabeled_epoch = sf.unlabeled.epochs_completed
         train_summary, train_err = \
-            sess.run([merged, avg_err_rate, mean_loss], train_dict)
+            sess.run([merged, ladder.aer, ladder.mean_loss], train_dict)
         train_writer.add_summary(train_summary, global_step=step)
 
-        print(labeled_epoch, unlabeled_epoch, step, mean_loss, train_err * 100, sep='\t', flush=True)
+        print(labeled_epoch, unlabeled_epoch, step, ladder.mean_loss, train_err * 100, sep='\t', flush=True)
 
     if params.save_interval is not None and step % params.save_interval == 0:
         saver.save(sess, save_to, global_step=step)
