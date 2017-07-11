@@ -93,12 +93,11 @@ clean = Encoder(x, y, LAYER_SIZES, noise_sd=None, reuse=False, training=TRAIN_FL
 noisy = Encoder(x, y, LAYER_SIZES, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
 
 # Compute supervised loss on labeled only
-noisy_loss = tf.nn.softmax_cross_entropy_with_logits(
-    labels=y, logits=noisy.z[noisy.n_layers - 1][:LABELED_BATCH_SIZE, :])
+supervised_loss = tf.concat((noisy.supervised_loss(LABELED_BATCH_SIZE),
+                             tf.zeros((UNLABELED_BATCH_SIZE,))), axis=0) * SC_WEIGHT
 
-noisy_predict = tf.argmax(noisy.h[noisy.n_layers-1], axis=-1)
 # Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
-avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy_predict[:LABELED_BATCH_SIZE], tf.argmax(y, 1)), tf.float32))
+avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy.predict[:LABELED_BATCH_SIZE], tf.argmax(y, 1)), tf.float32))
 # ===========================
 # DECODER
 # ===========================
@@ -107,14 +106,13 @@ if USE_GAMMA_DECODER:
 else:
     decoder = Decoder(noisy, clean)
 
-decoder.build(tf.expand_dims(tf.cast(noisy_predict, tf.float32), axis=-1))
-
+decoder.build(tf.expand_dims(tf.cast(noisy.predict, tf.float32), axis=-1))
+unsupervised_loss = decoder.unsupervised_loss(RC_WEIGHTS)
 # ===========================
 # TRAINING
 # ===========================
 # Total loss
-total_loss = SC_WEIGHT * tf.concat((noisy_loss, tf.zeros((UNLABELED_BATCH_SIZE,))), axis=0)\
-             + sum([decoder.rc_cost[l] * RC_WEIGHTS[l] for l in decoder.rc_cost.keys()])
+total_loss = supervised_loss + unsupervised_loss
 
 # Passing global_step to minimize() will increment it at each step.
 opt_op = tf.train.AdamOptimizer(INITIAL_LEARNING_RATE).minimize(total_loss, global_step=global_step)
