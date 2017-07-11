@@ -114,11 +114,11 @@ for step in range(end_step):
     if (step+1) % params.print_interval == 0:
         labeled_epoch = sf.labeled.epochs_completed
         unlabeled_epoch = sf.unlabeled.epochs_completed
-        train_summary, train_err = \
+        train_summary, train_err, train_loss = \
             sess.run([merged, ladder.aer, ladder.mean_loss], train_dict)
         train_writer.add_summary(train_summary, global_step=step)
 
-        print(labeled_epoch, unlabeled_epoch, step, ladder.mean_loss, train_err * 100, sep='\t', flush=True)
+        print(labeled_epoch, unlabeled_epoch, step, train_loss, train_err * 100, sep='\t', flush=True)
 
     if params.save_interval is not None and step % params.save_interval == 0:
         saver.save(sess, save_to, global_step=step)
