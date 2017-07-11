@@ -1,8 +1,10 @@
 
-from source import *
-from math import floor
-from tensorflow.examples.tutorials.mnist import input_data
 import argparse
+
+from tensorflow.examples.tutorials.mnist import input_data
+
+from src import feed
+from src.ladder import *
 
 mnist = input_data.read_data_sets('../data/mnist/', one_hot=True)
 
@@ -26,23 +28,28 @@ parser.add_argument('--decay_start_epoch', default=100, type=int)
 parser.add_argument('--end_epoch', default=150, type=int)
 parser.add_argument('--print_interval', default=100, type=int)
 parser.add_argument('--save_interval', default=None, type=int)
+parser.add_argument('--num_labeled', default=100, type=int)
 parser.add_argument('--test_batch_size', default=100, type=int)
-parser.add_argument('--batch_size', default=100, type=int)
+parser.add_argument('--labeled_batch_size', default=100, type=int)
+parser.add_argument('--unlabeled_batch_size', default=250, type=int)
 parser.add_argument('--gamma', action='store_true')
 
-args = parser.parse_args()
+params = parser.parse_args()
 
-TRAIN_BATCH_SIZE = args.batch_size
-LABEL_BATCH_SIZE = TRAIN_BATCH_SIZE
-UNLABEL_BATCH_SIZE = TRAIN_BATCH_SIZE
-TEST_BATCH_SIZE = args.test_batch_size
+NUM_LABELED = params.num_labeled
+LABELED_BATCH_SIZE = params.labeled_batch_size
+UNLABELED_BATCH_SIZE = params.unlabeled_batch_size
+TRAIN_BATCH_SIZE = LABELED_BATCH_SIZE + UNLABELED_BATCH_SIZE
+TEST_BATCH_SIZE = LABELED_BATCH_SIZE
+
+
 INPUT_SIZE = 784
-TRAIN_FLAG = args.training
+TRAIN_FLAG = params.training
 OUTPUT_SIZE = 10
-EX_ID = args.id
-PRINT_INTERVAL = args.print_interval
-SAVE_INTERVAL = args.save_interval
-USE_GAMMA_DECODER = args.gamma
+EX_ID = params.id
+PRINT_INTERVAL = params.print_interval
+SAVE_INTERVAL = params.save_interval
+USE_GAMMA_DECODER = params.gamma
 NUM_EXAMPLES = mnist.train.num_examples
 
 
@@ -51,8 +58,8 @@ LAYER_SIZES = [INPUT_SIZE, 1000, 500, 250, 250, 250, OUTPUT_SIZE]
 SC_WEIGHT = 1000
 RC_WEIGHTS = {0:0.0, 1:0.0, 2:0.0, 3:0.0, 4:0.0, 5:0.0, 6:1.0}
 
-DECAY_START_EPOCH = args.decay_start_epoch
-END_EPOCH = args.end_epoch
+DECAY_START_EPOCH = params.decay_start_epoch
+END_EPOCH = params.end_epoch
 DECAY_EPOCHS = END_EPOCH - DECAY_START_EPOCH
 ITER_PER_EPOCH = int(NUM_EXAMPLES / TRAIN_BATCH_SIZE)
 DECAY_START_STEP = to_steps(DECAY_START_EPOCH)
@@ -85,6 +92,13 @@ clean = Encoder(x, y, LAYER_SIZES, noise_sd=None, reuse=False, training=TRAIN_FL
 # CORRUPTED ENCODER
 noisy = Encoder(x, y, LAYER_SIZES, noise_sd=0.3, reuse=True, training=TRAIN_FLAG)
 
+# Compute supervised loss on labeled only
+noisy_loss = tf.nn.softmax_cross_entropy_with_logits(
+    labels=y, logits=noisy.z[noisy.n_layers - 1][:LABELED_BATCH_SIZE, :])
+
+noisy_predict = tf.argmax(noisy.h[noisy.n_layers-1], axis=-1)
+# Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
+avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy_predict[:LABELED_BATCH_SIZE], tf.argmax(y, 1)), tf.float32))
 # ===========================
 # DECODER
 # ===========================
@@ -93,18 +107,14 @@ if USE_GAMMA_DECODER:
 else:
     decoder = Decoder(noisy, clean)
 
+decoder.build(tf.expand_dims(tf.cast(noisy_predict, tf.float32), axis=-1))
+
 # ===========================
 # TRAINING
 # ===========================
-
-# Compute supervised loss on labeled only
-noisy_loss = tf.nn.softmax_cross_entropy_with_logits(
-    labels=y, logits=noisy.z[noisy.n_layers - 1][:LABEL_BATCH_SIZE,:])
-total_loss = SC_WEIGHT * noisy_loss + sum([decoder.rc_cost[l] * RC_WEIGHTS[l] for l in decoder.rc_cost.keys()])
-
-noisy_predict = tf.argmax(noisy.h[noisy.n_layers-1][:LABEL_BATCH_SIZE,:], axis=-1)
-# Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
-avg_err_rate = 1 - tf.reduce_mean(tf.cast(tf.equal(noisy_predict, tf.argmax(y, 1)), tf.float32))
+# Total loss
+total_loss = SC_WEIGHT * tf.concat((noisy_loss, tf.zeros((UNLABELED_BATCH_SIZE,))), axis=0)\
+             + sum([decoder.rc_cost[l] * RC_WEIGHTS[l] for l in decoder.rc_cost.keys()])
 
 # Passing global_step to minimize() will increment it at each step.
 opt_op = tf.train.AdamOptimizer(INITIAL_LEARNING_RATE).minimize(total_loss, global_step=global_step)
@@ -124,28 +134,29 @@ tf.summary.scalar('loss', tf.reduce_mean(total_loss))
 tf.summary.scalar('error', avg_err_rate)
 merged = tf.summary.merge_all()
 
-test_dict = make_feed(*mnist.test.next_batch(TEST_BATCH_SIZE))
+test_dict = make_feed(*mnist.validation.next_batch(TEST_BATCH_SIZE))
+sf = feed.MNIST(mnist.train.images, mnist.train.labels, params.num_labeled)
 print('Epoch', 'Step', 'TrainErr(%)', 'TestErr(%)', sep='\t', flush=True)
-
 # Training (using a separate step to count)
 for step in range(END_STEP):
-    train_dict = make_feed(*mnist.train.next_batch(TRAIN_BATCH_SIZE))
+    train_dict = make_feed(*sf.next_batch(LABELED_BATCH_SIZE, UNLABELED_BATCH_SIZE))
     sess.run(opt_op, feed_dict=train_dict)
     # Logging during training
 
     epoch = mnist.train.epochs_completed
 
-    if (step+1) % PRINT_INTERVAL == 0:
+    if (step+1) % params.print_interval == 0:
         train_summary, train_err = \
             sess.run([merged, avg_err_rate], train_dict)
-        test_summary, test_err = \
-            sess.run([merged, avg_err_rate], test_dict)
+        test_err = 0
+        # test_summary, test_err = \
+        #     sess.run([merged, avg_err_rate], test_dict)
         train_writer.add_summary(train_summary, global_step=step)
-        test_writer.add_summary(test_summary, global_step=step)
+        # test_writer.add_summary(test_summary, global_step=step)
 
         print(epoch, step, train_err * 100, test_err * 100, sep='\t', flush=True)
 
-    if SAVE_INTERVAL is not None and step % SAVE_INTERVAL == 0:
+    if params.save_interval is not None and step % params.save_interval == 0:
         saver.save(sess, save_to, global_step=step)
 
     global_step += 1

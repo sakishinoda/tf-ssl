@@ -3,11 +3,6 @@ import tensorflow.contrib.layers as layers
 from collections import OrderedDict
 
 
-
-
-
-
-##
 class NoisyBNLayer(object):
 
     def __init__(self, scope_name, size, noise_sd=None, decay=0.99, var_ep=1e-5, reuse=None):
@@ -161,8 +156,8 @@ class Decoder(object):
         self.clean = clean
         self.scope = scope
         self.rc_cost = OrderedDict()
-        u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
-        self.build(u_l)
+        # u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
+        # self.build(u_l)
 
     def build(self, decoder_activations):
         for l in self.noisy.z.keys():
