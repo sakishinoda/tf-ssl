@@ -35,29 +35,23 @@ def get_cli_params():
     parser.add_argument('--layer_sizes', default='784-1000-500-250-250-250-10')
     parser.add_argument('--sc_weight', default=1000, type=float)
     parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')
-    parser.add_argument('--gpu', action='store_true')
+    parser.add_argument('--which_gpu', default=0, type=int)
+    parser.add_argument('--write_to', default=None)
 
     # only used if train_flag is false
     parser.add_argument('--train_step', default=None, type=int)
     parser.add_argument('--verbose', action='store_true') # for testing
 
-    params = parser.parse_args()
-    return process_cli_params(params)
+    return parser.parse_args()
 
-def process_cli_params(params, verbose=True):
-
-    param_dict = vars(params)
-    if verbose:
-        print('===== Parameter settings =====', flush=True)
-        sorted_keys = sorted([k for k in param_dict.keys()])
-        for k in sorted_keys:
-            print(k,':', param_dict[k])
+def process_cli_params(params):
 
     # Specify base structure
     layer_sizes = parse_argstring(params.layer_sizes, dtype=int)
     rc_weights = parse_argstring(params.rc_weights, dtype=float)
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
 
+    param_dict = vars(params)
     param_dict.update({
         'layer_sizes': layer_sizes,
         'rc_weights': rc_weights,

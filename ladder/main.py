@@ -6,14 +6,24 @@ sys.path.append(os.path.join(sys.path[0],'..'))
 from src import feed, utils
 from src.ladder import *
 
-# Specify GPU to use
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 # ===========================
 # PARAMETERS
 # ===========================
 params = utils.get_cli_params()
+write_to = open(params.write_to, 'w')
+
+param_dict = vars(params)
+print('===== Parameter settings =====', flush=True, file=write_to)
+sorted_keys = sorted([k for k in param_dict.keys()])
+for k in sorted_keys:
+    print(k, ':', param_dict[k], file=write_to, flush=True)
+
+params = utils.process_cli_params(params)
+
+# Specify GPU to use
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 
 mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
 
@@ -21,14 +31,13 @@ ladder = Ladder(params)
 
 
 if params.train_flag:
-
     # ===========================
     # TRAINING
     # ===========================
     sf = feed.MNIST(mnist.train.images, mnist.train.labels, params.num_labeled)
     iter_per_epoch = int(sf.unlabeled.num_examples / params.unlabeled_batch_size)
-    print('iter_per_epoch', ':', iter_per_epoch)
-    utils.print_trainables()
+    print('iter_per_epoch', ':', iter_per_epoch, file=write_to, flush=True)
+    utils.print_trainables(write_to=write_to)
     save_interval = None if params.save_epochs is None else int(params.save_epochs * iter_per_epoch)
 
 
@@ -59,7 +68,7 @@ if params.train_flag:
 
     start_time = time()
 
-    print('LEpoch', 'UEpoch', 'Time/m', 'Step', 'Loss', 'AER(%)', sep='\t', flush=True)
+    print('LEpoch', 'UEpoch', 'Time/m', 'Step', 'Loss', 'AER(%)', sep='\t', flush=True, file=write_to)
     # Training (using a separate step to count)
     end_step = params.end_epoch * iter_per_epoch
     for step in range(end_step):
@@ -83,7 +92,7 @@ if params.train_flag:
                 step,
                 train_loss,
                 train_err * 100,
-                sep='\t', flush=True)
+                sep='\t', flush=True, file=write_to)
 
         if save_interval is not None and step % save_interval == 0:
             saver.save(sess, save_to, global_step=step)
@@ -128,12 +137,13 @@ else:
             sess.run([ladder.aer, ladder.mean_loss], feed_dict)
 
         if params.verbose:
-            print(step, loss[step], err[step] * 100, sep='\t', flush=True)
+            print(step, loss[step], err[step] * 100, sep='\t', flush=True, file=write_to)
 
     mean_loss = sum(loss) / (iter_per_epoch)
     mean_aer = sum(err) / (iter_per_epoch)
 
-    print('Training step', 'Mean loss', 'Mean AER(%)', sep='\t', flush=True)
-    print(params.train_step, mean_loss, mean_aer * 100, sep='\t', flush=True)
+    print('Training step', 'Mean loss', 'Mean AER(%)', sep='\t', flush=True, file=write_to)
+    print(params.train_step, mean_loss, mean_aer * 100, sep='\t', flush=True, file=write_to)
 
 sess.close()
+write_to.close()
