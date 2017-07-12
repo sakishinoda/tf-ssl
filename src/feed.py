@@ -38,28 +38,13 @@ class Dataset(object):
         seed1, seed2 = random_seed.get_seed(seed)
         # If op level seed is not set, use whatever graph level seed is returned
         self.rng = np.random.RandomState(seed1 if seed is None else seed2)
-        self._images, self._labels=  images, labels
+        self.images, self.labels= images, labels
         assert images.shape[0] == labels.shape[0]
-        self._num_examples = self.images.shape[0]
-        self._epochs_completed = 0
+        self.num_examples = self.images.shape[0]
+        self.epochs_completed = 0
         self._index_in_epoch = 0
-        assert self._images.shape[0] == self._num_examples
+        assert self.images.shape[0] == self.num_examples
 
-    @property
-    def images(self):
-        return self._images
-
-    @property
-    def labels(self):
-        return self._labels
-
-    @property
-    def num_examples(self):
-        return self._num_examples
-
-    @property
-    def epochs_completed(self):
-        return self._epochs_completed
 
     def next_batch(self, batch_size, shuffle=True):
         """Return the next `batch_size` examples from this data set.
@@ -68,18 +53,18 @@ class Dataset(object):
 
         start = self._index_in_epoch
         # Shuffle for the first epoch
-        if self._epochs_completed == 0 and start == 0 and shuffle:
+        if self.epochs_completed == 0 and start == 0 and shuffle:
             self.shuffle()
 
         # Go to the next epoch
-        if start + batch_size > self._num_examples:
+        if start + batch_size > self.num_examples:
             # Finished epoch
-            self._epochs_completed += 1
+            self.epochs_completed += 1
 
             # Get the rest examples in this epoch
-            rest_num_examples = self._num_examples - start
-            images_rest_part = self._images[start:self._num_examples]
-            labels_rest_part = self._labels[start:self._num_examples]
+            rest_num_examples = self.num_examples - start
+            images_rest_part = self.images[start:self.num_examples]
+            labels_rest_part = self.labels[start:self.num_examples]
 
             # Shuffle the data for next epoch
             if shuffle:
@@ -89,20 +74,20 @@ class Dataset(object):
             start = 0
             self._index_in_epoch = batch_size - rest_num_examples
             end = self._index_in_epoch
-            images_new_part = self._images[start:end]
-            labels_new_part = self._labels[start:end]
+            images_new_part = self.images[start:end]
+            labels_new_part = self.labels[start:end]
             return np.concatenate((images_rest_part, images_new_part), axis=0), \
                    np.concatenate((labels_rest_part, labels_new_part), axis=0)
         else:
             self._index_in_epoch += batch_size
             end = self._index_in_epoch
-            return self._images[start:end], self._labels[start:end]
+            return self.images[start:end], self.labels[start:end]
 
     def shuffle(self):
-        perm = np.arange(self._num_examples)
+        perm = np.arange(self.num_examples)
         self.rng.shuffle(perm)
-        self._images = self._images[perm]
-        self._labels = self._labels[perm]
+        self.images = self.images[perm]
+        self.labels = self.labels[perm]
 
 
 
