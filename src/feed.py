@@ -1,4 +1,3 @@
-from tensorflow.examples.tutorials.mnist import input_data
 from tensorflow.python.framework import random_seed
 import numpy as np
 from math import ceil

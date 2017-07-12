@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 from collections import OrderedDict
-import IPython
+
 
 
 class NoisyBNLayer(object):
