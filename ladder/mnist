@@ -2,7 +2,9 @@
 
 source activate blaze
 
-python main.py --id 'gamma' --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 1 > logs/gamma.res &
+nohup python main.py --id 'gamma' --gamma --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 1 > logs/gamma.res &
 
 
-python test.py --id 'gamma'
+python test.py --id 'gamma' --gamma --train_step 876
+
+nohup python main.py --id 'ladder' --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 > logs/ladder.res &

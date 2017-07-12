@@ -1,7 +1,8 @@
 from tensorflow.examples.tutorials.mnist import input_data
-
-import sys
-sys.path.append('/Users/saki/tf-ssl/')
+from time import time
+import sys, os
+# sys.path.append('/Users/saki/tf-ssl/')
+sys.path.append(os.path.join(sys.path[0],'..'))
 from src import feed, utils
 from src.ladder import *
 
@@ -11,7 +12,7 @@ from src.ladder import *
 # ===========================
 params = utils.get_cli_params()
 
-mnist = input_data.read_data_sets('/Users/saki/tf-ssl/data/mnist/', one_hot=True)
+mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
 
 ladder = Ladder(params)
 
@@ -21,9 +22,12 @@ if params.train_flag:
     # ===========================
     # TRAINING
     # ===========================
-
     sf = feed.MNIST(mnist.train.images, mnist.train.labels, params.num_labeled)
     iter_per_epoch = int(sf.unlabeled.num_examples / params.unlabeled_batch_size)
+    print('iter_per_epoch', ':', iter_per_epoch)
+    utils.print_trainables()
+    save_interval = None if params.save_epochs is None else int(params.save_epochs * iter_per_epoch)
+
 
     global_step = tf.get_variable('global_step', initializer=0, trainable=False)
     learning_rate = utils.decay_learning_rate(
@@ -34,7 +38,7 @@ if params.train_flag:
             global_step=global_step)
 
     # Passing global_step to minimize() will increment it at each step.
-    opt_op = tf.train.AdamOptimizer(params.learning_rate).minimize(ladder.loss, global_step=params.global_step)
+    opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.loss, global_step=global_step)
 
     # Set up saver
     saver = tf.train.Saver()
@@ -50,8 +54,9 @@ if params.train_flag:
     tf.summary.scalar('error', ladder.aer)
     merged = tf.summary.merge_all()
 
+    start_time = time()
 
-    print('Labeled Epoch', 'Unlabeled Epoch', 'Step', 'Loss', 'TrainErr(%)', sep='\t', flush=True)
+    print('LEpoch', 'UEpoch', 'Time/m', 'Step', 'Loss', 'AER(%)', sep='\t', flush=True)
     # Training (using a separate step to count)
     end_step = params.end_epoch * iter_per_epoch
     for step in range(end_step):
@@ -61,18 +66,26 @@ if params.train_flag:
 
         # Logging during training
         if (step+1) % params.print_interval == 0:
+            time_elapsed = time() - start_time
             labeled_epoch = sf.labeled.epochs_completed
             unlabeled_epoch = sf.unlabeled.epochs_completed
             train_summary, train_err, train_loss = \
                 sess.run([merged, ladder.aer, ladder.mean_loss], train_dict)
             train_writer.add_summary(train_summary, global_step=step)
 
-            print(labeled_epoch, unlabeled_epoch, step, train_loss, train_err * 100, sep='\t', flush=True)
+            print(
+                labeled_epoch,
+                unlabeled_epoch,
+                int(time_elapsed/60),
+                step,
+                train_loss,
+                train_err * 100,
+                sep='\t', flush=True)
 
-        if params.save_interval is not None and step % params.save_interval == 0:
+        if save_interval is not None and step % save_interval == 0:
             saver.save(sess, save_to, global_step=step)
 
-        params.global_step += 1
+        global_step += 1
 
     # Save final model
     saved_to = saver.save(sess, save_to)
