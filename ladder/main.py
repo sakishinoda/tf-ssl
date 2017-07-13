@@ -61,7 +61,7 @@ if params.train_flag:
 
     # Create summaries
     train_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
-    test_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
+    test_writer = tf.summary.FileWriter('logs/' + params.id + '/test/', sess.graph)
     train_loss_summary = tf.summary.scalar('training loss', ladder.training_loss)
     test_loss_summary = tf.summary.scalar('testing loss', ladder.testing_loss)
     err_summary = tf.summary.scalar('error', ladder.aer)
