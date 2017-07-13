@@ -110,7 +110,7 @@ if params.train_flag:
                 sep='\t', flush=True, file=write_to)
 
 
-        if save_interval is not None and step % save_interval == 0:
+        if save_interval is not None and step > 0 and step % save_interval == 0:
             saver.save(sess, save_to, global_step=step)
 
         global_step += 1
