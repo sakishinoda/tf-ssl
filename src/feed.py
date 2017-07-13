@@ -5,6 +5,7 @@ from math import ceil
 class SemiFeed(object):
     def __init__(self, all_images, all_labels, num_labeled, seed=None):
         seed1, seed2 = random_seed.get_seed(seed)
+        self.seeds = (seed, seed1, seed2)
         # If op level seed is not set, use whatever graph level seed is returned
         self.rng = np.random.RandomState(seed1 if seed is None else seed2)
         images, labels, u_images, u_labels = self.sample_labeled(
@@ -90,7 +91,7 @@ class Dataset(object):
 
 
 
-class MNIST(SemiFeed):
+class Balanced(SemiFeed):
 
     def sample_labeled(self, all_images, all_labels, num_labeled):
         images, labels, u_images, u_labels = self.sample_balanced_labeled(
@@ -102,6 +103,8 @@ class MNIST(SemiFeed):
 
     def sample_balanced_labeled(self, images, labels, num_labeled):
         n_total, n_classes = labels.shape
+
+        # First create a fully balanced set larger than desired
         nl_per_class = int(ceil(num_labeled / n_classes))
         rng = self.rng
         idx = []
@@ -109,19 +112,14 @@ class MNIST(SemiFeed):
         for c in range(n_classes):
             c_idx = np.where(labels[:,c]==1)[0]
             idx.append(rng.choice(c_idx, nl_per_class))
-
         l_idx = np.concatenate(idx)
+
+        # Now sample uniformly without replacement from the larger set to get desired
         l_idx = rng.choice(l_idx, size=num_labeled, replace=False)
 
         u_idx = np.setdiff1d(np.arange(n_total), l_idx, assume_unique=True)
 
         return images[l_idx], labels[l_idx], images[u_idx], labels[u_idx]
-
-
-
-
-
-
 
 
 

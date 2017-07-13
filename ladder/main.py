@@ -1,17 +1,15 @@
 from tensorflow.examples.tutorials.mnist import input_data
 from time import time
 import sys, os
-# sys.path.append('/Users/saki/tf-ssl/')
 sys.path.append(os.path.join(sys.path[0],'..'))
 from src import feed, utils
 from src.ladder import *
-
 
 # ===========================
 # PARAMETERS
 # ===========================
 params = utils.get_cli_params()
-write_to = open(params.write_to, 'w')
+write_to = open(params.write_to, 'w') if params.write_to is not None else None
 
 param_dict = vars(params)
 print('===== Parameter settings =====', flush=True, file=write_to)
@@ -34,7 +32,8 @@ if params.train_flag:
     # ===========================
     # TRAINING
     # ===========================
-    sf = feed.MNIST(mnist.train.images, mnist.train.labels, params.num_labeled)
+    sf = feed.Balanced(mnist.train.images, mnist.train.labels, params.num_labeled)
+    print('seeds : ', sf.seeds, file=write_to, flush=True)
     iter_per_epoch = int(sf.unlabeled.num_examples / params.unlabeled_batch_size)
     print('iter_per_epoch', ':', iter_per_epoch, file=write_to, flush=True)
     utils.print_trainables(write_to=write_to)
@@ -50,10 +49,10 @@ if params.train_flag:
             global_step=global_step)
 
     # Passing global_step to minimize() will increment it at each step.
-    opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.loss, global_step=global_step)
+    opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.training_loss, global_step=global_step)
 
     # Set up saver
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(keep_checkpoint_every_n_hours=1)
     save_to = 'models/' + params.id
 
     # Start session and initialize
@@ -62,13 +61,18 @@ if params.train_flag:
 
     # Create summaries
     train_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
-    tf.summary.scalar('loss', ladder.mean_loss)
-    tf.summary.scalar('error', ladder.aer)
-    merged = tf.summary.merge_all()
+    test_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
+    train_loss_summary = tf.summary.scalar('training loss', tf.reduce_mean(ladder.training_loss))
+    test_loss_summary = tf.summary.scalar('testing loss', tf.reduce_mean(ladder.testing_loss))
+    err_summary = tf.summary.scalar('error', ladder.aer)
+    train_merged = tf.summary.merge([train_loss_summary, err_summary])
+    test_merged = tf.summary.merge([test_loss_summary, err_summary])
 
+    x, y = mnist.validation.next_batch(params.labeled_batch_size)
+    test_dict = {ladder.x: x, ladder.y: y}
     start_time = time()
 
-    print('LEpoch', 'UEpoch', 'Time/m', 'Step', 'Loss', 'AER(%)', sep='\t', flush=True, file=write_to)
+    print('LEpoch', 'UEpoch', 'Time/m', 'Step', 'Loss', 'TestLoss', 'AER(%)', 'TestAER(%)', sep='\t', flush=True, file=write_to)
     # Training (using a separate step to count)
     end_step = params.end_epoch * iter_per_epoch
     for step in range(end_step):
@@ -81,9 +85,18 @@ if params.train_flag:
             time_elapsed = time() - start_time
             labeled_epoch = sf.labeled.epochs_completed
             unlabeled_epoch = sf.unlabeled.epochs_completed
+
+            # Training metrics
             train_summary, train_err, train_loss = \
-                sess.run([merged, ladder.aer, ladder.mean_loss], train_dict)
+                sess.run([train_merged, ladder.aer, tf.reduce_mean(ladder.training_loss)],
+                         feed_dict=train_dict)
             train_writer.add_summary(train_summary, global_step=step)
+
+            # Testing metrics
+            test_summary, test_err, test_loss = \
+                sess.run([test_merged, ladder.aer, tf.reduce_mean(ladder.testing_loss)],
+                         feed_dict=test_dict)
+            test_writer.add_summary(test_summary, global_step=step)
 
             print(
                 labeled_epoch,
@@ -91,8 +104,11 @@ if params.train_flag:
                 int(time_elapsed/60),
                 step,
                 train_loss,
+                test_loss,
                 train_err * 100,
+                test_err * 100,
                 sep='\t', flush=True, file=write_to)
+
 
         if save_interval is not None and step % save_interval == 0:
             saver.save(sess, save_to, global_step=step)
@@ -120,30 +136,31 @@ else:
 
     # Start session and initialize
     sess = tf.Session()
-    sess.run(tf.global_variables_initializer())
+    # sess.run(tf.global_variables_initializer())
 
     saver.restore(sess, save_to)
 
-
-    err = [0 for x in range(iter_per_epoch)]
-    loss = [0 for x in range(iter_per_epoch)]
-
+    err = []
+    loss = []
 
     for step in range(iter_per_epoch):
         x, y = test_set.next_batch(params.test_batch_size)
         feed_dict = {ladder.x: x, ladder.y: y}
 
-        err[step], loss[step] = \
-            sess.run([ladder.aer, ladder.mean_loss], feed_dict)
+        this_err, this_loss = \
+            sess.run([ladder.aer, tf.reduce_mean(ladder.testing_loss)], feed_dict)
+        err.append(this_err)
+        loss.append(this_loss)
 
         if params.verbose:
             print(step, loss[step], err[step] * 100, sep='\t', flush=True, file=write_to)
 
-    mean_loss = sum(loss) / (iter_per_epoch)
-    mean_aer = sum(err) / (iter_per_epoch)
+    mean_loss = sum(loss) / (len(loss)+1)
+    mean_aer = sum(err) / (len(err)+1)
 
     print('Training step', 'Mean loss', 'Mean AER(%)', sep='\t', flush=True, file=write_to)
     print(params.train_step, mean_loss, mean_aer * 100, sep='\t', flush=True, file=write_to)
 
 sess.close()
-write_to.close()
+if write_to is not None:
+    write_to.close()
