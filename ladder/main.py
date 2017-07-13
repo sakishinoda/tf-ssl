@@ -62,8 +62,8 @@ if params.train_flag:
     # Create summaries
     train_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
     test_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
-    train_loss_summary = tf.summary.scalar('training loss', tf.reduce_mean(ladder.training_loss))
-    test_loss_summary = tf.summary.scalar('testing loss', tf.reduce_mean(ladder.testing_loss))
+    train_loss_summary = tf.summary.scalar('training loss', ladder.training_loss)
+    test_loss_summary = tf.summary.scalar('testing loss', ladder.testing_loss)
     err_summary = tf.summary.scalar('error', ladder.aer)
     train_merged = tf.summary.merge([train_loss_summary, err_summary])
     test_merged = tf.summary.merge([test_loss_summary, err_summary])
@@ -88,13 +88,13 @@ if params.train_flag:
 
             # Training metrics
             train_summary, train_err, train_loss = \
-                sess.run([train_merged, ladder.aer, tf.reduce_mean(ladder.training_loss)],
+                sess.run([train_merged, ladder.aer, ladder.training_loss],
                          feed_dict=train_dict)
             train_writer.add_summary(train_summary, global_step=step)
 
             # Testing metrics
             test_summary, test_err, test_loss = \
-                sess.run([test_merged, ladder.aer, tf.reduce_mean(ladder.testing_loss)],
+                sess.run([test_merged, ladder.aer, ladder.testing_loss],
                          feed_dict=test_dict)
             test_writer.add_summary(test_summary, global_step=step)
 
@@ -148,7 +148,7 @@ else:
         feed_dict = {ladder.x: x, ladder.y: y}
 
         this_err, this_loss = \
-            sess.run([ladder.aer, tf.reduce_mean(ladder.testing_loss)], feed_dict)
+            sess.run([ladder.aer, ladder.testing_loss], feed_dict)
         err.append(this_err)
         loss.append(this_loss)
 

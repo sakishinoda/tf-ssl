@@ -33,7 +33,7 @@ def get_cli_params():
     parser.add_argument('--initial_learning_rate', default=0.0002, type=float)
     parser.add_argument('--gamma_flag', action='store_true')
     parser.add_argument('--layer_sizes', default='784-1000-500-250-250-250-10')
-    parser.add_argument('--sc_weight', default=1000, type=float)
+    parser.add_argument('--sc_weight', default=1, type=float)
     parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')
     parser.add_argument('--which_gpu', default=0, type=int)
     parser.add_argument('--write_to', default=None)

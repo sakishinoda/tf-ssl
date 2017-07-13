@@ -290,11 +290,11 @@ class Ladder(object):
 
     @property
     def training_loss(self):
-        return self.loss(train_flag=True)
+        return tf.reduce_mean(self.loss(train_flag=True))
 
     @property
     def testing_loss(self):
-        return self.loss(train_flag=False)
+        return tf.reduce_mean(self.loss(train_flag=False))
 
     def loss(self, train_flag=True):
         # Compute supervised loss on labeled only
