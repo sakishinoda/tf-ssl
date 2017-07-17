@@ -92,6 +92,8 @@ class Encoder(object):
         """D
         Defines all operations needed for inference.
         Supervised loss also required for training.
+        Note that z[0], z_pre[0] not defined; h[0] is the original input
+
         """
         bn = self.bn_layers[0]
         self.h[0] = bn.add_noise(bn.normalize(self.x, training))
@@ -171,7 +173,14 @@ class Decoder(object):
         # self.build(u_l)
 
     def build(self, decoder_activations, training=True):
+        """
+        Reconstruction cost is only associated with each layer of z, so does not include the input h[0],
+        for which there is no corresponding z[0]
 
+        :param decoder_activations:
+        :param training:
+        :return:
+        """
         for l in reversed([l for l in self.noisy.z.keys()]):
             # print('dec', l)
             decoder_activations, self.rc_cost[l] = self.compute_rc_cost(l, decoder_activations, training)
