@@ -2,8 +2,6 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 from collections import OrderedDict
 
-
-
 class NoisyBNLayer(object):
 
     def __init__(self, scope_name, size, noise_sd=None, decay=0.99, var_ep=1e-5, reuse=None):
