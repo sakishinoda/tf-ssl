@@ -55,7 +55,8 @@ def process_cli_params(params):
     param_dict.update({
         'layer_sizes': layer_sizes,
         'rc_weights': rc_weights,
-        'test_batch_size': None if params.train_flag else params.labeled_batch_size
+        'test_batch_size': None if params.train_flag else params.labeled_batch_size,
+        'write_to': 'logs/' + params.id + '.results' if params.write_to is None else params.write_to
     })
 
     return params

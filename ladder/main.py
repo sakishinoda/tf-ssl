@@ -1,4 +1,4 @@
-import IPython
+# import IPython
 from tensorflow.examples.tutorials.mnist import input_data
 from time import time
 import sys, os
@@ -27,7 +27,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
 
 ladder = Ladder(params)
-IPython.embed()
+# IPython.embed()
 
 
 if params.train_flag:
