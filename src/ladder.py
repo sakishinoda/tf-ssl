@@ -299,20 +299,22 @@ class Ladder(object):
 
     @property
     def training_loss(self):
-        return tf.reduce_mean(self.loss(train_flag=True))
+        return tf.reduce_sum(self.loss(train_flag=True))
 
     @property
     def testing_loss(self):
-        return tf.reduce_mean(self.loss(train_flag=False))
+        return tf.reduce_sum(self.loss(train_flag=False))
 
     def loss(self, train_flag=True):
         # Compute supervised loss on labeled only
         supervised_loss = self.noisy.supervised_loss(
             self.params.labeled_batch_size,
             self.params.unlabeled_batch_size,
-            training=train_flag) * self.params.sc_weight
+            training=train_flag) * self.params.sc_weight / self.params.labeled_batch_size
 
-        return self.unsupervised_loss + supervised_loss
+        unsupervised_loss = self.unsupervised_loss / self.params.unlabeled_batch_size
+
+        return unsupervised_loss + supervised_loss
 
         # self.loss = self.supervised_loss + self.unsupervised_loss
         # self.mean_loss = tf.reduce_mean(self.loss)
