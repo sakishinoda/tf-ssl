@@ -7,6 +7,6 @@ nohup python main.py --id 'gamma' --gamma --train_flag --decay_start_epoch 100 -
 
 python test.py --id 'gamma' --gamma --train_step 876
 
-nohup python main.py --id 'ladder_test_with_sum_costs' --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --write_to logs/ladder_test_with_sum_costs.res -rc_weights 1000-10.0-0.2-0.2-0.2-0.2-0.2 &
+nohup python main.py --id 'ladder_test_with_sum_costs' --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --write_to logs/ladder_test_with_sum_costs.res --rc_weights 1000-10.0-0.2-0.2-0.2-0.2-0.2 &
 
 python main.py --id "ladder_test_1000sc" --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --write_to logs/ladder_test_1000sc.res --rc_weights 1000-10.0-0.2-0.2-0.2-0.2-0.2 --sc_weight 1000 --which_gpu 1

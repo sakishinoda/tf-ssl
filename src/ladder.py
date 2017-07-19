@@ -118,6 +118,8 @@ class Encoder(object):
     def supervised_loss(self, labeled_batch_size, unlabeled_batch_size, training=True):
         labeled_loss = tf.nn.softmax_cross_entropy_with_logits(
             labels=self.y, logits=self.z[self.n_layers - 1][:labeled_batch_size])
+
+
         if training:
             return tf.concat((labeled_loss, tf.zeros((unlabeled_batch_size,))), axis=0)
         else:
@@ -199,6 +201,7 @@ class Decoder(object):
         combinator = Combinator(u_l, z_l, layer_sizes=(2, 2, 1), stddev=0.025, scope='com' + str(layer) + '_')
         reconstruction = combinator.outputs
 
+        # Sum over each "pixel"
         rc_cost = tf.reduce_sum(
             tf.square(noisy.bn_layers[layer].normalize_from_saved_stats(reconstruction, training=training) - target_z),
             axis=-1)
