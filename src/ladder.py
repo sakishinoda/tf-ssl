@@ -115,15 +115,10 @@ class Encoder(object):
 
         return predict
 
-    def supervised_loss(self, labeled_batch_size, unlabeled_batch_size, training=True):
+    def supervised_loss(self, labeled_batch_size):
         labeled_loss = tf.nn.softmax_cross_entropy_with_logits(
             labels=self.y, logits=self.z[self.n_layers - 1][:labeled_batch_size])
-
-
-        if training:
-            return tf.concat((labeled_loss, tf.zeros((unlabeled_batch_size,))), axis=0)
-        else:
-            return labeled_loss
+        return tf.reduce_mean(labeled_loss, axis=0)
 
 
 
@@ -202,7 +197,7 @@ class Decoder(object):
         reconstruction = combinator.outputs
 
         # Sum over each "pixel"
-        rc_cost = tf.reduce_sum(
+        rc_cost = tf.reduce_mean(
             tf.square(noisy.bn_layers[layer].normalize_from_saved_stats(reconstruction, training=training) - target_z),
             axis=-1)
 
@@ -296,26 +291,28 @@ class Ladder(object):
 
     @property
     def unsupervised_loss(self):
-        return sum([self.decoder.rc_cost[l] * self.params.rc_weights[l] for l in self.decoder.rc_cost.keys()])
+        unlabeled_loss = sum([self.decoder.rc_cost[l][self.params.unlabeled_batch_size:] *
+                    self.params.rc_weights[l] for l in self.decoder.rc_cost.keys()])
+        return tf.reduce_mean(unlabeled_loss, axis=0)
+
+    @property
+    def supervised_loss(self):
+        # Compute supervised loss on labeled only
+        supervised_loss = self.noisy.supervised_loss(
+            self.params.labeled_batch_size) * self.params.sc_weight
+        return supervised_loss
 
     @property
     def training_loss(self):
-        return tf.reduce_sum(self.loss(train_flag=True))
+        return self.loss
 
     @property
     def testing_loss(self):
-        return tf.reduce_sum(self.loss(train_flag=False))
+        return self.supervised_loss
 
-    def loss(self, train_flag=True):
-        # Compute supervised loss on labeled only
-        supervised_loss = self.noisy.supervised_loss(
-            self.params.labeled_batch_size,
-            self.params.unlabeled_batch_size,
-            training=train_flag) * self.params.sc_weight / self.params.labeled_batch_size
-
-        unsupervised_loss = self.unsupervised_loss / self.params.unlabeled_batch_size
-
-        return unsupervised_loss + supervised_loss
+    @property
+    def loss(self):
+        return self.unsupervised_loss + self.supervised_loss
 
         # self.loss = self.supervised_loss + self.unsupervised_loss
         # self.mean_loss = tf.reduce_mean(self.loss)
