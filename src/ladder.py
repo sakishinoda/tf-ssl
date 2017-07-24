@@ -303,7 +303,7 @@ class Ladder(object):
         return supervised_loss
 
     @property
-    def training_loss(self):
+    def loss(self):
         return self.loss
 
     @property

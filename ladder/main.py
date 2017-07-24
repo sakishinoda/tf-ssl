@@ -51,7 +51,7 @@ if params.train_flag:
             global_step=global_step)
 
     # Passing global_step to minimize() will increment it at each step.
-    opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.training_loss, global_step=global_step)
+    opt_op = tf.train.AdamOptimizer(learning_rate).minimize(ladder.loss, global_step=global_step)
 
     # Set up saver
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=1)
@@ -64,7 +64,7 @@ if params.train_flag:
     # Create summaries
     train_writer = tf.summary.FileWriter('logs/' + params.id + '/train/', sess.graph)
     test_writer = tf.summary.FileWriter('logs/' + params.id + '/test/', sess.graph)
-    train_loss_summary = tf.summary.scalar('training loss', ladder.training_loss)
+    train_loss_summary = tf.summary.scalar('training loss', ladder.loss)
     test_loss_summary = tf.summary.scalar('testing loss', ladder.testing_loss)
     err_summary = tf.summary.scalar('error', ladder.aer)
     train_merged = tf.summary.merge([train_loss_summary, err_summary])
@@ -90,7 +90,7 @@ if params.train_flag:
 
             # Training metrics
             train_summary, train_err, train_loss = \
-                sess.run([train_merged, ladder.aer, ladder.training_loss],
+                sess.run([train_merged, ladder.aer, ladder.loss],
                          feed_dict=train_dict)
             train_writer.add_summary(train_summary, global_step=step)
 
