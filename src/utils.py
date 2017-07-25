@@ -37,6 +37,7 @@ def get_cli_params():
     parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')  # first number is a dummy
     parser.add_argument('--which_gpu', default=0, type=int)
     parser.add_argument('--write_to', default=None)
+    parser.add_argument('--seed', default=1)
 
     # only used if train_flag is false
     parser.add_argument('--train_step', default=None, type=int)

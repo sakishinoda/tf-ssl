@@ -1,17 +1,21 @@
-from tensorflow.python.framework import random_seed
+# from tensorflow.python.framework import random_seed
+# https://www.tensorflow.org/versions/r0.12/api_docs/python/constant_op/random_tensors#set_random_seed
+
 import numpy as np
 from math import ceil
 
 class SemiFeed(object):
     def __init__(self, all_images, all_labels, num_labeled, seed=None):
-        seed1, seed2 = random_seed.get_seed(seed)
-        self.seeds = (seed, seed1, seed2)
+        # seed1, seed2 = random_seed.get_seed(seed)
+        # self.seeds = (seed, seed1, seed2)
         # If op level seed is not set, use whatever graph level seed is returned
-        self.rng = np.random.RandomState(seed1 if seed is None else seed2)
+        # self.rng = np.random.RandomState(seed1 if seed is None else seed2)
         images, labels, u_images, u_labels = self.sample_labeled(
             all_images, all_labels, num_labeled)
         self.labeled = Dataset(images, labels, seed)
         self.unlabeled = Dataset(u_images, u_labels, seed)
+        # np.random.seed(seed)
+        # self.seeds = seed
 
     def next_batches(self, l_batch_size, u_batch_size, shuffle=True):
         l_images, l_labels = self.labeled.next_batch(l_batch_size, shuffle)
@@ -26,7 +30,8 @@ class SemiFeed(object):
     def sample_labeled(self, images, labels, num_labeled):
 
         perm = np.arange(images.shape[0])
-        self.rng.shuffle(perm)
+        # self.rng.shuffle(perm)
+        np.random.shuffle(perm)
 
         return images[perm[:num_labeled]], labels[perm[:num_labeled]], \
                images[perm[num_labeled:]], labels[perm[num_labeled:]]
@@ -35,9 +40,9 @@ class SemiFeed(object):
 
 class Dataset(object):
     def __init__(self, images, labels, seed=None):
-        seed1, seed2 = random_seed.get_seed(seed)
+        # seed1, seed2 = random_seed.get_seed(seed)
         # If op level seed is not set, use whatever graph level seed is returned
-        self.rng = np.random.RandomState(seed1 if seed is None else seed2)
+        # self.rng = np.random.RandomState(seed1 if seed is None else seed2)
         self.images, self.labels= images, labels
         assert images.shape[0] == labels.shape[0]
         self.num_examples = self.images.shape[0]
@@ -85,7 +90,8 @@ class Dataset(object):
 
     def shuffle(self):
         perm = np.arange(self.num_examples)
-        self.rng.shuffle(perm)
+        np.random.shuffle(perm)
+        # self.rng.shuffle()
         self.images = self.images[perm]
         self.labels = self.labels[perm]
 
@@ -106,16 +112,16 @@ class Balanced(SemiFeed):
 
         # First create a fully balanced set larger than desired
         nl_per_class = int(ceil(num_labeled / n_classes))
-        rng = self.rng
+        # rng = self.rng
         idx = []
 
         for c in range(n_classes):
             c_idx = np.where(labels[:,c]==1)[0]
-            idx.append(rng.choice(c_idx, nl_per_class))
+            idx.append(np.random.choice(c_idx, nl_per_class))
         l_idx = np.concatenate(idx)
 
         # Now sample uniformly without replacement from the larger set to get desired
-        l_idx = rng.choice(l_idx, size=num_labeled, replace=False)
+        l_idx = np.random.choice(l_idx, size=num_labeled, replace=False)
 
         u_idx = np.setdiff1d(np.arange(n_total), l_idx, assume_unique=True)
 

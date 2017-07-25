@@ -5,6 +5,7 @@ import sys, os
 sys.path.append(os.path.join(sys.path[0],'..'))
 from src import feed, utils
 from src.ladder import *
+import numpy as np
 
 # ===========================
 # PARAMETERS
@@ -26,6 +27,12 @@ os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 
 mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
 
+# Set tensorflow and numpy seeds
+tf.set_random_seed(params.seed)
+np.random.seed(params.seed)
+print('seed : ', params.seed, file=write_to, flush=True)
+
+
 ladder = Ladder(params)
 # IPython.embed()
 
@@ -35,7 +42,7 @@ if params.train_flag:
     # TRAINING
     # ===========================
     sf = feed.Balanced(mnist.train.images, mnist.train.labels, params.num_labeled)
-    print('seeds : ', sf.seeds, file=write_to, flush=True)
+    # print('seeds : ', sf.seeds, file=write_to, flush=True)
     iter_per_epoch = int(sf.unlabeled.num_examples / params.unlabeled_batch_size)
     print('iter_per_epoch', ':', iter_per_epoch, file=write_to, flush=True)
     utils.print_trainables(write_to=write_to)
