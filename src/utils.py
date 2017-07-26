@@ -56,7 +56,11 @@ def get_cli_params():
     # option to not save the model at all
     parser.add_argument('--do_not_save', action='store_true')
 
-    return parser.parse_args()
+    params = parser.parse_args()
+    params.write_to = 'logs/' + params.id + '.results' if params.write_to is \
+                                                        None else params.write_to
+    return params
+
 
 def process_cli_params(params):
 
@@ -69,8 +73,7 @@ def process_cli_params(params):
     param_dict.update({
         'layer_sizes': layer_sizes,
         'rc_weights': rc_weights,
-        'test_batch_size': None if params.train_flag else params.labeled_batch_size,
-        'write_to': 'logs/' + params.id + '.results' if params.write_to is None else params.write_to
+        'test_batch_size': None if params.train_flag else params.labeled_batch_size
     })
 
     return params
