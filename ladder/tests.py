@@ -248,8 +248,8 @@ def test_only_unsupervised():
 
     Result
     ------
-    Except for difference in timing, results are identical, meaning that
-    there is no zero layer.
+    (RESOLVED: see test_similarity) Except for difference in timing, results
+    are identical, meaning that there is no zero layer.
 
     Is there supposed to be a reconstruction cost associated with the final
     output label? Well, the final output label is an argmax. So as long as
@@ -278,7 +278,7 @@ def test_only_unsupervised():
 
 if __name__ == '__main__':
     # test_gamma_equivalence()
-    check_layer_sizes()
-    # test_if_zero_rc_is_dummy()
+    # check_layer_sizes()
+    test_if_zero_rc_is_dummy()
     # sim = test_similarity("tests/gamma_equiv_gamma", "tests/gamma_equiv_ladder")
     # print(sum(sim) / len(sim))

@@ -63,7 +63,7 @@ def process_cli_params(params):
     # Specify base structure
     layer_sizes = parse_argstring(params.layer_sizes, dtype=int)
     rc_weights = parse_argstring(params.rc_weights, dtype=float)
-    rc_weights = dict(zip(range(1, len(rc_weights)), rc_weights))
+    rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
 
     param_dict = vars(params)
     param_dict.update({

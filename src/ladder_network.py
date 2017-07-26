@@ -95,7 +95,7 @@ class Encoder(object):
         """
         bn = self.bn_layers[0]
         self.h[0] = bn.add_noise(bn.normalize(self.x, training))
-
+        self.z[0] = self.h[0]
 
         for l in range(1, self.n_layers):
             # print('enc', l)
