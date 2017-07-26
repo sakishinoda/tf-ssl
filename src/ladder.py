@@ -361,7 +361,11 @@ def main(params=None):
         # ===========================
         sf = feed.Balanced(mnist.train.images, mnist.train.labels, params.num_labeled)
         # print('seeds : ', sf.seeds, file=write_to, flush=True)
-        iter_per_epoch = int(sf.unlabeled.num_examples / params.unlabeled_batch_size)
+        if params.use_labeled_epochs:
+            iter_per_epoch = int(
+                sf.labeled.num_examples / params.labeled_batch_size)
+        else:
+            iter_per_epoch = int(sf.unlabeled.num_examples / params.unlabeled_batch_size)
         print('iter_per_epoch', ':', iter_per_epoch, file=write_to, flush=True)
         utils.print_trainables(write_to=write_to)
         save_interval = None if params.save_epochs is None else int(params.save_epochs * iter_per_epoch)

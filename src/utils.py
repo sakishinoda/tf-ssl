@@ -28,16 +28,24 @@ def get_cli_params():
     parser.add_argument('--print_interval', default=50, type=int)
     parser.add_argument('--save_epochs', default=None, type=float)
     parser.add_argument('--num_labeled', default=100, type=int)
+
     parser.add_argument('--labeled_batch_size', default=100, type=int)
     parser.add_argument('--unlabeled_batch_size', default=250, type=int)
+
     parser.add_argument('--initial_learning_rate', default=0.0002, type=float)
+
     parser.add_argument('--gamma_flag', action='store_true')
+
     parser.add_argument('--layer_sizes', default='784-1000-500-250-250-250-10')
     parser.add_argument('--sc_weight', default=1, type=float)
-    parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')  # first number is a dummy
+    parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')
+
     parser.add_argument('--which_gpu', default=0, type=int)
     parser.add_argument('--write_to', default=None)
     parser.add_argument('--seed', default=1)
+
+    # by default use the unlabeled batch epochs
+    parser.add_argument('--use_labeled_epochs', action='store_true')
 
     # only used if train_flag is false
     parser.add_argument('--train_step', default=None, type=int)

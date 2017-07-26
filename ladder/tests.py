@@ -39,9 +39,14 @@ def test_similarity(file1, file2):
     return sim
 
 
-def test_seeds():
+def test_repr():
     """
     Small test to check reproducibility with seeds.
+
+    Results
+    -------
+        100% consistency over 2 epochs using same seed.
+        31% consistency over 2 epochs using seeds 1 and 2.
 
     """
     params = utils.process_cli_params(utils.get_cli_params())
@@ -59,15 +64,13 @@ def test_seeds():
         tf.reset_default_graph()
         # run = 2
         params.seed = run
-        params.write_to = "tests/repr_test_" + str(run)
+        params.id = "repr_" + str(run)
+        params.write_to = "tests/" + params.id
         ladder.main(params)
 
-    sim = test_similarity("tests/repr_test_1", "tests/repr_test_2")
+    sim = test_similarity("tests/" + "repr_" + str(1), "tests/" + "repr_" +
+                          str(2))
     print(sum(sim)/len(sim))
-
-
-
-
 
 
 def test_fully_supervised():
@@ -88,14 +91,43 @@ def test_fully_supervised():
     params.end_epoch = 2
     params.train_flag = True
     params.gamma_flag = True
-    params.num_labeled = 100
+
 
     params.seed = 1
     params.rc_weights = [0 for x in params.rc_weights]
+    params.use_labeled_epochs = True
 
-    tf.reset_default_graph()
-    params.write_to = "repr_test_"
+    for num_labeled in [100, 1000, 55000]:
+        tf.reset_default_graph()
+        params.num_labeled = num_labeled
+        params.id = "fully_sup_" + str(num_labeled)
+        params.write_to = "tests/" + params.id
+        ladder.main(params)
 
+
+def test_only_unsupervised():
+
+    params = utils.process_cli_params(utils.get_cli_params())
+
+    # Alter from default to simplify
+    params.decay_start_epoch = 1
+    params.end_epoch = 2
+    params.train_flag = True
+    params.gamma_flag = True
+
+
+    params.seed = 1
+    params.rc_weights = [0 for x in params.rc_weights]
+    # params.sc_weight = 0
+
+
+
+    for num_labeled in [100, 1000, 55000]:
+        tf.reset_default_graph()
+        params.num_labeled = num_labeled
+        params.id = "fully_sup_" + str(num_labeled)
+        params.write_to = "tests/" + params.id
+        ladder.main(params)
 
 if __name__ == '__main__':
-    test_seeds()
+    test_fully_supervised()
