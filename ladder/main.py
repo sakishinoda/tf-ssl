@@ -4,7 +4,7 @@ from time import time
 import sys, os
 sys.path.append(os.path.join(sys.path[0],'..'))
 from src import feed, utils
-from src.ladder import *
+from src.ladder_network import *
 import numpy as np
 
 
