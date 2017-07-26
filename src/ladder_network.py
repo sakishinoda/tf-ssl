@@ -137,7 +137,6 @@ class Combinator(object):
         last = len(layer_sizes) - 1
         for l, size_out in enumerate(layer_sizes):
             inputs = fclayer(inputs, size_out, self.wts_init, self.bias_init, self.reuse, self.scope+str(l))
-
             if l < last:
                 inputs = lrelu(inputs)
             else:
@@ -153,35 +152,58 @@ class Combinator(object):
 
 
 class Decoder(object):
+    """Has n_layers (default 7) layers, keyed as range(n_layers),
+    i.e. integers 0 to n_layers-1 inclusive."""
     def __init__(self, noisy, clean, scope='dec'):
 
         self.noisy = noisy
         self.clean = clean
         self.scope = scope
+        self.n_layers = self.noisy.n_layers
         self.rc_cost = OrderedDict()
+        self.combinators = OrderedDict()
+        self.activations = OrderedDict()
+        self.reconstructions = OrderedDict()
 
-        # u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)  # label, with dim matching
+        # label, with dim matching
+        # u_l = tf.expand_dims(tf.cast(self.noisy.predict, tf.float32), axis=-1)
         # self.build(u_l)
 
     def build(self, decoder_activations, training=True):
         """
-        Reconstruction cost is only associated with each layer of z, so does not include the input h[0],
-        for which there is no corresponding z[0]
+        Reconstruction cost is only associated with each layer of z,
+        so does not include the input h[0], for which there is no
+        corresponding z[0]
 
         :param decoder_activations:
         :param training:
         :return:
         """
+
+        # Enumerates down from self.noisy.n_layers-1
+        # n_layers = 7 by default, including inputs as 0
+        self.activations[self.n_layers] = decoder_activations
         for l in reversed([l for l in self.noisy.z.keys()]):
             # print('dec', l)
-            decoder_activations, self.rc_cost[l] = self.compute_rc_cost(l, decoder_activations, training)
+            self.activations[l], self.rc_cost[l] = self.compute_rc_cost(
+                l, self.activations[l+1], training)
+
+            # # Alternative loop
+            # decoder_activations, self.rc_cost[l] = self.compute_rc_cost(
+            # l, decoder_activations, training)
+            # self.activations[l] = decoder_activations
 
     def compute_rc_cost(self, layer, decoder_activations, training=True):
+        # print(layer, decoder_activations.get_shape())
         noisy, clean = self.noisy, self.clean
 
         # Use decoder weights to upsample the signal from above
         size_out = noisy.layer_sizes[layer]
-        u_l = fclayer(decoder_activations, size_out, scope=self.scope + str(layer))
+        u_pre_l = fclayer(decoder_activations, size_out,
+                          scope=self.scope + str(layer))
+
+        u_l = noisy.bn_layers[layer].normalize_from_saved_stats(
+            u_pre_l, training=training)
 
         # Unbatch-normalized activations from parallel layer in noisy encoder
         z_l = noisy.z[layer]
@@ -191,13 +213,17 @@ class Decoder(object):
 
         combinator = Combinator(u_l, z_l, layer_sizes=(2, 2, 1), stddev=0.025, scope='com' + str(layer) + '_')
         reconstruction = combinator.outputs
+        reconstruction.set_shape([None, size_out])
+
+        self.combinators[layer] = combinator
+        self.reconstructions[layer] = reconstruction
 
         # Sum over each "pixel"
         rc_cost = tf.reduce_mean(
-            tf.square(noisy.bn_layers[layer].normalize_from_saved_stats(reconstruction, training=training) - target_z),
+            tf.square(reconstruction - target_z),
             axis=-1)
 
-        return decoder_activations, rc_cost
+        return reconstruction, rc_cost
 
     # def unsupervised_loss(self, weights):
     #     return sum([self.rc_cost[l] * weights[l] for l in self.rc_cost.keys()])
@@ -205,9 +231,9 @@ class Decoder(object):
 
 class GammaDecoder(Decoder):
     def build(self, decoder_activations, training=True):
-        l = self.noisy.n_layers-1
-        _, self.rc_cost[l] = self.compute_rc_cost(l, decoder_activations, training=training)
-
+        l = self.n_layers-1
+        self.activations[l], self.rc_cost[l] = self.compute_rc_cost(
+            l, decoder_activations, training=training)
 
 def fclayer(input,
             size_out,

@@ -152,25 +152,62 @@ def test_if_zero_rc_is_dummy():
 
 
 
-def test_identify_layer_numbers():
+def check_layer_sizes():
+    """Various checks for the sizes of things in the model"""
     params = get_testing_mode_params(gamma=False)
     ladder = ldr.Ladder(params)
 
-    print("Noisy encoder activations")
-    for k,v in ladder.noisy.z.items():
-        print(k, v)
+    # print(ladder.noisy.layer_sizes)
 
-    print("Decoder costs")
-    for k,v in ladder.decoder.rc_cost.items():
-        print(k, v)
+    mnist = input_data.read_data_sets(sys.path[0] + '/../data/mnist/',
+                                      one_hot=True)
+    x, y = mnist.validation.next_batch(params.labeled_batch_size)
+    test_dict = {ladder.x: x, ladder.y: y}
+
+    sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
+
+    print("No. layers in encoder: {}".format(ladder.noisy.n_layers))
+
+    # print("===== Noisy encoder activations ===== ")
+    # for k,v in ladder.noisy.z.items():
+    #     v_eval = sess.run(v, feed_dict=test_dict)
+    #     print(k, v, v_eval.shape)
+    #
+    # print("===== Clean encoder activations ===== ")
+    # for k,v in ladder.clean.z.items():
+    #     v_eval = sess.run(v, feed_dict=test_dict)
+    #     print(k, v, v_eval.shape)
+    #
+    # print("===== Combinator Outputs ===== ")
+    # for k, u in ladder.decoder.combinators.items():
+    #     v = u.outputs
+    #     v_eval = sess.run(v, feed_dict=test_dict)
+    #     print(k, v, v_eval.shape)
+    #
+    # print("===== Reconstructions ===== ")
+    # for k, v in ladder.decoder.reconstructions.items():
+    #     v_eval = sess.run(v, feed_dict=test_dict)
+    #     print(k, v, v_eval.shape)
+
+    print("===== Decoder activations ===== ")
+    for k,v in ladder.decoder.activations.items():
+        v_eval = sess.run(v, feed_dict=test_dict)
+        print(k, v, v_eval.shape)
+        # print(v_eval)
+        # print("=====")
 
 
+    # print("===== Decoder costs ===== ")
+    # for k,v in ladder.decoder.rc_cost.items():
+    #     v_eval = sess.run(v, feed_dict=test_dict)
+    #     print(k, v, v_eval.shape)
+    #
+    # print("===== Reconstruction cost weights ===== ")
+    # for k, v in params.rc_weights.items():
+    #     print(k, v)
 
-    print("Reconstruction cost weights")
-    for k, v in params.rc_weights.items():
-        print(k, v)
-
-
+    sess.close()
 
 
 def test_only_unsupervised():
@@ -208,5 +245,5 @@ def test_only_unsupervised():
         ldr.main(params)
 
 if __name__ == '__main__':
-    test_identify_layer_numbers()
+    check_layer_sizes()
     # test_if_zero_rc_is_dummy()
