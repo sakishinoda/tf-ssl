@@ -155,9 +155,20 @@ def test_if_zero_rc_is_dummy():
 def test_identify_layer_numbers():
     params = get_testing_mode_params(gamma=False)
     ladder = ldr.Ladder(params)
-    print(vars(ladder.noisy))
-    print(vars(ladder.decoder))
 
+    print("Noisy encoder activations")
+    for k,v in ladder.noisy.z.items():
+        print(k, v)
+
+    print("Decoder costs")
+    for k,v in ladder.decoder.rc_cost.items():
+        print(k, v)
+
+
+
+    print("Reconstruction cost weights")
+    for k, v in params.rc_weights.items():
+        print(k, v)
 
 
 
