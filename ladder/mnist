@@ -4,4 +4,4 @@ source activate blaze
 
 #nohup python src/ladder_network.py --id 'gamma_1000l' --gamma --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --sc_weight 1 --rc_weight 0-0-0-0-0-0-1 --num_labeled 1000 --seed 1 &
 
-nohup python main.py --id "ladder_1000l_2000rc" --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --rc_weights 2000-2000.0-20-0.2-0.2-0.2-0.2-0.2 --sc_weight 1 --which_gpu 0 --num_labeled 1000 --seed 1 &
+nohup python main.py --id "ladder_1000l_2000rc" --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --rc_weights 2000-2000.0-20-0.2-0.2-0.2-0.2-0.2 --sc_weight 1 --which_gpu 1 --num_labeled 1000 --seed 1 &

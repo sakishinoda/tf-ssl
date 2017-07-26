@@ -44,7 +44,7 @@ def get_cli_params():
 
     parser.add_argument('--which_gpu', default=0, type=int)
     parser.add_argument('--write_to', default=None)
-    parser.add_argument('--seed', default=1)
+    parser.add_argument('--seed', default=1, type=int)
 
     # by default use the unlabeled batch epochs
     parser.add_argument('--use_labeled_epochs', action='store_true')
