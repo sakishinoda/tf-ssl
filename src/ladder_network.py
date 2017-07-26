@@ -96,6 +96,7 @@ class Encoder(object):
         bn = self.bn_layers[0]
         self.h[0] = bn.add_noise(bn.normalize(self.x, training))
 
+
         for l in range(1, self.n_layers):
             # print('enc', l)
             size_out = self.layer_sizes[l]
@@ -182,16 +183,16 @@ class Decoder(object):
 
         # Enumerates down from self.noisy.n_layers-1
         # n_layers = 7 by default, including inputs as 0
-        self.activations[self.n_layers] = decoder_activations
+        # self.activations[self.n_layers] = decoder_activations
         for l in reversed([l for l in self.noisy.z.keys()]):
             # print('dec', l)
-            self.activations[l], self.rc_cost[l] = self.compute_rc_cost(
-                l, self.activations[l+1], training)
+            # self.activations[l], self.rc_cost[l] = self.compute_rc_cost(
+            #     l, self.activations[l+1], training)
 
             # # Alternative loop
-            # decoder_activations, self.rc_cost[l] = self.compute_rc_cost(
-            # l, decoder_activations, training)
-            # self.activations[l] = decoder_activations
+            decoder_activations, self.rc_cost[l] = self.compute_rc_cost(
+            l, decoder_activations, training)
+            self.activations[l] = decoder_activations
 
     def compute_rc_cost(self, layer, decoder_activations, training=True):
         # print(layer, decoder_activations.get_shape())
@@ -466,14 +467,18 @@ def main(params=None):
                     sep='\t', flush=True, file=write_to)
 
 
-            if save_interval is not None and step > 0 and step % save_interval == 0:
+            if (save_interval is not None
+                and step > 0
+                and step % save_interval == 0
+                and params.do_not_save is False):
                 saver.save(sess, save_to, global_step=step)
 
             global_step += 1
 
         # Save final model
-        saved_to = saver.save(sess, save_to)
-        print('Model saved to: ', saved_to)
+        if params.do_not_save is False:
+            saved_to = saver.save(sess, save_to)
+            print('Model saved to: ', saved_to)
 
     else:
 

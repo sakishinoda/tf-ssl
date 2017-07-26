@@ -20,6 +20,7 @@ def get_testing_mode_params(gamma=True, num_labeled=100, seed=1):
     params = utils.process_cli_params(utils.get_cli_params())
 
     # Alter from default to simplify
+    params.do_not_save = True
     params.decay_start_epoch = 1
     params.end_epoch = 2
     params.train_flag = True
@@ -30,7 +31,7 @@ def get_testing_mode_params(gamma=True, num_labeled=100, seed=1):
     return params
 
 
-def test_similarity(file1, file2):
+def test_similarity(file1, file2, verbose=True):
     """Test line-by-line similarity of two tsv files """
     with open(file1, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter='\t')
@@ -45,11 +46,12 @@ def test_similarity(file1, file2):
         sim.append(1 if (data2[i]==l) else 0)
 
         print(i, sim[-1])
-        # if sim[-1]==0:
-        #     print(">>>>> MISMATCH <<<<<")
-        #     print(l)
-        #     print(data2[i])
-        #     print("<<<<< END >>>>>")
+        if verbose:
+            if sim[-1]==0:
+                print(">>>>> MISMATCH START <<<<<")
+                print(l)
+                print(data2[i])
+                print("<<<<< MISMATCH STOP  >>>>>")
 
     return sim
 
@@ -151,6 +153,33 @@ def test_if_zero_rc_is_dummy():
     print(sum(sim) / len(sim))
 
 
+def test_gamma_equivalence():
+    """Compare gamma decoder and ladder decoder with weight only at top
+
+    Results
+    -------
+    Differed only by time stamp
+
+    """
+
+    tf.reset_default_graph()
+    params = get_testing_mode_params(gamma=True, seed=1)
+    params.id = 'gamma_equiv_gamma'
+    params.write_to = 'tests/' + params.id
+    ldr.main(params)
+    test_me = (params.write_to, )
+
+    tf.reset_default_graph()
+    params.gamma = False
+    params.rc_weights = [0, 0, 0, 0, 0, 0, 1]
+    params.id = 'gamma_equiv_ladder'
+    params.write_to = 'tests/' + params.id
+    ldr.main(params)
+    test_me += (params.write_to, )
+
+    sim = test_similarity(*test_me)
+    print(sum(sim) / len(sim))
+
 
 def check_layer_sizes():
     """Various checks for the sizes of things in the model"""
@@ -169,26 +198,26 @@ def check_layer_sizes():
 
     print("No. layers in encoder: {}".format(ladder.noisy.n_layers))
 
-    # print("===== Noisy encoder activations ===== ")
-    # for k,v in ladder.noisy.z.items():
-    #     v_eval = sess.run(v, feed_dict=test_dict)
-    #     print(k, v, v_eval.shape)
-    #
-    # print("===== Clean encoder activations ===== ")
-    # for k,v in ladder.clean.z.items():
-    #     v_eval = sess.run(v, feed_dict=test_dict)
-    #     print(k, v, v_eval.shape)
-    #
-    # print("===== Combinator Outputs ===== ")
-    # for k, u in ladder.decoder.combinators.items():
-    #     v = u.outputs
-    #     v_eval = sess.run(v, feed_dict=test_dict)
-    #     print(k, v, v_eval.shape)
-    #
-    # print("===== Reconstructions ===== ")
-    # for k, v in ladder.decoder.reconstructions.items():
-    #     v_eval = sess.run(v, feed_dict=test_dict)
-    #     print(k, v, v_eval.shape)
+    print("===== Noisy encoder activations ===== ")
+    for k,v in ladder.noisy.z.items():
+        v_eval = sess.run(v, feed_dict=test_dict)
+        print(k, v, v_eval.shape)
+
+    print("===== Clean encoder activations ===== ")
+    for k,v in ladder.clean.z.items():
+        v_eval = sess.run(v, feed_dict=test_dict)
+        print(k, v, v_eval.shape)
+
+    print("===== Combinator Outputs ===== ")
+    for k, u in ladder.decoder.combinators.items():
+        v = u.outputs
+        v_eval = sess.run(v, feed_dict=test_dict)
+        print(k, v, v_eval.shape)
+
+    print("===== Reconstructions ===== ")
+    for k, v in ladder.decoder.reconstructions.items():
+        v_eval = sess.run(v, feed_dict=test_dict)
+        print(k, v, v_eval.shape)
 
     print("===== Decoder activations ===== ")
     for k,v in ladder.decoder.activations.items():
@@ -197,17 +226,20 @@ def check_layer_sizes():
         # print(v_eval)
         # print("=====")
 
+    print("===== Decoder costs ===== ")
+    for k,v in ladder.decoder.rc_cost.items():
+        v_eval = sess.run(v, feed_dict=test_dict)
+        print(k, v, v_eval.shape)
 
-    # print("===== Decoder costs ===== ")
-    # for k,v in ladder.decoder.rc_cost.items():
-    #     v_eval = sess.run(v, feed_dict=test_dict)
-    #     print(k, v, v_eval.shape)
-    #
-    # print("===== Reconstruction cost weights ===== ")
-    # for k, v in params.rc_weights.items():
-    #     print(k, v)
+    print("===== Reconstruction cost weights ===== ")
+    for k, v in params.rc_weights.items():
+        print(k, v)
 
     sess.close()
+
+
+
+
 
 
 def test_only_unsupervised():
@@ -245,5 +277,8 @@ def test_only_unsupervised():
         ldr.main(params)
 
 if __name__ == '__main__':
+    # test_gamma_equivalence()
     check_layer_sizes()
     # test_if_zero_rc_is_dummy()
+    # sim = test_similarity("tests/gamma_equiv_gamma", "tests/gamma_equiv_ladder")
+    # print(sum(sim) / len(sim))
