@@ -15,7 +15,13 @@ nohup python main.py --id 'gamma_1000l_sc1_rc1000_seed1' --gamma --train_flag --
 
 nohup python main.py --id "ladder_1000l_amlp4_seed2" --train_flag --decay_start_epoch 100 --end_epoch 150 --print_interval 50 --save_epochs 10 --rc_weights 5000-50.0-0.5-0.5-0.5-0.5-0.5 --sc_weight 1 --which_gpu 1 --num_labeled 1000 --seed 1 --combinator 4-1 --combinator_sd 0.025 &
 
-# run.py train --encoder-layers 1000-500-250-250-250-10 --decoder-spec 0-0-0-0-0-0-gauss --denoising-cost-x 0,0,0,0,0,0,10 --labeled-samples 1000 --unlabeled-samples 60000 --seed 1 -- mnist_1000_gamma
 
 # Using hyperparameters from the original paper and simplest AMLP combinator
+# run.py train --encoder-layers 1000-500-250-250-250-10 --decoder-spec 0-0-0-0-0-0-gauss --denoising-cost-x 0,0,0,0,0,0,10 --labeled-samples 1000 --unlabeled-samples 60000 --seed 1 -- mnist_1000_gamma
+
 nohup python main.py --train_flag --id "mnist_1000_gamma" --rc_weights 0-0-0-0-0-0-10 --seed 1 --num_labeled 1000 --combinator 4-1 --combinator_sd 0.025 --which_gpu 1 --initial_learning_rate 0.002 &
+
+# run.py train --encoder-layers 1000-500-250-250-250-10 --decoder-spec gauss --denoising-cost-x 1000,10,0.1,0.1,0.1,0.1,0.1 --labeled-samples 100 --unlabeled-samples 60000 --seed 1 -- mnist_100_full
+# run.py train --encoder-layers 1000-500-250-250-250-10 --decoder-spec gauss --denoising-cost-x 2000,20,0.1,0.1,0.1,0.1,0.1 --f-local-noise-std 0.2 --labeled-samples 1000 --unlabeled-samples 60000 --seed 1 -- mnist_1000_full
+
+nohup python main.py --train_flag --id "mnist_1000_full" --rc_weights 2000-20-0.1-0.1-0.1-0.1-0.1 --seed 1 --num_labeled 1000 --combinator 4-1 --combinator_sd 0.025 --which_gpu 1 --initial_learning_rate 0.002 &

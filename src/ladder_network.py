@@ -155,7 +155,7 @@ class Combinator(object):
 class Decoder(object):
     """Has n_layers (default 7) layers, keyed as range(n_layers),
     i.e. integers 0 to n_layers-1 inclusive."""
-    def __init__(self, noisy, clean, scope='dec', combinator_sizes=(2,2,1),
+    def __init__(self, noisy, clean, scope='dec', combinator_layers=(2, 2, 1),
                  combinator_sd=0.025):
 
         self.noisy = noisy
@@ -163,7 +163,7 @@ class Decoder(object):
         self.scope = scope
         self.n_layers = self.noisy.n_layers
 
-        self.combinator_sizes = combinator_sizes
+        self.combinator_layers = combinator_layers
         self.combinator_sd = combinator_sd
 
 
@@ -221,7 +221,7 @@ class Decoder(object):
         combinator = Combinator(
             decoder_input=u_l,
             lateral_input=z_l,
-            layer_sizes=self.combinator_sizes,
+            layer_sizes=self.combinator_layers,
             stddev=self.combinator_sd,
             scope='com' + str(layer) + '_')
 
@@ -282,7 +282,7 @@ class Ladder(object):
     def __init__(self, params):
 
         self.params = params
-        layer_sizes = params.layer_sizes
+        encoder_layers = params.encoder_layers
         train_flag = params.train_flag
         gamma_flag = params.gamma_flag
 
@@ -292,15 +292,17 @@ class Ladder(object):
 
         # PLACEHOLDERS
         # Input placeholder
-        self.x = tf.placeholder(tf.float32, shape=(None, layer_sizes[0]))
+        self.x = tf.placeholder(tf.float32, shape=(None, encoder_layers[0]))
         # One-hot targets
-        self.y = tf.placeholder(tf.float32, shape=(None, layer_sizes[-1]))
+        self.y = tf.placeholder(tf.float32, shape=(None, encoder_layers[-1]))
 
         # CLEAN ENCODER
-        self.clean = Encoder(self.x, self.y, layer_sizes, noise_sd=None, reuse=False, training=train_flag)
+        self.clean = Encoder(self.x, self.y, encoder_layers, noise_sd=None, reuse=False, training=train_flag)
 
         # CORRUPTED ENCODER
-        self.noisy = Encoder(self.x, self.y, layer_sizes, noise_sd=0.3, reuse=True, training=train_flag)
+        self.noisy = Encoder(self.x, self.y, encoder_layers,
+                             noise_sd=params.encoder_noise_sd,
+                             reuse=True, training=train_flag)
         self.predict = self.noisy.predict
 
         # ===========================
@@ -308,12 +310,12 @@ class Ladder(object):
         # ===========================
         if gamma_flag:
             self.decoder = GammaDecoder(self.noisy, self.clean,
-                                        combinator_sizes=params.combinator,
+                                        combinator_layers=params.combinator_layers,
                                         combinator_sd=params.combinator_sd)
         else:
             self.decoder = Decoder(self.noisy, self.clean,
-                                        combinator_sizes=params.combinator,
-                                        combinator_sd=params.combinator_sd)
+                                   combinator_layers=params.combinator_layers,
+                                   combinator_sd=params.combinator_sd)
 
         self.decoder.build(
             decoder_activations=tf.expand_dims(tf.cast(self.predict, tf.float32), axis=-1),
