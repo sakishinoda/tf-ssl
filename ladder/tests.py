@@ -276,6 +276,9 @@ def test_only_unsupervised():
         params.write_to = "tests/" + params.id
         ldr.main(params)
 
+
+
+
 if __name__ == '__main__':
     # test_gamma_equivalence()
     # check_layer_sizes()

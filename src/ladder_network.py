@@ -155,12 +155,18 @@ class Combinator(object):
 class Decoder(object):
     """Has n_layers (default 7) layers, keyed as range(n_layers),
     i.e. integers 0 to n_layers-1 inclusive."""
-    def __init__(self, noisy, clean, scope='dec'):
+    def __init__(self, noisy, clean, scope='dec', combinator_sizes=(2,2,1),
+                 combinator_sd=0.025):
 
         self.noisy = noisy
         self.clean = clean
         self.scope = scope
         self.n_layers = self.noisy.n_layers
+
+        self.combinator_sizes = combinator_sizes
+        self.combinator_sd = combinator_sd
+
+
         self.rc_cost = OrderedDict()
         self.combinators = OrderedDict()
         self.activations = OrderedDict()
@@ -212,14 +218,20 @@ class Decoder(object):
         # Unbatch-normalized target activations from parallel layer in clean encoder
         target_z = clean.z[layer]
 
-        combinator = Combinator(u_l, z_l, layer_sizes=(2, 2, 1), stddev=0.025, scope='com' + str(layer) + '_')
+        combinator = Combinator(
+            decoder_input=u_l,
+            lateral_input=z_l,
+            layer_sizes=self.combinator_sizes,
+            stddev=self.combinator_sd,
+            scope='com' + str(layer) + '_')
+
         reconstruction = combinator.outputs
         reconstruction.set_shape([None, size_out])
 
         self.combinators[layer] = combinator
         self.reconstructions[layer] = reconstruction
 
-        # Sum over each "pixel"
+        # Mean over the width of the layer
         rc_cost = tf.reduce_mean(
             tf.square(reconstruction - target_z),
             axis=-1)
@@ -235,6 +247,7 @@ class GammaDecoder(Decoder):
         l = self.n_layers-1
         self.activations[l], self.rc_cost[l] = self.compute_rc_cost(
             l, decoder_activations, training=training)
+
 
 def fclayer(input,
             size_out,
@@ -271,7 +284,6 @@ class Ladder(object):
         self.params = params
         layer_sizes = params.layer_sizes
         train_flag = params.train_flag
-        labeled_batch_size = params.labeled_batch_size
         gamma_flag = params.gamma_flag
 
         # ===========================
@@ -295,9 +307,13 @@ class Ladder(object):
         # DECODER
         # ===========================
         if gamma_flag:
-            self.decoder = GammaDecoder(self.noisy, self.clean)
+            self.decoder = GammaDecoder(self.noisy, self.clean,
+                                        combinator_sizes=params.combinator,
+                                        combinator_sd=params.combinator_sd)
         else:
-            self.decoder = Decoder(self.noisy, self.clean)
+            self.decoder = Decoder(self.noisy, self.clean,
+                                        combinator_sizes=params.combinator,
+                                        combinator_sd=params.combinator_sd)
 
         self.decoder.build(
             decoder_activations=tf.expand_dims(tf.cast(self.predict, tf.float32), axis=-1),

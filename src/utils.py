@@ -42,6 +42,10 @@ def get_cli_params():
     # Default RC cost corresponds to the gamma network
     parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')
 
+    # Specify form of combinator (A)MLP
+    parser.add_argument('--combinator', default='2-2-1')
+    parser.add_argument('--combinator_sd', default=0.025, type=float)
+
     parser.add_argument('--which_gpu', default=0, type=int)
     parser.add_argument('--write_to', default=None)
     parser.add_argument('--seed', default=1, type=int)
@@ -68,11 +72,13 @@ def process_cli_params(params):
     layer_sizes = parse_argstring(params.layer_sizes, dtype=int)
     rc_weights = parse_argstring(params.rc_weights, dtype=float)
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
+    combinator = parse_argstring(params.combinator, dtype=int)
 
     param_dict = vars(params)
     param_dict.update({
         'layer_sizes': layer_sizes,
         'rc_weights': rc_weights,
+        'combinator': combinator,
         'test_batch_size': None if params.train_flag else params.labeled_batch_size
     })
 
