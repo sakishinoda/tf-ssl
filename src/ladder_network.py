@@ -26,7 +26,8 @@ class NoisyBNLayer(object):
     def normalize(self, x, training=True):
         eps = self.var_ep
         if training:
-            batch_mean, batch_var = tf.nn.moments(x, [0])
+
+            batch_mean, batch_var = tf.nn.moments(x, axes=[0]) # batch only
             self.batch_mean, self.batch_var = batch_mean, batch_var
             train_mean_op = tf.assign(self.pop_mean,
                                       self.pop_mean * self.decay + batch_mean * (1 - self.decay))
@@ -85,9 +86,8 @@ class Encoder(object):
 
         self.predict = self.build(training)
 
-
     def build(self, training=True):
-        """D
+        """
         Defines all operations needed for inference.
         Supervised loss also required for training.
         Note that z[0], z_pre[0] not defined; h[0] is the original input
@@ -98,18 +98,22 @@ class Encoder(object):
         self.z[0] = self.h[0]
 
         for l in range(1, self.n_layers):
-            # print('enc', l)
+
             size_out = self.layer_sizes[l]
             bn = self.bn_layers[l]
-            self.z_pre[l] = fclayer(self.h[l-1], size_out, reuse=self.reuse, scope=self.scope+str(l))
+            self.z_pre[l] = fclayer(
+                self.h[l-1], size_out, reuse=self.reuse, scope=self.scope+str(l))
 
             if l == self.n_layers - 1:
                 self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
-                self.h[l] = tf.nn.softmax(logits=bn.apply_shift_scale(self.z[l], shift=True, scale=True))
+                self.h[l] = tf.nn.softmax(
+                    logits=bn.apply_shift_scale(
+                        self.z[l], shift=True, scale=True))
             else:
                 # Do not need to apply scaling to RELU
                 self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
-                self.h[l] = tf.nn.relu(bn.apply_shift_scale(self.z[l], shift=True, scale=False))
+                self.h[l] = tf.nn.relu(bn.apply_shift_scale(
+                    self.z[l], shift=True, scale=False))
 
 
         predict = tf.argmax(self.h[self.n_layers-1], axis=-1)
@@ -118,8 +122,143 @@ class Encoder(object):
 
     def supervised_loss(self, labeled_batch_size):
         labeled_loss = tf.nn.softmax_cross_entropy_with_logits(
-            labels=self.y, logits=self.z[self.n_layers - 1][:labeled_batch_size])
+            labels=self.y,
+            logits=self.z[self.n_layers - 1][:labeled_batch_size])
         return tf.reduce_mean(labeled_loss, axis=0)
+
+
+class CNN_Encoder(Encoder):
+
+    def build(self, training=True):
+        """
+        Defines all operations needed for inference.
+        Supervised loss also required for training.
+        Note that z[0], z_pre[0] not defined; h[0] is the original input
+
+        """
+        bn = self.bn_layers[0]
+        self.h[0] = bn.add_noise(bn.normalize(self.x, training))
+        self.z[0] = self.h[0]
+
+
+
+        # None indicates pooling layer
+        encoder_layers = [32, None, 64, 64, None,
+                          128, 10, None, 10]
+        self.encoder_layers = dict(zip(range(1,len(encoder_layers)),
+                                       encoder_layers))
+
+        strides = [None, 2, None, None, 2,
+                   None, None, None, None]
+        self.strides = dict(zip(range(1,len(strides)), strides))
+
+        kernel_sizes = [5, 2, 3, 3, 2,
+                        3, 1, 7, None]  # second last is /4 of input
+        self.kernel_sizes = dict(zip(range(1,len(kernel_sizes)), kernel_sizes))
+
+        # 1: First convolution: 5x5 conv. 32 ReLU (no BN)# NO BN?????
+        self.conv_layer(layer=1,
+                        training=training)
+
+        # 2: 2x2 max-pooling stride 2 BN
+        self.max_pool_layer(layer=2, training=training)
+
+        # 3: 3x3 conv. 64 BN ReLU
+        self.conv_layer(layer=3, training=training)
+
+        # 4: 3x3 conv. 64 BN ReLU
+        self.conv_layer(layer=4, training=training)
+
+        # 5: 2x2 max-pooling, stride 2, BN
+        self.max_pool_layer(layer=5, training=training)
+
+        # 6: 3x3 conv 128 BN ReLU
+        self.conv_layer(layer=6, training=training)
+
+        # 7: 1x1 conv. 10 BN ReLU
+        self.conv_layer(layer=7, training=training)
+
+        # 8: global meanpool BN
+        self.mean_pool_layer(layer=8, training=training)
+
+        # 9: fully connected 10 BN
+
+        predict = tf.argmax(self.h[self.n_layers-1], axis=-1)
+
+        return predict
+
+    def max_pool_layer(self, layer, training=True):
+        kernel_size = self.kernel_sizes[layer]
+        stride = self.strides[layer]
+        self.z_pre[layer] = layers.max_pool2d(
+            inputs=self.h[layer - 1],
+            kernel_size=kernel_size,
+            stride=stride,
+            padding='VALID',
+            # data_format=DATA_FORMAT_NHWC,
+            # outputs_collections=None,
+            scope=self.scope+str(layer))
+
+        bn = self.bn_layers[layer]
+        self.z[layer] = bn.add_noise(bn.normalize(self.z_pre[layer], training))
+        self.h[layer] = tf.nn.relu(bn.apply_shift_scale(
+            self.z[layer], shift=True, scale=False))
+
+    def mean_pool_layer(self, layer, training=True):
+        kernel_size = self.kernel_sizes[layer]
+        stride = self.strides[layer]
+
+        self.z_pre[layer] = layers.avg_pool2d(
+            inputs=self.h[layer - 1],
+            kernel_size=kernel_size,
+            stride=stride,
+            padding='SAME',
+            # data_format=DATA_FORMAT_NHWC,
+            # outputs_collections=None,
+            scope=self.scope+str(layer))
+
+        bn = self.bn_layers[layer]
+        self.z[layer] = bn.add_noise(bn.normalize(self.z_pre[layer], training))
+        self.h[layer] = tf.nn.relu(bn.apply_shift_scale(
+            self.z[layer], shift=True, scale=False))
+
+
+    def conv_layer(self, layer, training=True):
+        size_out = self.encoder_layers[layer]
+        kernel_size = self.kernel_sizes[layer]
+        self.z_pre[layer] = self.forward(
+            inputs=self.h[layer - 1],
+            size_out=size_out,
+            kernel_size=kernel_size,
+            reuse=self.reuse,
+            scope=self.scope+str(layer))
+
+        bn = self.bn_layers[layer]
+        self.z[layer] = bn.add_noise(bn.normalize(self.z_pre[layer], training))
+        self.h[layer] = tf.nn.relu(bn.apply_shift_scale(
+            self.z[layer], shift=True, scale=False))
+
+    def forward(self,
+                inputs,
+                size_out,
+                kernel_size,
+                wts_init=layers.xavier_initializer(),
+                bias_init=tf.truncated_normal_initializer(stddev=1e-6),
+                reuse=None,
+                scope=None):
+        return layers.conv2d(inputs,
+                             num_outputs=size_out,
+                             kernel_size=kernel_size,
+                             activation_fn=tf.nn.relu,
+                             padding='SAME',
+                             weights_initializer=wts_init,
+                             biases_initializer=bias_init,
+                             reuse=reuse,
+                             scope=scope)
+
+    def bn_per_channel(self):
+        return None
+
 
 
 
@@ -165,7 +304,6 @@ class Decoder(object):
 
         self.combinator_layers = combinator_layers
         self.combinator_sd = combinator_sd
-
 
         self.rc_cost = OrderedDict()
         self.combinators = OrderedDict()
@@ -249,14 +387,14 @@ class GammaDecoder(Decoder):
             l, decoder_activations, training=training)
 
 
-def fclayer(input,
+def fclayer(inputs,
             size_out,
             wts_init=layers.xavier_initializer(),
             bias_init=tf.truncated_normal_initializer(stddev=1e-6),
             reuse=None,
             scope=None):
     return layers.fully_connected(
-        inputs=input,
+        inputs=inputs,
         num_outputs=size_out,
         activation_fn=None,
         normalizer_fn=None,
