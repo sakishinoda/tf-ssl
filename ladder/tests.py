@@ -13,7 +13,7 @@ def test_data_balancing():
     # Test mnist data balancing z
     mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
     sf = feed.Balanced(mnist.validation.images, mnist.validation.labels, 100, None)
-    IPython.embed()
+    # IPython.embed()
 
 
 def get_testing_mode_params(gamma=True, num_labeled=100, seed=1):
@@ -141,6 +141,21 @@ def test_fully_supervised_with_all_labeled():
     ldr.main(params)
 
 
+
+def test_compare_loss_from_unlabeled_batch_sizes():
+    params = get_testing_mode_params()
+    params.decay_start_epoch = 10
+    params.end_epoch = 15
+    params.seed = 1
+    base_id = 'unlabeled_batch_size_'
+    write_dir = 'tests/'
+
+    for unlabeled_batch_size in [100, 250]:
+        tf.reset_default_graph()
+        params.unlabeled_batch_size = unlabeled_batch_size
+        params.id = base_id + str(unlabeled_batch_size)
+        params.write_to = write_dir + params.id
+        ldr.main(params)
 
 
 
@@ -309,4 +324,5 @@ if __name__ == '__main__':
     # test_if_zero_rc_is_dummy()
     # sim = test_similarity("tests/gamma_equiv_gamma", "tests/gamma_equiv_ladder")
     # print(sum(sim) / len(sim))
-    test_fully_supervised_with_all_labeled()
+    # test_fully_supervised_with_all_labeled()
+    test_compare_loss_from_unlabeled_batch_sizes()
