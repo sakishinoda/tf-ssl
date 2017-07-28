@@ -82,7 +82,7 @@ def test_repr():
     print(sum(sim)/len(sim))
 
 
-def test_fully_supervised():
+def test_fully_supervised_with_labeled_subsets():
     """
     Test to check that the fully supervised case (i.e. no unsupervised examples)
     works for e.g. all of MNIST, 100 labels, etc.
@@ -119,6 +119,21 @@ def test_fully_supervised():
         params.id = "fully_sup_" + str(num_labeled)
         params.write_to = "tests/" + params.id
         ldr.main(params)
+
+
+def test_fully_supervised_with_all_labeled():
+    params = get_testing_mode_params(num_labeled=55000)
+    params.seed = 1
+    params.rc_weights = [0 for x in params.rc_weights]
+    params.use_labeled_epochs = True
+    tf.reset_default_graph()
+    params.id = "fully_sup"
+    params.write_to = "tests/" + params.id
+    ldr.main(params)
+
+
+
+
 
 
 def test_if_zero_rc_is_dummy():
@@ -282,6 +297,7 @@ def test_only_unsupervised():
 if __name__ == '__main__':
     # test_gamma_equivalence()
     # check_layer_sizes()
-    test_if_zero_rc_is_dummy()
+    # test_if_zero_rc_is_dummy()
     # sim = test_similarity("tests/gamma_equiv_gamma", "tests/gamma_equiv_ladder")
     # print(sum(sim) / len(sim))
+    test_fully_supervised_with_all_labeled()
