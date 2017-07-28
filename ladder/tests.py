@@ -122,10 +122,19 @@ def test_fully_supervised_with_labeled_subsets():
 
 
 def test_fully_supervised_with_all_labeled():
-    params = get_testing_mode_params(num_labeled=55000)
+    params = utils.process_cli_params(utils.get_cli_params())
+
+    # Alter from default to simplify
+    params.do_not_save = True
+    # params.decay_start_epoch = 1
+    # params.end_epoch = 2
+    params.train_flag = True
+    params.gamma_flag = False
+    params.num_labeled = 55000
     params.seed = 1
     params.rc_weights = [0 for x in params.rc_weights]
     params.use_labeled_epochs = True
+
     tf.reset_default_graph()
     params.id = "fully_sup"
     params.write_to = "tests/" + params.id
