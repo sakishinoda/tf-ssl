@@ -143,10 +143,21 @@ def test_fully_supervised_with_all_labeled():
 
 
 def test_compare_loss_from_unlabeled_batch_sizes():
-    params = get_testing_mode_params()
+    params = utils.process_cli_params(utils.get_cli_params())
+
+    # Alter from default to simplify
+    params.do_not_save = True
+    # params.decay_start_epoch = 1
+    # params.end_epoch = 2
+    params.train_flag = True
+    # params.gamma_flag = gamma
+    # params.num_labeled = num_labeled
+    # params.seed = seed
+
     params.decay_start_epoch = 10
     params.end_epoch = 15
     params.seed = 1
+
     base_id = 'unlabeled_batch_size_'
     write_dir = 'tests/'
 

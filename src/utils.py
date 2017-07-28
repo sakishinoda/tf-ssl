@@ -47,10 +47,10 @@ def get_cli_params():
     parser.add_argument('--encoder_noise_sd', default=0.3, type=float)
 
     # Default RC cost corresponds to the gamma network
-    parser.add_argument('--rc_weights', default='0-0-0-0-0-0-1')
+    parser.add_argument('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
     # Specify form of combinator (A)MLP
-    parser.add_argument('--combinator_layers', default='2-2-1')
+    parser.add_argument('--combinator_layers', default='4-1')
     parser.add_argument('--combinator_sd', default=0.025, type=float)
 
     parser.add_argument('--which_gpu', default=0, type=int)

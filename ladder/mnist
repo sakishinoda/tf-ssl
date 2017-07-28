@@ -32,4 +32,5 @@ nohup python main.py --train_flag --id "mnist_1000_full_decay15" --rc_weights 20
     # Start decay as usual after 100 epochs
 nohup python main.py --train_flag --id "mnist_1000_full_leps" --rc_weights 2000-20-0.2-0.2-0.2-0.2-0.2 --encoder_noise_sd 0.3 --seed 1 --num_labeled 1000 --combinator_layers 4-1 --combinator_sd 0.025 --which_gpu 0 --initial_learning_rate 0.002 --use_labeled_epochs &
 
+
 # No point in using labeled epochs
