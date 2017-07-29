@@ -59,15 +59,28 @@ class NoisyBNLayer(object):
             x = tf.multiply(self.scale, x)
         return x
 
+    def normalize_and_add_noise(self, x, labeled_batch_size, training=True):
+        return self.add_noise(
+            tf.stack(
+                [self.normalize(x[:labeled_batch_size], training), # labeled
+                 self.normalize_from_saved_stats(x[labeled_batch_size:],
+                                                 training)], # unlabeled
+                axis=0
+            )
+        )
+
+
 
 class Encoder(object):
-    def __init__(self, x, y, layer_sizes, noise_sd=None, reuse=None, training=True):
+    def __init__(self, x, y, layer_sizes, noise_sd=None, reuse=None,
+                 training=True, batch_size=100):
         """
         """
         self.scope = 'enc'
         self.reuse = reuse
         self.n_layers = len(layer_sizes)
         self.layer_sizes = layer_sizes
+        self.labeled_batch_size = batch_size  # testing at test time
         self.last = self.n_layers-1
 
         self.x = x
@@ -87,14 +100,17 @@ class Encoder(object):
 
 
     def build(self, training=True):
-        """D
+        """
         Defines all operations needed for inference.
         Supervised loss also required for training.
         Note that z[0], z_pre[0] not defined; h[0] is the original input
 
         """
+        labeled_batch_size = self.labeled_batch_size
+
         bn = self.bn_layers[0]
-        self.h[0] = bn.add_noise(bn.normalize(self.x, training))
+        self.h[0] = bn.normalize_and_add_noise(self.x, labeled_batch_size,
+                                               training)
         self.z[0] = self.h[0]
 
         for l in range(1, self.n_layers):
@@ -104,11 +120,15 @@ class Encoder(object):
             self.z_pre[l] = fclayer(self.h[l-1], size_out, reuse=self.reuse, scope=self.scope+str(l))
 
             if l == self.n_layers - 1:
-                self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
+                self.z[l] = bn.normalize_and_add_noise(self.z_pre[l],
+                                                       labeled_batch_size,
+                                                       training)
                 self.h[l] = tf.nn.softmax(logits=bn.apply_shift_scale(self.z[l], shift=True, scale=True))
             else:
                 # Do not need to apply scaling to RELU
-                self.z[l] = bn.add_noise(bn.normalize(self.z_pre[l], training))
+                self.z[l] = bn.normalize_and_add_noise(self.z_pre[l],
+                                                       labeled_batch_size,
+                                                       training)
                 self.h[l] = tf.nn.relu(bn.apply_shift_scale(self.z[l], shift=True, scale=False))
 
 
@@ -238,9 +258,6 @@ class Decoder(object):
 
         return reconstruction, rc_cost
 
-    # def unsupervised_loss(self, weights):
-    #     return sum([self.rc_cost[l] * weights[l] for l in self.rc_cost.keys()])
-
 
 class GammaDecoder(Decoder):
     def build(self, decoder_activations, training=True):
@@ -297,12 +314,16 @@ class Ladder(object):
         self.y = tf.placeholder(tf.float32, shape=(None, encoder_layers[-1]))
 
         # CLEAN ENCODER
-        self.clean = Encoder(self.x, self.y, encoder_layers, noise_sd=None, reuse=False, training=train_flag)
+        self.clean = Encoder(self.x, self.y, encoder_layers,
+                             noise_sd=None, reuse=False, training=train_flag,
+                             batch_size=params.labeled_batch_size)
 
         # CORRUPTED ENCODER
         self.noisy = Encoder(self.x, self.y, encoder_layers,
                              noise_sd=params.encoder_noise_sd,
-                             reuse=True, training=train_flag)
+                             reuse=True, training=train_flag,
+                             batch_size=params.labeled_batch_size)
+
         self.predict = self.noisy.predict
 
         # ===========================
@@ -324,8 +345,10 @@ class Ladder(object):
     @property
     def aer(self):
         """
-        Compute training error rate on labeled examples only (since e.g. CIFAR-100 with Tiny Images, no labels are actually available)
-        At test time, number of labeled examples is same as number of examples"""
+        Compute training error rate on labeled examples only (since e.g.
+        CIFAR-100 with Tiny Images, no labels are actually available)
+        At test time, number of labeled examples is same as number of examples
+        """
 
         return 1 - tf.reduce_mean(
             tf.cast(tf.equal(self.predict[:self.params.labeled_batch_size], tf.argmax(self.y, 1)), tf.float32))
