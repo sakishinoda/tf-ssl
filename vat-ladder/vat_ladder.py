@@ -552,8 +552,8 @@ print("Initial Test Accuracy: ", init_acc, "%")
 for i in tqdm(range(i_iter, num_iter)):
     images, labels = mnist.train.next_batch(batch_size)
 
-    _, train_loss = sess.run(
-        [train_step, loss],
+    _ = sess.run(
+        [train_step],
         feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
 
     if (i > 1) and ((i+1) % (num_iter//num_epochs) == 0):
@@ -570,9 +570,12 @@ for i in tqdm(range(i_iter, num_iter)):
         with open('train_log', 'ab') as train_log:
             # write test accuracy to file "train_log"
             train_log_w = csv.writer(train_log)
-            log_i = [epoch_n, train_loss] + sess.run(
+            log_i = [epoch_n] + sess.run(
                 [accuracy],
-                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False})
+                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}
+            ) + sess.run(
+                [loss, cost, u_cost, vat_loss],
+                feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
             train_log_w.writerow(log_i)
 
 print("Final Accuracy: ", sess.run(accuracy, feed_dict={
