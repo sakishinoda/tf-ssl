@@ -1,6 +1,7 @@
 # -----------------------------
 # IMPORTS
 # -----------------------------
+import IPython
 import tensorflow as tf
 import input_data
 import math
@@ -10,7 +11,7 @@ from tqdm import tqdm
 import argparse
 import numpy as np  # needed only to set seed for data input
 from tensorflow.contrib import layers as layers
-
+import layers as vat_layers
 
 def fclayer(input,
             size_out,
@@ -139,7 +140,7 @@ tf.set_random_seed(params.seed)
 # Set layer sizes for encoders
 layer_sizes = params.encoder_layers
 
-L = len(layer_sizes) - 1  # number of layers
+num_layers = len(layer_sizes) - 1  # number of layers
 
 num_epochs = params.end_epoch
 num_labeled = params.num_labeled
@@ -153,69 +154,8 @@ starter_learning_rate = params.initial_learning_rate
 # epoch after which to begin learning rate decay
 decay_after = params.decay_start_epoch
 batch_size = params.labeled_batch_size
-num_iter = (num_examples/batch_size) * num_epochs  # number of loop iterations
+num_iter = (num_examples//batch_size) * num_epochs  # number of loop iterations
 
-
-
-# -----------------------------
-# -----------------------------
-# VAT FUNCTIONS
-# -----------------------------
-# -----------------------------
-
-
-
-def forward(x, is_training=True, update_batch_stats=True, seed=1234):
-    if is_training:
-        return logit(x, is_training=True,
-                     update_batch_stats=update_batch_stats,
-                     stochastic=True, seed=seed)
-    else:
-        return logit(x, is_training=False,
-                     update_batch_stats=update_batch_stats,
-                     stochastic=False, seed=seed)
-
-
-def get_normalized_vector(d):
-    d /= (1e-12 + tf.reduce_max(tf.abs(d), range(1, len(d.get_shape())), keep_dims=True))
-    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0), range(1, len(d.get_shape())), keep_dims=True))
-    return d
-
-
-def generate_virtual_adversarial_perturbation(x, logit, is_training=True):
-    d = tf.random_normal(shape=tf.shape(x))
-
-    for _ in range(NUM_POWER_ITERATIONS):
-        d = XI * get_normalized_vector(d)
-        logit_p = logit
-        logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
-        dist = L.kl_divergence_with_logit(logit_p, logit_m)
-        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
-        d = tf.stop_gradient(grad)
-
-    return EPSILON * get_normalized_vector(d)
-
-
-def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss"):
-    r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
-    logit = tf.stop_gradient(logit)
-    logit_p = logit
-    logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
-    loss = L.kl_divergence_with_logit(logit_p, logit_m)
-    return tf.identity(loss, name=name)
-
-
-def generate_adversarial_perturbation(x, loss):
-    grad = tf.gradients(loss, [x], aggregation_method=2)[0]
-    grad = tf.stop_gradient(grad)
-    return EPSILON * get_normalized_vector(grad)
-
-
-def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
-    r_adv = generate_adversarial_perturbation(x, loss)
-    logit = forward(x + r_adv, is_training=is_training, update_batch_stats=False)
-    loss = L.ce_loss(logit, y)
-    return loss
 
 
 # -----------------------------
@@ -236,14 +176,14 @@ def wts_init(shape, name):
     return tf.Variable(tf.random_normal(shape), name=name) / \
            math.sqrt(shape[0])
 
-shapes = zip(layer_sizes[:-1], layer_sizes[1:])  # shapes of linear layers
+shapes = list(zip(layer_sizes[:-1], layer_sizes[1:]))  # shapes of linear layers
 
 weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
            'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
            # batch normalization parameter to shift the normalized value
-           'beta': [bias_init(0.0, layer_sizes[l + 1], "beta") for l in range(L)],
+           'beta': [bias_init(0.0, layer_sizes[l + 1], "beta") for l in range(num_layers)],
            # batch normalization parameter to scale the normalized value
-           'gamma': [bias_init(1.0, layer_sizes[l + 1], "beta") for l in range(L)]}
+           'gamma': [bias_init(1.0, layer_sizes[l + 1], "beta") for l in range(num_layers)]}
 
 # scaling factor for noise used in corrupted encoder
 noise_std = params.encoder_noise_sd
@@ -258,7 +198,8 @@ unlabeled = lambda x: tf.slice(x, [batch_size, 0], [-1, -1]) if x is not None el
 split_lu = lambda x: (labeled(x), unlabeled(x))
 
 # Boolean training flag
-training = tf.placeholder(tf.bool)
+TRAIN_FLAG = tf.placeholder(tf.bool)
+
 
 # -----------------------------
 # -----------------------------
@@ -292,14 +233,20 @@ def update_batch_normalization(batch, l):
 # ENCODER
 # -----------------------------
 # -----------------------------
-def encoder(inputs, noise_std):
+def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
+    """
+    is_training has to be a placeholder TF boolean
+    Note: if is_training is false, update_batch_stats is false, since the
+    update is only called in the training setting
+    """
     h = inputs + tf.random_normal(tf.shape(inputs)) * noise_std  # add noise to input
     d = {}  # to store the pre-activation, activation, mean and variance for each layer
     # The data for labeled and unlabeled examples are stored separately
     d['labeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
     d['unlabeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
     d['labeled']['z'][0], d['unlabeled']['z'][0] = split_lu(h)
-    for l in range(1, L+1):
+
+    for l in range(1, num_layers+1):
         print("Layer ", l, ": ", layer_sizes[l-1], " -> ", layer_sizes[l])
         d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
         z_pre = tf.matmul(h, weights['W'][l-1])  # pre-activation
@@ -319,7 +266,10 @@ def encoder(inputs, noise_std):
             else:
                 # Clean encoder
                 # batch normalization + update the average mean and variance using batch mean and variance of labeled examples
-                z = join(update_batch_normalization(z_pre_l, l), batch_normalization(z_pre_u, m, v))
+                bn_l = update_batch_normalization(z_pre_l, l) if \
+                    update_batch_stats else batch_normalization(z_pre_l)
+                bn_u = batch_normalization(z_pre_u, m, v)
+                z = join(bn_l, bn_u)
             return z
 
         # else:
@@ -336,30 +286,107 @@ def encoder(inputs, noise_std):
             return z
 
         # perform batch normalization according to value of boolean "training" placeholder:
-        z = tf.cond(training, training_batch_norm, eval_batch_norm)
+        z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
+        # z = training_batch_norm() if is_training else eval_batch_norm()
 
-        if l == L:
+        if l == num_layers:
             # use softmax activation in output layer
             h = tf.nn.softmax(weights['gamma'][l-1] * (z + weights["beta"][l-1]))
         else:
             # use ReLU activation in hidden layers
             h = tf.nn.relu(z + weights["beta"][l-1])
+
         d['labeled']['z'][l], d['unlabeled']['z'][l] = split_lu(z)
         d['unlabeled']['m'][l], d['unlabeled']['v'][l] = m, v  # save mean and variance of unlabeled examples for decoding
     d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
+
     return h, d
 
-print( "=== Corrupted Encoder ===")
-y_c, corr = encoder(inputs, noise_std)
+
+print( "=== Corrupted Encoder === ")
+logits_corr, corr_stats = encoder(inputs, noise_std, is_training=TRAIN_FLAG,
+                                  update_batch_stats=False)
 
 print( "=== Clean Encoder ===")
-y, clean = encoder(inputs, 0.0)  # 0.0 -> do not add noise
+logits_clean, clean_stats = encoder(inputs, 0.0, is_training=TRAIN_FLAG,
+                                    update_batch_stats=True)  # 0.0 -> do not add noise
 
-def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
-    if is_training:
-        return y_c
-    else:
-        return y
+# -----------------------------
+# -----------------------------
+# VAT FUNCTIONS
+# -----------------------------
+# -----------------------------
+# vat encoder is clean encoder but without updating batch norm
+def logit(x, is_training=TRAIN_FLAG, update_batch_stats=True, stochastic=True,
+          seed=1234):
+    noise_std = 0.0 if stochastic is False else params.encoder_noise_sd
+    logits, _ = encoder(x, noise_std, is_training=is_training,
+                       update_batch_stats=update_batch_stats)
+    return logits
+
+
+def forward(x, is_training=TRAIN_FLAG, update_batch_stats=True, seed=1234):
+    def training_logit():
+        return logit(x, is_training=is_training,
+                     update_batch_stats=update_batch_stats,
+                     stochastic=True, seed=seed)
+    def testing_logit():
+        return logit(x, is_training=is_training,
+                     update_batch_stats=update_batch_stats,
+                     stochastic=False, seed=seed)
+
+    return tf.cond(is_training, training_logit, testing_logit)
+
+
+def get_normalized_vector(d):
+    # IPython.embed()
+    d_dims = len(d.get_shape()) - 1
+    axes = [range(1, d_dims)] if d_dims > 1 else [1]
+    d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=axes, keep_dims=True))
+    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0), axis=axes,
+                                      keep_dims=True))
+    return d
+
+
+def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
+    d = tf.random_normal(shape=tf.shape(x))
+
+    for k in range(NUM_POWER_ITERATIONS):
+        d = XI * get_normalized_vector(d)
+        logit_p = logit
+        logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
+
+        IPython.embed()
+
+        dist = vat_layers.kl_divergence_with_logit(logit_p, logit_m)
+        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+
+        d = tf.stop_gradient(grad)
+
+    return EPSILON * get_normalized_vector(d)
+
+
+def virtual_adversarial_loss(x, logit, is_training=TRAIN_FLAG, name="vat_loss"):
+    r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
+    logit = tf.stop_gradient(logit)
+    logit_p = logit
+    logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
+    loss = vat_layers.kl_divergence_with_logit(logit_p, logit_m)
+    return tf.identity(loss, name=name)
+
+
+def generate_adversarial_perturbation(x, loss):
+    grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+    grad = tf.stop_gradient(grad)
+    return EPSILON * get_normalized_vector(grad)
+
+
+def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
+    r_adv = generate_adversarial_perturbation(x, loss)
+    logit = forward(x + r_adv, is_training=is_training, update_batch_stats=False)
+    loss = vat_layers.ce_loss(logit, y)
+    return loss
+
 
 # -----------------------------
 # -----------------------------
@@ -415,17 +442,19 @@ combinator = gauss_combinator
 # -----------------------------
 # -----------------------------
 
+# IPython.embed()
 print( "=== Decoder ===")
 # Decoder
 z_est = {}
 d_cost = []  # to store the denoising cost of all layers
-for l in range(L, -1, -1):
+for l in range(num_layers, -1, -1):
     print("Layer ", l, ": ", layer_sizes[l+1] if l+1 < len(layer_sizes) else
     None, " -> ", layer_sizes[l], ", denoising cost: ", denoising_cost[l])
-    z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
-    m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1-1e-10)
-    if l == L:
-        u = unlabeled(y_c)
+    z, z_c = clean_stats['unlabeled']['z'][l], corr_stats['unlabeled']['z'][l]
+    m, v = clean_stats['unlabeled']['m'].get(l, 0), clean_stats['unlabeled']['v'].get(l, 1 - 1e-10)
+    # print(l)
+    if l == num_layers:
+        u = unlabeled(logits_corr)
     else:
         u = tf.matmul(z_est[l+1], weights['V'][l])
 
@@ -446,20 +475,22 @@ for l in range(L, -1, -1):
 
 # vat cost
 ul_x = unlabeled(inputs)
-ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
+ul_logit = unlabeled(logits_corr)
+# IPython.embed()
+# ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
 vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
 
-y_N = labeled(y_c)
+y_N = labeled(logits_corr)
 cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
 
 loss = cost + u_cost + vat_loss # total cost
 
-pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y), 1))  # cost used for prediction
+pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
 
-correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(outputs, 1))  # no of correct predictions
+correct_prediction = tf.equal(tf.argmax(logits_clean, 1), tf.argmax(outputs, 1))  # no of correct predictions
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float")) * tf.constant(100.0)
 
 learning_rate = tf.Variable(starter_learning_rate, trainable=False)
@@ -488,7 +519,7 @@ if ckpt and ckpt.model_checkpoint_path:
     # if checkpoint exists, restore the parameters and set epoch_n and i_iter
     saver.restore(sess, ckpt.model_checkpoint_path)
     epoch_n = int(ckpt.model_checkpoint_path.split('-')[1])
-    i_iter = (epoch_n+1) * (num_examples/batch_size)
+    i_iter = (epoch_n+1) * (num_examples//batch_size)
     print("Restored Epoch ", epoch_n)
 else:
     # no checkpoint exists. create checkpoints directory if it does not exist.
@@ -500,7 +531,7 @@ else:
 # -----------------------------
 print("=== Training ===")
 print("Initial Accuracy: ", sess.run(accuracy, feed_dict={
-    inputs: mnist.test.images, outputs: mnist.test.labels, training: False}), "%")
+    inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}), "%")
 
 
 for i in tqdm(range(i_iter, num_iter)):
@@ -508,15 +539,15 @@ for i in tqdm(range(i_iter, num_iter)):
 
     _, train_loss = sess.run(
         [train_step, loss],
-        feed_dict={inputs: images, outputs: labels, training: True})
+        feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
 
-    if (i > 1) and ((i+1) % (num_iter/num_epochs) == 0):
-        epoch_n = i/(num_examples/batch_size)
+    if (i > 1) and ((i+1) % (num_iter//num_epochs) == 0):
+        epoch_n = i//(num_examples//batch_size)
         if (epoch_n+1) >= decay_after:
             # decay learning rate
             # learning_rate = starter_learning_rate * ((num_epochs - epoch_n) / (num_epochs - decay_after))
             ratio = 1.0 * (num_epochs - (epoch_n+1))  # epoch_n + 1 because learning rate is set for next epoch
-            ratio = max(0, ratio / (num_epochs - decay_after))
+            ratio = max(0., ratio / (num_epochs - decay_after))
             sess.run(learning_rate.assign(starter_learning_rate * ratio))
         saver.save(sess, 'checkpoints/model.ckpt', epoch_n)
         # print "Epoch ", epoch_n, ", Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False}), "%"
@@ -526,11 +557,11 @@ for i in tqdm(range(i_iter, num_iter)):
             train_log_w = csv.writer(train_log)
             log_i = [epoch_n, train_loss] + sess.run(
                 [accuracy, loss],
-                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, training: False})
+                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False})
             train_log_w.writerow(log_i)
 
 print("Final Accuracy: ", sess.run(accuracy, feed_dict={
-    inputs: mnist.test.images, outputs: mnist.test.labels, training: False}),
+    inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}),
       "%")
 
 sess.close()
