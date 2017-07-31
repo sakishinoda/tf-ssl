@@ -1,22 +1,142 @@
+# -----------------------------
+# IMPORTS
+# -----------------------------
 import tensorflow as tf
 import input_data
 import math
 import os
 import csv
 from tqdm import tqdm
-from utils import get_cli_params, process_cli_params, fclayer
+import argparse
 import numpy as np  # needed only to set seed for data input
+from tensorflow.contrib import layers as layers
+
+
+def fclayer(input,
+            size_out,
+            wts_init=layers.xavier_initializer(),
+            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
+            reuse=None,
+            scope=None,
+            activation=None):
+    return layers.fully_connected(
+        inputs=input,
+        num_outputs=size_out,
+        activation_fn=activation,
+        normalizer_fn=None,
+        normalizer_params=None,
+        weights_initializer=wts_init,
+        weights_regularizer=None,
+        biases_initializer=bias_init,
+        biases_regularizer=None,
+        reuse=reuse,
+        variables_collections=None,
+        outputs_collections=None,
+        trainable=True,
+        scope=scope
+    )
+
+
+
+# -----------------------------
+# -----------------------------
+# PARAMETER PARSING
+# -----------------------------
+# -----------------------------
+
+def parse_argstring(argstring, dtype=float, sep='-'):
+    return list(map(dtype, argstring.split(sep)))
+
+def get_cli_params():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--id', default='ladder')
+    parser.add_argument('--train_flag', action='store_true')
+    parser.add_argument('--decay_start_epoch', default=100, type=int)
+    parser.add_argument('--end_epoch', default=150, type=int)
+    parser.add_argument('--print_interval', default=50, type=int)
+    parser.add_argument('--save_epochs', default=None, type=float)
+    parser.add_argument('--num_labeled', default=100, type=int)
+
+    parser.add_argument('--labeled_batch_size', default=100, type=int)
+    parser.add_argument('--unlabeled_batch_size', default=250, type=int)
+
+    parser.add_argument('--initial_learning_rate', default=0.002, type=float)
+
+    parser.add_argument('--gamma_flag', action='store_true')
+
+    # Specify encoder layers
+    parser.add_argument('--encoder_layers',
+                        default='784-1000-500-250-250-250-10')
+
+    # Weight to apply to supervised cost in total loss
+    parser.add_argument('--sc_weight', default=1, type=float)
+
+    # Standard deviation of the Gaussian noise to inject at each level
+    parser.add_argument('--encoder_noise_sd', default=0.3, type=float)
+
+    # Default RC cost corresponds to the gamma network
+    parser.add_argument('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
+
+    # Specify form of combinator (A)MLP
+    parser.add_argument('--combinator_layers', default='4-1')
+    parser.add_argument('--combinator_sd', default=0.025, type=float)
+
+    parser.add_argument('--which_gpu', default=0, type=int)
+    parser.add_argument('--write_to', default=None)
+    parser.add_argument('--seed', default=1, type=int)
+
+    # by default use the unlabeled batch epochs
+    parser.add_argument('--use_labeled_epochs', action='store_true')
+
+    # only used if train_flag is false
+    parser.add_argument('--train_step', default=None, type=int)
+    parser.add_argument('--verbose', action='store_true') # for testing
+
+    # option to not save the model at all
+    parser.add_argument('--do_not_save', action='store_true')
+
+    params = parser.parse_args()
+    params.write_to = 'logs/' + params.id + '.results' if params.write_to is \
+                                                        None else params.write_to
+    return params
+
+def process_cli_params(params):
+
+    # Specify base structure
+    encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
+    rc_weights = parse_argstring(params.rc_weights, dtype=float)
+    rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
+    combinator_layers = parse_argstring(params.combinator_layers, dtype=int)
+
+    param_dict = vars(params)
+    param_dict.update({
+        'encoder_layers': encoder_layers,
+        'rc_weights': rc_weights,
+        'combinator_layers': combinator_layers,
+        'test_batch_size': None if params.train_flag else params.labeled_batch_size
+    })
+
+    return params
 
 params = process_cli_params(get_cli_params())
 
+# norm length for (virtual) adversarial training
+EPSILON = 8.0
+# the number of power iterations
+NUM_POWER_ITERATIONS = 1
+# small constant for finite difference
+XI = 1e-6
+
+
+# Set GPU device to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 
+# Set seeds
 np.random.seed(params.seed)
 tf.set_random_seed(params.seed)
 
-# layer_sizes = [784, 1000, 500, 250, 250, 250, 10]
-# assert layer_sizes==params.encoder_layers
+# Set layer sizes for encoders
 layer_sizes = params.encoder_layers
 
 L = len(layer_sizes) - 1  # number of layers
@@ -35,16 +155,85 @@ decay_after = params.decay_start_epoch
 batch_size = params.labeled_batch_size
 num_iter = (num_examples/batch_size) * num_epochs  # number of loop iterations
 
+
+
+# -----------------------------
+# -----------------------------
+# VAT FUNCTIONS
+# -----------------------------
+# -----------------------------
+
+
+
+def forward(x, is_training=True, update_batch_stats=True, seed=1234):
+    if is_training:
+        return logit(x, is_training=True,
+                     update_batch_stats=update_batch_stats,
+                     stochastic=True, seed=seed)
+    else:
+        return logit(x, is_training=False,
+                     update_batch_stats=update_batch_stats,
+                     stochastic=False, seed=seed)
+
+
+def get_normalized_vector(d):
+    d /= (1e-12 + tf.reduce_max(tf.abs(d), range(1, len(d.get_shape())), keep_dims=True))
+    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0), range(1, len(d.get_shape())), keep_dims=True))
+    return d
+
+
+def generate_virtual_adversarial_perturbation(x, logit, is_training=True):
+    d = tf.random_normal(shape=tf.shape(x))
+
+    for _ in range(NUM_POWER_ITERATIONS):
+        d = XI * get_normalized_vector(d)
+        logit_p = logit
+        logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
+        dist = L.kl_divergence_with_logit(logit_p, logit_m)
+        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+        d = tf.stop_gradient(grad)
+
+    return EPSILON * get_normalized_vector(d)
+
+
+def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss"):
+    r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
+    logit = tf.stop_gradient(logit)
+    logit_p = logit
+    logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
+    loss = L.kl_divergence_with_logit(logit_p, logit_m)
+    return tf.identity(loss, name=name)
+
+
+def generate_adversarial_perturbation(x, loss):
+    grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+    grad = tf.stop_gradient(grad)
+    return EPSILON * get_normalized_vector(grad)
+
+
+def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
+    r_adv = generate_adversarial_perturbation(x, loss)
+    logit = forward(x + r_adv, is_training=is_training, update_batch_stats=False)
+    loss = L.ce_loss(logit, y)
+    return loss
+
+
+# -----------------------------
+# -----------------------------
+# LADDER SETUP
+# -----------------------------
+# -----------------------------
+
 inputs = tf.placeholder(tf.float32, shape=(None, layer_sizes[0]))
 outputs = tf.placeholder(tf.float32)
 
 
 def bias_init(inits, size, name):
-    return tf.Variable(inits * tf.ones([size]), name=name)
-
+    return tf.get_variable(initializer=inits * tf.ones([size]), name=name)
 
 def wts_init(shape, name):
-    return tf.Variable(tf.random_normal(shape, name=name)) / \
+    # effectively a Xavier initializer
+    return tf.get_variable(initializer=tf.random_normal(shape, name=name)) / \
            math.sqrt(shape[0])
 
 shapes = zip(layer_sizes[:-1], layer_sizes[1:])  # shapes of linear layers
@@ -57,22 +246,27 @@ weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
            'gamma': [bias_init(1.0, layer_sizes[l + 1], "beta") for l in range(L)]}
 
 # scaling factor for noise used in corrupted encoder
-# noise_std = 0.3
 noise_std = params.encoder_noise_sd
-# hyperparameters that denote the importance of each layer
-denoising_cost = [1000.0, 10.0, 0.10, 0.10, 0.10, 0.10, 0.10]
-# denoising_cost = params.rc_weights
 
+# hyperparameters that denote the importance of each layer
+denoising_cost = params.rc_weights
+
+# Lambdas for extracting labeled/unlabeled, etc.
 join = lambda l, u: tf.concat([l, u], 0)
 labeled = lambda x: tf.slice(x, [0, 0], [batch_size, -1]) if x is not None else x
 unlabeled = lambda x: tf.slice(x, [batch_size, 0], [-1, -1]) if x is not None else x
 split_lu = lambda x: (labeled(x), unlabeled(x))
 
+# Boolean training flag
 training = tf.placeholder(tf.bool)
 
+# -----------------------------
+# -----------------------------
+# BATCH NORMALIZATION SETUP
+# -----------------------------
+# -----------------------------
 ewma = tf.train.ExponentialMovingAverage(decay=0.99)  # to calculate the moving averages of mean and variance
 bn_assigns = []  # this list stores the updates to be made to average mean and variance
-
 
 def batch_normalization(batch, mean=None, var=None):
     if mean is None or var is None:
@@ -93,7 +287,11 @@ def update_batch_normalization(batch, l):
     with tf.control_dependencies([assign_mean, assign_var]):
         return (batch - mean) / tf.sqrt(var + 1e-10)
 
-
+# -----------------------------
+# -----------------------------
+# ENCODER
+# -----------------------------
+# -----------------------------
 def encoder(inputs, noise_std):
     h = inputs + tf.random_normal(tf.shape(inputs)) * noise_std  # add noise to input
     d = {}  # to store the pre-activation, activation, mean and variance for each layer
@@ -157,7 +355,17 @@ y_c, corr = encoder(inputs, noise_std)
 print( "=== Clean Encoder ===")
 y, clean = encoder(inputs, 0.0)  # 0.0 -> do not add noise
 
-print( "=== Decoder ===")
+def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
+    if is_training:
+        return y_c
+    else:
+        return y
+
+# -----------------------------
+# -----------------------------
+# RECOMBINATION FUNCTIONS
+# -----------------------------
+# -----------------------------
 
 def amlp_combinator(z_c, u, size):
     uz = tf.multiply(z_c, u)
@@ -198,9 +406,16 @@ def gauss_combinator(z_c, u, size):
 
 
 # Choose recombination function
-combinator = amlp_combinator
+combinator = gauss_combinator
 
 
+# -----------------------------
+# -----------------------------
+# DECODER
+# -----------------------------
+# -----------------------------
+
+print( "=== Decoder ===")
 # Decoder
 z_est = {}
 d_cost = []  # to store the denoising cost of all layers
@@ -222,12 +437,25 @@ for l in range(L, -1, -1):
     # append the cost of this layer to d_cost
     d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / layer_sizes[l]) * denoising_cost[l])
 
+
+# -----------------------------
+# -----------------------------
+# PUTTING IT ALL TOGETHER
+# -----------------------------
+# -----------------------------
+
+# vat cost
+ul_x = unlabeled(inputs)
+ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
+vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
+
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
 
 y_N = labeled(y_c)
 cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
-loss = cost + u_cost  # total cost
+
+loss = cost + u_cost + vat_loss # total cost
 
 pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y), 1))  # cost used for prediction
 
@@ -244,10 +472,16 @@ with tf.control_dependencies([train_step]):
 
 saver = tf.train.Saver()
 
+# -----------------------------
+# -----------------------------
+
 print("===  Starting Session ===")
 sess = tf.Session()
 
 i_iter = 0
+
+# -----------------------------
+# Resume from checkpoint
 
 ckpt = tf.train.get_checkpoint_state('checkpoints/')  # get latest checkpoint (if any)
 if ckpt and ckpt.model_checkpoint_path:
@@ -263,6 +497,7 @@ else:
     init = tf.global_variables_initializer()
     sess.run(init)
 
+# -----------------------------
 print("=== Training ===")
 print("Initial Accuracy: ", sess.run(accuracy, feed_dict={
     inputs: mnist.test.images, outputs: mnist.test.labels, training: False}), "%")
@@ -270,9 +505,11 @@ print("Initial Accuracy: ", sess.run(accuracy, feed_dict={
 
 for i in tqdm(range(i_iter, num_iter)):
     images, labels = mnist.train.next_batch(batch_size)
-    # images, labels = sf.next_batch(params.labeled_batch_size,
-    #                       params.unlabeled_batch_size)
-    sess.run(train_step, feed_dict={inputs: images, outputs: labels, training: True})
+
+    _, train_loss = sess.run(
+        [train_step, loss],
+        feed_dict={inputs: images, outputs: labels, training: True})
+
     if (i > 1) and ((i+1) % (num_iter/num_epochs) == 0):
         epoch_n = i/(num_examples/batch_size)
         if (epoch_n+1) >= decay_after:
@@ -283,11 +520,12 @@ for i in tqdm(range(i_iter, num_iter)):
             sess.run(learning_rate.assign(starter_learning_rate * ratio))
         saver.save(sess, 'checkpoints/model.ckpt', epoch_n)
         # print "Epoch ", epoch_n, ", Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False}), "%"
+
         with open('train_log', 'ab') as train_log:
             # write test accuracy to file "train_log"
             train_log_w = csv.writer(train_log)
-            log_i = [epoch_n] + sess.run(
-                [accuracy],
+            log_i = [epoch_n, train_loss] + sess.run(
+                [accuracy, loss],
                 feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, training: False})
             train_log_w.writerow(log_i)
 
