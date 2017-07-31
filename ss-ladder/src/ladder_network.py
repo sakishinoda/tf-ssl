@@ -386,7 +386,7 @@ def main(params=None):
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 
-    mnist = input_data.read_data_sets(sys.path[0]+'/../../data/mnist/', one_hot=True)
+    mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 
     # Set tensorflow and numpy seeds
     tf.set_random_seed(params.seed)
