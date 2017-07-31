@@ -5,7 +5,7 @@ Compatible with Python 3
 
 import gzip
 import os
-import urllib
+import urllib.request, urllib.parse, urllib.error
 
 import numpy
 
@@ -18,10 +18,10 @@ def maybe_download(filename, work_directory, verbose=False):
     os.mkdir(work_directory)
   filepath = os.path.join(work_directory, filename)
   if not os.path.exists(filepath):
-    filepath, _ = urllib.urlretrieve(SOURCE_URL + filename, filepath)
+    filepath, _ = urllib.request.urlretrieve(SOURCE_URL + filename, filepath)
     statinfo = os.stat(filepath)
     if verbose:
-        print('Succesfully downloaded', filename, statinfo.st_size, 'bytes.')
+        print(('Succesfully downloaded', filename, statinfo.st_size, 'bytes.'))
   return filepath
 
 
@@ -33,7 +33,7 @@ def _read32(bytestream):
 def extract_images(filename, verbose=False):
   """Extract the images into a 4D uint8 numpy array [index, y, x, depth]."""
   if verbose:
-      print('Extracting', filename)
+      print(('Extracting', filename))
   with gzip.open(filename) as bytestream:
     magic = _read32(bytestream)
     if magic != 2051:
@@ -61,7 +61,7 @@ def dense_to_one_hot(labels_dense, num_classes=10):
 def extract_labels(filename, one_hot=False, verbose=False):
   """Extract the labels into a 1D uint8 numpy array [index]."""
   if verbose:
-      print('Extracting', filename)
+      print(('Extracting', filename))
   with gzip.open(filename) as bytestream:
     magic = _read32(bytestream)
     if magic != 2049:
@@ -157,7 +157,7 @@ class SemiDataSet(object):
         y = numpy.array([numpy.arange(10)[l==1][0] for l in labels])
         idx = indices[y==0][:5]
         n_classes = y.max() + 1
-        n_from_each_class = n_labeled / n_classes
+        n_from_each_class = int(n_labeled / n_classes)
         i_labeled = []
         for c in range(n_classes):
             i = indices[y==c][:n_from_each_class]
