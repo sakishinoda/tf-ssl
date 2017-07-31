@@ -1,0 +1,2 @@
+nohup python vat_ladder.py --id "Gauss" --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 --vat_weight 0.0 --description "Standard Gauss combinator, no VAT cost" &
+nohup python vat_ladder.py --id "Gauss_Alpha-1.0" --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 --vat_weight 1.0 --description "Standard Gauss combinator, VAT cost 1.0" &

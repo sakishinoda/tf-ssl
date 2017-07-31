@@ -11,7 +11,10 @@ from tqdm import tqdm
 import argparse
 import numpy as np  # needed only to set seed for data input
 from tensorflow.contrib import layers as layers
+import time
 # from vat_layers import kl_divergence_with_logit
+
+
 def fclayer(input,
             size_out,
             wts_init=layers.xavier_initializer(),
@@ -105,21 +108,12 @@ def get_cli_params():
     return params
 
 def process_cli_params(params):
-
     # Specify base structure
     encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
     rc_weights = parse_argstring(params.rc_weights, dtype=float)
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
-    combinator_layers = parse_argstring(params.combinator_layers, dtype=int)
-
-    param_dict = vars(params)
-    param_dict.update({
-        'encoder_layers': encoder_layers,
-        'rc_weights': rc_weights,
-        'combinator_layers': combinator_layers,
-        'test_batch_size': None if params.train_flag else params.labeled_batch_size
-    })
-
+    params.encoder_layers = encoder_layers
+    params.rc_weights = rc_weights
     return params
 
 PARAMS = process_cli_params(get_cli_params())
@@ -545,7 +539,7 @@ if not os.path.exists(log_dir):
 if PARAMS.description is not None:
     desc_file = log_dir + "/" + "description"
     with open(desc_file, 'a') as f:
-        print(PARAMS.description, file=desc_file, flush=True)
+        print(PARAMS.description, file=f, flush=True)
 
 log_file = log_dir + "/" + "train_log"
 
@@ -567,7 +561,7 @@ print("Initial Test Accuracy: ", init_acc, "%")
 # print("Initial Test Loss: ", init_loss)
 
 
-
+start = time.time()
 for i in tqdm(range(i_iter, num_iter)):
     images, labels = mnist.train.next_batch(batch_size)
 
@@ -575,7 +569,9 @@ for i in tqdm(range(i_iter, num_iter)):
         [train_step],
         feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
 
+
     if (i > 1) and ((i+1) % (num_iter//num_epochs) == 0):
+        now = time.time() - start
         epoch_n = i//(num_examples//batch_size)
         if (epoch_n+1) >= decay_after:
             # decay learning rate
@@ -589,7 +585,7 @@ for i in tqdm(range(i_iter, num_iter)):
         with open(log_file, 'a') as train_log:
             # write test accuracy to file "train_log"
             # train_log_w = csv.writer(train_log)
-            log_i = [epoch_n] + sess.run(
+            log_i = [now, epoch_n] + sess.run(
                 [accuracy],
                 feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}
             ) + sess.run(
