@@ -126,7 +126,8 @@ EPSILON = 8.0
 NUM_POWER_ITERATIONS = 1
 # small constant for finite difference
 XI = 1e-6
-
+# Weight of vat wrt other losses
+ALPHA = 0.1
 
 # Set GPU device to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -482,7 +483,7 @@ u_cost = tf.add_n(d_cost)
 y_N = labeled(logits_corr)
 cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
 
-loss = cost + u_cost + vat_loss # total cost
+loss = cost + u_cost + ALPHA*vat_loss # total cost
 
 pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
 
