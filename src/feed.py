@@ -100,11 +100,15 @@ class Dataset(object):
 class Balanced(SemiFeed):
 
     def sample_labeled(self, all_images, all_labels, num_labeled):
+
+        assert num_labeled <= all_images.shape[0]
+
         images, labels, u_images, u_labels = self.sample_balanced_labeled(
             all_images,
             all_labels,
             num_labeled
         )
+
         return images, labels, u_images, u_labels
 
     def sample_balanced_labeled(self, images, labels, num_labeled):

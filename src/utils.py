@@ -1,6 +1,7 @@
 import tensorflow as tf
 import argparse
 import numpy as np
+import tensorflow.contrib.layers as layers
 
 def decay_learning_rate(initial_learning_rate, decay_start_epoch, end_epoch, iter_per_epoch, global_step):
     end_step = end_epoch * iter_per_epoch
@@ -100,3 +101,30 @@ def print_trainables(write_to=None):
           file=write_to)
     # [print(var.name, var.get_shape()) for var in trainables]
 
+
+def fclayer(input,
+            size_out,
+            wts_init=layers.xavier_initializer(),
+            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
+            reuse=None,
+            scope=None):
+    return layers.fully_connected(
+        inputs=input,
+        num_outputs=size_out,
+        activation_fn=None,
+        normalizer_fn=None,
+        normalizer_params=None,
+        weights_initializer=wts_init,
+        weights_regularizer=None,
+        biases_initializer=bias_init,
+        biases_regularizer=None,
+        reuse=reuse,
+        variables_collections=None,
+        outputs_collections=None,
+        trainable=True,
+        scope=scope
+    )
+
+
+def lrelu(x, alpha=0.1):
+    return tf.maximum(x, alpha*x)

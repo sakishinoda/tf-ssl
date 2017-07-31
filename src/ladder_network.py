@@ -1,11 +1,11 @@
 import tensorflow as tf
-import tensorflow.contrib.layers as layers
 from collections import OrderedDict
 from tensorflow.examples.tutorials.mnist import input_data
 from time import time
 from src import feed, utils
 import numpy as np
 import sys, os
+from src.utils import fclayer, lrelu
 
 
 class NoisyBNLayer(object):
@@ -266,33 +266,6 @@ class GammaDecoder(Decoder):
             l, decoder_activations, training=training)
 
 
-def fclayer(input,
-            size_out,
-            wts_init=layers.xavier_initializer(),
-            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
-            reuse=None,
-            scope=None):
-    return layers.fully_connected(
-        inputs=input,
-        num_outputs=size_out,
-        activation_fn=None,
-        normalizer_fn=None,
-        normalizer_params=None,
-        weights_initializer=wts_init,
-        weights_regularizer=None,
-        biases_initializer=bias_init,
-        biases_regularizer=None,
-        reuse=reuse,
-        variables_collections=None,
-        outputs_collections=None,
-        trainable=True,
-        scope=scope
-    )
-
-
-def lrelu(x, alpha=0.1):
-    return tf.maximum(x, alpha*x)
-
 
 class Ladder(object):
 
@@ -413,7 +386,7 @@ def main(params=None):
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 
-    mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
+    mnist = input_data.read_data_sets(sys.path[0]+'/../../data/mnist/', one_hot=True)
 
     # Set tensorflow and numpy seeds
     tf.set_random_seed(params.seed)
@@ -427,7 +400,12 @@ def main(params=None):
         # ===========================
         # TRAINING
         # ===========================
-        sf = feed.Balanced(mnist.train.images, mnist.train.labels, params.num_labeled)
+        sf = feed.Balanced(
+            np.concatenate([mnist.train.images, mnist.validation.images],
+                           axis=0),
+            np.concatenate([mnist.train.labels, mnist.validation.labels],
+                           axis=0),
+            params.num_labeled)
         # print('seeds : ', sf.seeds, file=write_to, flush=True)
         if params.use_labeled_epochs:
             iter_per_epoch = int(
