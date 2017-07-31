@@ -118,7 +118,7 @@ def process_cli_params(params):
 
     return params
 
-params = process_cli_params(get_cli_params())
+PARAMS = process_cli_params(get_cli_params())
 
 # norm length for (virtual) adversarial training
 EPSILON = 8.0
@@ -131,29 +131,30 @@ ALPHA = 0.1
 
 # Set GPU device to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
+os.environ["CUDA_VISIBLE_DEVICES"]=str(PARAMS.which_gpu)
 
 # Set seeds
-np.random.seed(params.seed)
-tf.set_random_seed(params.seed)
+np.random.seed(PARAMS.seed)
+tf.set_random_seed(PARAMS.seed)
 
 # Set layer sizes for encoders
-layer_sizes = params.encoder_layers
+layer_sizes = PARAMS.encoder_layers
 
 num_layers = len(layer_sizes) - 1  # number of layers
 
-num_epochs = params.end_epoch
-num_labeled = params.num_labeled
+num_epochs = PARAMS.end_epoch
+num_labeled = PARAMS.num_labeled
 
 print("===  Loading Data ===")
-mnist = input_data.read_data_sets("MNIST_data", n_labeled=num_labeled, one_hot=True)
+mnist = input_data.read_data_sets("MNIST_data", n_labeled=num_labeled,
+                                  one_hot=True, verbose=True)
 num_examples = mnist.train.num_examples
 
-starter_learning_rate = params.initial_learning_rate
+starter_learning_rate = PARAMS.initial_learning_rate
 
 # epoch after which to begin learning rate decay
-decay_after = params.decay_start_epoch
-batch_size = params.labeled_batch_size
+decay_after = PARAMS.decay_start_epoch
+batch_size = PARAMS.labeled_batch_size
 num_iter = (num_examples//batch_size) * num_epochs  # number of loop iterations
 
 
@@ -186,10 +187,10 @@ weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
            'gamma': [bias_init(1.0, layer_sizes[l + 1], "beta") for l in range(num_layers)]}
 
 # scaling factor for noise used in corrupted encoder
-noise_std = params.encoder_noise_sd
+noise_std = PARAMS.encoder_noise_sd
 
 # hyperparameters that denote the importance of each layer
-denoising_cost = params.rc_weights
+denoising_cost = PARAMS.rc_weights
 
 # Lambdas for extracting labeled/unlabeled, etc.
 join = lambda l, u: tf.concat([l, u], 0)
@@ -322,7 +323,6 @@ def logsoftmax(x):
     lsm = xdev - tf.log(tf.reduce_sum(tf.exp(xdev), 1, keep_dims=True))
     return lsm
 
-
 def kl_divergence_with_logit(q_logit, p_logit):
     q = tf.nn.softmax(q_logit)
     qlogq = tf.reduce_mean(tf.reduce_sum(q * logsoftmax(q_logit), 1))
@@ -330,26 +330,32 @@ def kl_divergence_with_logit(q_logit, p_logit):
     return qlogq - qlogp
 
 # vat encoder is clean encoder but without updating batch norm
-def logit(x, is_training=TRAIN_FLAG, update_batch_stats=True, stochastic=True,
-          seed=1234):
-    noise_std = 0.0 if stochastic is False else params.encoder_noise_sd
-    logits, _ = encoder(x, noise_std, is_training=is_training,
-                       update_batch_stats=update_batch_stats)
-    return logits
+# def logit(x, is_training=TRAIN_FLAG, update_batch_stats=False, stochastic=True,
+#           seed=1234):
+#     noise_std = 0.0 if stochastic is False else PARAMS.encoder_noise_sd
+#     print("=== VAT PASS ===")
+#     logits, _ = encoder(x, noise_std, is_training=is_training,
+#                        update_batch_stats=update_batch_stats)
+#     return logits
 
+def forward(x, is_training=TRAIN_FLAG, update_batch_stats=False, seed=1234):
 
-def forward(x, is_training=TRAIN_FLAG, update_batch_stats=True, seed=1234):
     def training_logit():
-        return logit(x, is_training=is_training,
-                     update_batch_stats=update_batch_stats,
-                     stochastic=True, seed=seed)
+        print("=== VAT Clean Pass === ")
+        logit,_ = encoder(x, 0.0,
+                          is_training=is_training,
+                          update_batch_stats=update_batch_stats)
+        return logit
+
     def testing_logit():
-        return logit(x, is_training=is_training,
-                     update_batch_stats=update_batch_stats,
-                     stochastic=False, seed=seed)
+        print("=== VAT Corrupted Pass ===")
+        logit, _ = encoder(x, PARAMS.encoder_noise_sd,
+                           is_training=is_training,
+                           update_batch_stats=update_batch_stats)
+        return logit
 
-    return tf.cond(is_training, training_logit, testing_logit)
-
+    # return tf.cond(is_training, training_logit, testing_logit)
+    return training_logit()
 
 def get_normalized_vector(d):
     # IPython.embed()
@@ -367,19 +373,21 @@ def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
     for k in range(NUM_POWER_ITERATIONS):
         d = XI * get_normalized_vector(d)
         logit_p = logit
+        print("=== Power Iteration: {} ===".format(k))
         logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
         dist = kl_divergence_with_logit(logit_p, logit_m)
         grad = tf.gradients(dist, [d], aggregation_method=2)[0]
-
         d = tf.stop_gradient(grad)
 
     return EPSILON * get_normalized_vector(d)
 
 
 def virtual_adversarial_loss(x, logit, is_training=TRAIN_FLAG, name="vat_loss"):
+    print("=== VAT Pass: Generating VAT perturbation ===")
     r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
     logit = tf.stop_gradient(logit)
     logit_p = logit
+    print("=== VAT Pass: Computing VAT Loss (KL Divergence)")
     logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
     loss = kl_divergence_with_logit(logit_p, logit_m)
     return tf.identity(loss, name=name)
@@ -398,10 +406,10 @@ def amlp_combinator(z_c, u, size):
     # print(z_c.get_shape, u.get_shape, uz.get_shape)
 
     h = fclayer(x, size_out=4, wts_init=tf.random_normal_initializer(
-        stddev=params.combinator_sd), reuse=None) #, scope='combinator_hidden')
+        stddev=PARAMS.combinator_sd), reuse=None) #, scope='combinator_hidden')
 
     o = fclayer(h, size_out=1, wts_init=tf.random_normal_initializer(
-        stddev=params.combinator_sd), reuse=None,
+        stddev=PARAMS.combinator_sd), reuse=None,
                 activation=tf.nn.relu) #, scope='combinator_out')
 
     return tf.squeeze(o)
@@ -471,11 +479,10 @@ for l in range(num_layers, -1, -1):
 # -----------------------------
 
 # vat cost
-ul_x = unlabeled(inputs)
-ul_logit = unlabeled(logits_corr)
-# IPython.embed()
+# ul_x = unlabeled(inputs)
+# ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
+vat_loss = virtual_adversarial_loss(inputs, logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
@@ -527,8 +534,19 @@ else:
 
 # -----------------------------
 print("=== Training ===")
-print("Initial Accuracy: ", sess.run(accuracy, feed_dict={
-    inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}), "%")
+
+[init_acc, init_loss] = sess.run([accuracy, loss], feed_dict={
+    inputs: mnist.train.labeled_ds.images, outputs:
+        mnist.train.labeled_ds.labels,
+    TRAIN_FLAG: False})
+print("Initial Train Accuracy: ", init_acc, "%")
+print("Initial Train Loss: ", init_loss)
+
+[init_acc] = sess.run([accuracy], feed_dict={
+    inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False})
+print("Initial Test Accuracy: ", init_acc, "%")
+# print("Initial Test Loss: ", init_loss)
+
 
 
 for i in tqdm(range(i_iter, num_iter)):
@@ -553,7 +571,7 @@ for i in tqdm(range(i_iter, num_iter)):
             # write test accuracy to file "train_log"
             train_log_w = csv.writer(train_log)
             log_i = [epoch_n, train_loss] + sess.run(
-                [accuracy, loss],
+                [accuracy],
                 feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False})
             train_log_w.writerow(log_i)
 
