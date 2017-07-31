@@ -176,7 +176,8 @@ class SemiDataSet(object):
         return images, labels
 
 
-def read_data_sets(train_dir, n_labeled = 100, fake_data=False, one_hot=False):
+def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
+                   one_hot=False, verbose=False):
   class DataSets(object):
     pass
   data_sets = DataSets()
@@ -193,17 +194,17 @@ def read_data_sets(train_dir, n_labeled = 100, fake_data=False, one_hot=False):
   TEST_LABELS = 't10k-labels-idx1-ubyte.gz'
   VALIDATION_SIZE = 0
 
-  local_file = maybe_download(TRAIN_IMAGES, train_dir)
-  train_images = extract_images(local_file)
+  local_file = maybe_download(TRAIN_IMAGES, train_dir, verbose=verbose)
+  train_images = extract_images(local_file, verbose=verbose)
 
-  local_file = maybe_download(TRAIN_LABELS, train_dir)
-  train_labels = extract_labels(local_file, one_hot=one_hot)
+  local_file = maybe_download(TRAIN_LABELS, train_dir, verbose=verbose)
+  train_labels = extract_labels(local_file, one_hot=one_hot, verbose=verbose)
 
-  local_file = maybe_download(TEST_IMAGES, train_dir)
-  test_images = extract_images(local_file)
+  local_file = maybe_download(TEST_IMAGES, train_dir, verbose=verbose)
+  test_images = extract_images(local_file, verbose=verbose)
 
-  local_file = maybe_download(TEST_LABELS, train_dir)
-  test_labels = extract_labels(local_file, one_hot=one_hot)
+  local_file = maybe_download(TEST_LABELS, train_dir, verbose=verbose)
+  test_labels = extract_labels(local_file, one_hot=one_hot, verbose=verbose)
 
   validation_images = train_images[:VALIDATION_SIZE]
   validation_labels = train_labels[:VALIDATION_SIZE]
