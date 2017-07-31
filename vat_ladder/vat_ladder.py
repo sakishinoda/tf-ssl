@@ -36,8 +36,6 @@ def fclayer(input,
         scope=scope
     )
 
-
-
 # -----------------------------
 # -----------------------------
 # PARAMETER PARSING
@@ -95,6 +93,9 @@ def get_cli_params():
     # option to not save the model at all
     parser.add_argument('--do_not_save', action='store_true')
 
+    # weight of vat cost
+    parser.add_argument('--vat_weight', default=0.1, type=float)
+
     params = parser.parse_args()
     params.write_to = 'logs/' + params.id + '.results' if params.write_to is \
                                                         None else params.write_to
@@ -127,7 +128,7 @@ NUM_POWER_ITERATIONS = 1
 # small constant for finite difference
 XI = 1e-6
 # Weight of vat wrt other losses
-ALPHA = 0.1
+ALPHA = PARAMS.vat_weight
 
 # Set GPU device to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -567,16 +568,17 @@ for i in tqdm(range(i_iter, num_iter)):
         saver.save(sess, 'checkpoints/model.ckpt', epoch_n)
         # print "Epoch ", epoch_n, ", Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False}), "%"
 
-        with open('train_log', 'ab') as train_log:
+        with open('train_log', 'a') as train_log:
             # write test accuracy to file "train_log"
-            train_log_w = csv.writer(train_log)
+            # train_log_w = csv.writer(train_log)
             log_i = [epoch_n] + sess.run(
                 [accuracy],
                 feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}
             ) + sess.run(
                 [loss, cost, u_cost, vat_loss],
                 feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
-            train_log_w.writerow(log_i)
+            # train_log_w.writerow(log_i)
+            print(*log_i, sep=',', flush=True, file=train_log)
 
 print("Final Accuracy: ", sess.run(accuracy, feed_dict={
     inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}),
