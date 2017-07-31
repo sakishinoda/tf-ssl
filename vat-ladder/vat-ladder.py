@@ -11,8 +11,7 @@ from tqdm import tqdm
 import argparse
 import numpy as np  # needed only to set seed for data input
 from tensorflow.contrib import layers as layers
-import layers as vat_layers
-
+# from vat_layers import kl_divergence_with_logit
 def fclayer(input,
             size_out,
             wts_init=layers.xavier_initializer(),
@@ -316,6 +315,19 @@ logits_clean, clean_stats = encoder(inputs, 0.0, is_training=TRAIN_FLAG,
 # VAT FUNCTIONS
 # -----------------------------
 # -----------------------------
+
+def logsoftmax(x):
+    xdev = x - tf.reduce_max(x, 1, keep_dims=True)
+    lsm = xdev - tf.log(tf.reduce_sum(tf.exp(xdev), 1, keep_dims=True))
+    return lsm
+
+
+def kl_divergence_with_logit(q_logit, p_logit):
+    q = tf.nn.softmax(q_logit)
+    qlogq = tf.reduce_mean(tf.reduce_sum(q * logsoftmax(q_logit), 1))
+    qlogp = tf.reduce_mean(tf.reduce_sum(q * logsoftmax(p_logit), 1))
+    return qlogq - qlogp
+
 # vat encoder is clean encoder but without updating batch norm
 def logit(x, is_training=TRAIN_FLAG, update_batch_stats=True, stochastic=True,
           seed=1234):
@@ -355,10 +367,7 @@ def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
         d = XI * get_normalized_vector(d)
         logit_p = logit
         logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
-
-        IPython.embed()
-
-        dist = vat_layers.kl_divergence_with_logit(logit_p, logit_m)
+        dist = kl_divergence_with_logit(logit_p, logit_m)
         grad = tf.gradients(dist, [d], aggregation_method=2)[0]
 
         d = tf.stop_gradient(grad)
@@ -371,21 +380,8 @@ def virtual_adversarial_loss(x, logit, is_training=TRAIN_FLAG, name="vat_loss"):
     logit = tf.stop_gradient(logit)
     logit_p = logit
     logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
-    loss = vat_layers.kl_divergence_with_logit(logit_p, logit_m)
+    loss = kl_divergence_with_logit(logit_p, logit_m)
     return tf.identity(loss, name=name)
-
-
-def generate_adversarial_perturbation(x, loss):
-    grad = tf.gradients(loss, [x], aggregation_method=2)[0]
-    grad = tf.stop_gradient(grad)
-    return EPSILON * get_normalized_vector(grad)
-
-
-def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
-    r_adv = generate_adversarial_perturbation(x, loss)
-    logit = forward(x + r_adv, is_training=is_training, update_batch_stats=False)
-    loss = vat_layers.ce_loss(logit, y)
-    return loss
 
 
 # -----------------------------
