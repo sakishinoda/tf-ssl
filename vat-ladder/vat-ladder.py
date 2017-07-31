@@ -229,11 +229,11 @@ outputs = tf.placeholder(tf.float32)
 
 
 def bias_init(inits, size, name):
-    return tf.get_variable(initializer=inits * tf.ones([size]), name=name)
+    return tf.Variable(inits * tf.ones([size]), name=name)
 
 def wts_init(shape, name):
     # effectively a Xavier initializer
-    return tf.get_variable(initializer=tf.random_normal(shape, name=name)) / \
+    return tf.Variable(tf.random_normal(shape), name=name) / \
            math.sqrt(shape[0])
 
 shapes = zip(layer_sizes[:-1], layer_sizes[1:])  # shapes of linear layers
