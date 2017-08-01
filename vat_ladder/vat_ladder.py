@@ -552,10 +552,8 @@ if not os.path.exists(log_dir):
 
 desc_file = log_dir + "/" + "description"
 with open(desc_file, 'a') as f:
-    if PARAMS.description is not None:
-        print(PARAMS.description, file=f, flush=True)
     print(*order_param_settings(PARAMS), sep='\n', file=f, flush=True)
-    print("Trainable parameters: ", count_trainable_params(), file=f,
+    print("Trainable parameters:", count_trainable_params(), file=f,
           flush=True)
 
 log_file = log_dir + "/" + "train_log"
