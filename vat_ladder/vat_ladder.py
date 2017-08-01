@@ -116,6 +116,20 @@ def process_cli_params(params):
     params.rc_weights = rc_weights
     return params
 
+
+def count_trainable_params():
+    trainables = tf.trainable_variables()
+    return np.sum([np.prod(var.get_shape()) for var in trainables])
+
+def order_param_settings(params):
+    param_dict = vars(params)
+    param_list = []
+    for k in sorted(param_dict.keys()):
+        param_list.append(str(k) + ": " + str(param_dict[k]))
+
+    return param_list
+
+
 PARAMS = process_cli_params(get_cli_params())
 
 # norm length for (virtual) adversarial training
@@ -480,7 +494,7 @@ for l in range(num_layers, -1, -1):
 # ul_x = unlabeled(inputs)
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-vat_loss = virtual_adversarial_loss(inputs, logits_corr)
+vat_loss = PARAMS.vat_weight * virtual_adversarial_loss(inputs, logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
@@ -488,7 +502,7 @@ u_cost = tf.add_n(d_cost)
 y_N = labeled(logits_corr)
 cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
 
-loss = cost + u_cost + ALPHA*vat_loss # total cost
+loss = cost + u_cost + vat_loss # total cost
 
 pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
 
@@ -515,7 +529,7 @@ i_iter = 0
 
 # -----------------------------
 # Resume from checkpoint
-ckpt_dir = "checkpoints/" + PARAMS.id
+ckpt_dir = "checkpoints/" + PARAMS.id + "/"
 ckpt = tf.train.get_checkpoint_state(ckpt_dir)  # get latest checkpoint (if any)
 if ckpt and ckpt.model_checkpoint_path:
     # if checkpoint exists, restore the parameters and set epoch_n and i_iter
@@ -536,13 +550,15 @@ log_dir = "logs/" + PARAMS.id
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
-if PARAMS.description is not None:
-    desc_file = log_dir + "/" + "description"
-    with open(desc_file, 'a') as f:
+desc_file = log_dir + "/" + "description"
+with open(desc_file, 'a') as f:
+    if PARAMS.description is not None:
         print(PARAMS.description, file=f, flush=True)
+    print(*order_param_settings(PARAMS), sep='\n', file=f, flush=True)
+    print("Trainable parameters: ", count_trainable_params(), file=f,
+          flush=True)
 
 log_file = log_dir + "/" + "train_log"
-
 
 
 # -----------------------------
