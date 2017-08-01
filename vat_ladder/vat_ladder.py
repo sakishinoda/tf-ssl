@@ -97,7 +97,10 @@ def get_cli_params():
     parser.add_argument('--do_not_save', action='store_true')
 
     # weight of vat cost
-    parser.add_argument('--vat_weight', default=0.1, type=float)
+    parser.add_argument('--vat_weight', default=0, type=float)
+
+    # weight of entropy minimisation cost
+    parser.add_argument('--ent_weight', default=0, type=float)
 
     # description to print
     parser.add_argument('--description', default=None)
@@ -341,6 +344,10 @@ def kl_divergence_with_logit(q_logit, p_logit):
     qlogp = tf.reduce_mean(tf.reduce_sum(q * logsoftmax(p_logit), 1))
     return qlogq - qlogp
 
+def entropy_y_x(logit):
+    p = tf.nn.softmax(logit)
+    return -tf.reduce_mean(tf.reduce_sum(p * logsoftmax(logit), 1))
+
 # vat encoder is clean encoder but without updating batch norm
 # def logit(x, is_training=TRAIN_FLAG, update_batch_stats=False, stochastic=True,
 #           seed=1234):
@@ -495,6 +502,7 @@ for l in range(num_layers, -1, -1):
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
 vat_loss = PARAMS.vat_weight * virtual_adversarial_loss(inputs, logits_corr)
+ent_loss = PARAMS.ent_weight * entropy_y_x(logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
@@ -502,7 +510,7 @@ u_cost = tf.add_n(d_cost)
 y_N = labeled(logits_corr)
 cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
 
-loss = cost + u_cost + vat_loss # total cost
+loss = cost + u_cost + vat_loss + ent_loss # total cost
 
 pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
 
@@ -603,7 +611,7 @@ for i in tqdm(range(i_iter, num_iter)):
                 [accuracy],
                 feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}
             ) + sess.run(
-                [loss, cost, u_cost, vat_loss],
+                [loss, cost, u_cost, vat_loss, ent_loss],
                 feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
             # train_log_w.writerow(log_i)
             print(*log_i, sep=',', flush=True, file=train_log)
