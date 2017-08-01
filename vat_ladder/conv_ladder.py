@@ -1,0 +1,297 @@
+"""
+Implement a CNN Ladder.
+Code starting point takerum vat-tf
+Dropout on the pooling layers is replaced with batch norm.
+Batch norm on convolution layers are carried out per-channel.
+"""
+import tensorflow as tf
+import numpy as np
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
+parser.add_argument('--lrelu_a', default=0.1, type=float)
+parser.add_argument('--top_bn', action='store_true')
+PARAMS = parser.parse_args()
+
+
+
+def lrelu(x, a=0.1):
+    if a < 1e-16:
+        return tf.nn.relu(x)
+    else:
+        return tf.maximum(x, a * x)
+
+
+def bn(x, dim, is_training=True, update_batch_stats=True, collections=None, name="bn"):
+    params_shape = (dim,)
+    n = tf.to_float(tf.reduce_prod(tf.shape(x)[:-1]))
+    axis = list(range(int(tf.shape(x).get_shape().as_list()[0]) - 1))
+    mean = tf.reduce_mean(x, axis)
+    var = tf.reduce_mean(tf.pow(x - mean, 2.0), axis)
+    avg_mean = tf.get_variable(
+        name=name + "_mean",
+        shape=params_shape,
+        initializer=tf.constant_initializer(0.0),
+        collections=collections,
+        trainable=False
+    )
+
+    avg_var = tf.get_variable(
+        name=name + "_var",
+        shape=params_shape,
+        initializer=tf.constant_initializer(1.0),
+        collections=collections,
+        trainable=False
+    )
+
+    gamma = tf.get_variable(
+        name=name + "_gamma",
+        shape=params_shape,
+        initializer=tf.constant_initializer(1.0),
+        collections=collections
+    )
+
+    beta = tf.get_variable(
+        name=name + "_beta",
+        shape=params_shape,
+        initializer=tf.constant_initializer(0.0),
+        collections=collections,
+    )
+
+    if is_training:
+        avg_mean_assign_op = tf.no_op()
+        avg_var_assign_op = tf.no_op()
+        if update_batch_stats:
+            avg_mean_assign_op = tf.assign(
+                avg_mean,
+                PARAMS.bn_stats_decay_factor * avg_mean + (1 - PARAMS.bn_stats_decay_factor) * mean)
+            avg_var_assign_op = tf.assign(
+                avg_var,
+                PARAMS.bn_stats_decay_factor * avg_var + (n / (n - 1))
+                * (1 - PARAMS.bn_stats_decay_factor) * var)
+
+        with tf.control_dependencies([avg_mean_assign_op, avg_var_assign_op]):
+            z = (x - mean) / tf.sqrt(1e-6 + var)
+    else:
+        z = (x - avg_mean) / tf.sqrt(1e-6 + avg_var)
+
+    return gamma * z + beta
+
+
+def fc(x, dim_in, dim_out, seed=None, name='fc'):
+    num_units_in = dim_in
+    num_units_out = dim_out
+    weights_initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
+
+    weights = tf.get_variable(name + '_W',
+                            shape=[num_units_in, num_units_out],
+                            initializer=weights_initializer)
+    biases = tf.get_variable(name + '_b',
+                             shape=[num_units_out],
+                             initializer=tf.constant_initializer(0.0))
+    x = tf.nn.xw_plus_b(x, weights, biases)
+    return x
+
+
+def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False, seed=None, name='conv'):
+    shape = [ksize, ksize, f_in, f_out]
+    initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
+    weights = tf.get_variable(name + '_W',
+                            shape=shape,
+                            dtype='float',
+                            initializer=initializer)
+    x = tf.nn.conv2d(x, filter=weights, strides=[1, stride, stride, 1],
+                     padding=padding)
+
+    if use_bias:
+        bias = tf.get_variable(name + '_b',
+                               shape=[f_out],
+                               dtype='float',
+                               initializer=tf.zeros_initializer)
+        return tf.nn.bias_add(x, bias)
+    else:
+        return x
+
+
+def deconv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
+           seed=None, name='deconv'):
+    shape = [ksize, ksize, f_in, f_out]
+    initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
+    weights = tf.get_variable(name + '_W',
+                              shape=shape,
+                              dtype='float',
+                              initializer=initializer)
+    x = tf.nn.conv2d_transpose(x, weights, strides=[1, stride, stride, 1],
+                               padding=padding)
+
+    if use_bias:
+        bias = tf.get_variable(name + '_b',
+                               shape=[f_out],
+                               dtype='float',
+                               initializer=tf.zeros_initializer)
+        return tf.nn.bias_add(x, bias)
+    else:
+        return x
+
+def avg_pool(x, ksize=2, stride=2):
+    return tf.nn.avg_pool(x,
+                          ksize=[1, ksize, ksize, 1],
+                          strides=[1, stride, stride, 1],
+                          padding='SAME')
+
+
+def max_pool(x, ksize=2, stride=2):
+    return tf.nn.max_pool(x,
+                          ksize=[1, ksize, ksize, 1],
+                          strides=[1, stride, stride, 1],
+                          padding='SAME')
+
+
+def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
+       seed=1234):
+    """
+    Returns logit (pre-softmax)
+
+    VAT Conv-Large:
+    layer_sizes = [
+    128, 128, 128, 128,
+    256, 256, 256, 256,
+    512, 256, 128]
+    kernel_sizes = [
+    3, 3, 3, 2,
+    3, 3, 3, 2,
+    3, 1, 1
+    ]
+
+    Ladder Conv-Large (similar to VAT Conv-Small on CIFAR-10)
+    layer_sizes = [
+    96, 96, 96, 96,
+    192, 192, 192, 192,
+    192, 192, 10]
+    kernel_sizes = [
+    3, 3, 3, 2,
+    3, 3, 3, 2,
+    3, 1, 1
+    ]
+    """
+
+    h = x
+    # rng = np.random.RandomState(seed)
+
+
+    def conv_bn_lrelu(h, l, f_in, f_out, ksize=3):
+        h = conv(h, ksize=ksize, stride=1, f_in=f_in, f_out=f_out, seed=None,
+             name='c'+str(l))
+        h = lrelu(bn(h, f_out, is_training=is_training,
+                     update_batch_stats=update_batch_stats, name='b'+str(l)),
+                  PARAMS.lrelu_a)
+        return h
+
+    h = conv_bn_lrelu(h, 1, 3, 96)
+    h = conv_bn_lrelu(h, 2, 96, 96)
+    h = conv_bn_lrelu(h, 3, 96, 96)
+
+    # Max_pool usually downsamples by 2 - but using SAME padding here
+    h = max_pool(h, ksize=2, stride=2)
+    h = bn(h, dim=96, is_training=is_training,
+           update_batch_stats=update_batch_stats, name='pool1_bn')
+    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+
+    h = conv_bn_lrelu(h, 4, 96, 192)
+    h = conv_bn_lrelu(h, 5, 192, 192)
+    h = conv_bn_lrelu(h, 6, 192, 192)
+
+    h = max_pool(h, ksize=2, stride=2)
+    h = bn(h, dim=192, is_training=is_training,
+           update_batch_stats=update_batch_stats, name='pool2_bn')
+    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+
+    h = conv_bn_lrelu(h, 7, 192, 192)
+    h = conv_bn_lrelu(h, 8, 192, 192, ksize=1)
+    h = conv_bn_lrelu(h, 9, 192, 192, ksize=1)
+
+    h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average pooling
+    h = fc(h, 192, 10, seed=None, name='fc')
+
+    if PARAMS.top_bn:
+        h = bn(h, 10, is_training=is_training,
+                 update_batch_stats=update_batch_stats, name='bfc')
+
+    return h
+
+
+def decoder(x, is_training=True, update_batch_stats=True, stochastic=True,
+       seed=1234):
+    """
+    Returns logit (pre-softmax)
+
+    VAT Conv-Large:
+    layer_sizes = [
+    128, 128, 128, 128,
+    256, 256, 256, 256,
+    512, 256, 128]
+    kernel_sizes = [
+    3, 3, 3, 2,
+    3, 3, 3, 2,
+    3, 1, 1
+    ]
+
+    Ladder Conv-Large (similar to VAT Conv-Small on CIFAR-10)
+    layer_sizes = [
+    96, 96, 96, 96,
+    192, 192, 192, 192,
+    192, 192, 10]
+    kernel_sizes = [
+    3, 3, 3, 2,
+    3, 3, 3, 2,
+    3, 1, 1
+    ]
+    """
+
+    h = x
+    # rng = np.random.RandomState(seed)
+
+
+    def conv_bn_lrelu(h, l, f_in, f_out, ksize=3):
+        h = conv(h, ksize=ksize, stride=1, f_in=f_in, f_out=f_out, seed=None,
+             name='c'+str(l))
+        h = lrelu(bn(h, f_out, is_training=is_training,
+                     update_batch_stats=update_batch_stats, name='b'+str(l)),
+                  PARAMS.lrelu_a)
+        return h
+
+    h = conv_bn_lrelu(h, 1, 3, 96)
+    h = conv_bn_lrelu(h, 2, 96, 96)
+    h = conv_bn_lrelu(h, 3, 96, 96)
+
+    # Max_pool usually downsamples by 2 - but using SAME padding here
+    h = max_pool(h, ksize=2, stride=2)
+    h = bn(h, dim=96, is_training=is_training,
+           update_batch_stats=update_batch_stats, name='pool1_bn')
+    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+
+    h = conv_bn_lrelu(h, 4, 96, 192)
+    h = conv_bn_lrelu(h, 5, 192, 192)
+    h = conv_bn_lrelu(h, 6, 192, 192)
+
+    h = max_pool(h, ksize=2, stride=2)
+    h = bn(h, dim=192, is_training=is_training,
+           update_batch_stats=update_batch_stats, name='pool2_bn')
+    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+
+    h = conv_bn_lrelu(h, 7, 192, 192)
+    h = conv_bn_lrelu(h, 8, 192, 192, ksize=1)
+    h = conv_bn_lrelu(h, 9, 192, 192, ksize=1)
+
+    h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average pooling
+    h = fc(h, 192, 10, seed=None, name='fc')
+
+    if PARAMS.top_bn:
+        h = bn(h, 10, is_training=is_training,
+                 update_batch_stats=update_batch_stats, name='bfc')
+
+    return h
+
+
+

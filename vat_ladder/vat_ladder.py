@@ -119,7 +119,6 @@ def process_cli_params(params):
     params.rc_weights = rc_weights
     return params
 
-
 def count_trainable_params():
     trainables = tf.trainable_variables()
     return np.sum([np.prod(var.get_shape()) for var in trainables])
@@ -469,6 +468,7 @@ combinator = gauss_combinator
 # IPython.embed()
 print( "=== Decoder ===")
 # Decoder
+
 z_est = {}
 d_cost = []  # to store the denoising cost of all layers
 for l in range(num_layers, -1, -1):
