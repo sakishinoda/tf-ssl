@@ -18,9 +18,9 @@ PARAMS = parser.parse_args()
 
 def make_layer_spec(
     types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'c', 'c', 'c', 'avg', 'fc'),
-    fan = (3, 96, 96, 96, None, 192, 192, 192, None, 192, 192, 192, None, 10),
-    ksizes = (3, 3, 3, None, 3, 3, 3, None, 3, 1, 1, None, None),
-    strides = (1, 1, 1, None, 1, 1, 1, None, 1, 1, 1, None, None),
+    fan = (3, 96, 96, 96, 96, 192, 192, 192, 192, 192, 192, 192, 192, 10),
+    ksizes = (3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, None, None),
+    strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None),
     init_size = 32
 ):
     dims = [init_size, ] * 4 + [init_size//2, ] * 4 + [init_size//4, ] * 3 + [1, 1]
@@ -180,7 +180,7 @@ def max_pool(x, ksize=2, stride=2):
 
 
 def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
-       seed=1234):
+       seed=1234, layers=None):
     """
     Returns logit (pre-softmax)
 
@@ -208,8 +208,9 @@ def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
     """
 
     h = x
+    if layers is None:
+        layers = make_layer_spec()
     # rng = np.random.RandomState(seed)
-
 
     def conv_bn_lrelu(h, l, f_in, f_out, ksize=3):
         h = conv(h, ksize=ksize, stride=1, f_in=f_in, f_out=f_out, seed=None,
@@ -219,35 +220,27 @@ def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
                   PARAMS.lrelu_a)
         return h
 
-    h = conv_bn_lrelu(h, 1, 3, 96)
-    h = conv_bn_lrelu(h, 2, 96, 96)
-    h = conv_bn_lrelu(h, 3, 96, 96)
-
-    # Max_pool downsamples W,H by 2, leaves C same
-    h = max_pool(h, ksize=2, stride=2)
-    h = bn(h, dim=96, is_training=is_training,
-           update_batch_stats=update_batch_stats, name='pool1_bn')
-    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
-
-    h = conv_bn_lrelu(h, 4, 96, 192)
-    h = conv_bn_lrelu(h, 5, 192, 192)
-    h = conv_bn_lrelu(h, 6, 192, 192)
-
-    h = max_pool(h, ksize=2, stride=2)
-    h = bn(h, dim=192, is_training=is_training,
-           update_batch_stats=update_batch_stats, name='pool2_bn')
-    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
-
-    h = conv_bn_lrelu(h, 7, 192, 192)
-    h = conv_bn_lrelu(h, 8, 192, 192, ksize=1)
-    h = conv_bn_lrelu(h, 9, 192, 192, ksize=1)
-
-    h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average pooling
-    h = fc(h, 192, 10, seed=None, name='fc')
-
-    if PARAMS.top_bn:
-        h = bn(h, 10, is_training=is_training,
-                 update_batch_stats=update_batch_stats, name='bfc')
+    for l in range(len(layers.keys())):
+        if layers[l]['type'] == 'c':
+            h = conv_bn_lrelu(h, l, layers[l]['f_in'], layers[l]['f_out'],
+                              ksize=layers[l]['ksize'])
+        elif layers[l]['type'] == 'max':
+            h = max_pool(h,
+                         ksize=layers[l]['ksize'],
+                         stride=layers[l]['stride'])
+            h = bn(h, dim=layers[l]['f_in'], is_training=is_training,
+                   update_batch_stats=update_batch_stats, name='b' + str(l))
+            # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+        elif layers[h]['type'] == 'avg':
+            h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average poolig
+        elif layers[h]['type'] == 'fc':
+            h = fc(h, layers[l]['f_in'], layers[l]['f_out'], seed=None,
+                   name='fc')
+            if PARAMS.top_bn:
+                h = bn(h, 10, is_training=is_training,
+                       update_batch_stats=update_batch_stats, name='b'+str(l))
+        else:
+            print('Layer type not defined')
 
     return h
 
@@ -313,7 +306,7 @@ def decoder(x, is_training=True, update_batch_stats=False, stochastic=True,
 
     l = 7
     h = depool(h)
-    h = bn(h, dim=layers[l]["f_in"], is_training=is_training,
+    h = bn(h, dim=layers[l]["f_out"], is_training=is_training,
            update_batch_stats=update_batch_stats, name='dec_pool2_bn')
 
     # 6 to 4: deconv
