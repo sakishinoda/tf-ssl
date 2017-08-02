@@ -474,6 +474,7 @@ d_cost = []  # to store the denoising cost of all layers
 for l in range(num_layers, -1, -1):
     print("Layer ", l, ": ", layer_sizes[l+1] if l+1 < len(layer_sizes) else
     None, " -> ", layer_sizes[l], ", denoising cost: ", denoising_cost[l])
+
     z, z_c = clean_stats['unlabeled']['z'][l], corr_stats['unlabeled']['z'][l]
     m, v = clean_stats['unlabeled']['m'].get(l, 0), clean_stats['unlabeled']['v'].get(l, 1 - 1e-10)
     # print(l)
