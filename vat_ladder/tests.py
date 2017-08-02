@@ -50,7 +50,7 @@ def test_simple_dae():
     x_vec = tf.placeholder(shape=[batch_size, 784], dtype=tf.float32)
     x = tf.reshape(x_vec, [batch_size, 28, 28, 1])
     y = tf.placeholder(shape=[batch_size, 10], dtype=tf.float32)
-    nll_wt = tf.placeholder_with_default(input=10.0)
+    nll_wt = tf.placeholder(shape=[1,])
 
     enc_out = encoder(x, layers=layers)
     nll = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=enc_out, labels=y), axis=[0])
