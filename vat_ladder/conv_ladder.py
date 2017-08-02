@@ -12,9 +12,32 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
 parser.add_argument('--lrelu_a', default=0.1, type=float)
 parser.add_argument('--top_bn', action='store_true')
+parser.add_argument('--bn_stats_decay_factor', default=0.99, type=float)
+parser.add_argument('--batch_size', default=100, type=int)
 PARAMS = parser.parse_args()
 
+def make_layer_spec(
+    types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'c', 'c', 'c', 'avg', 'fc'),
+    fan = (3, 96, 96, 96, None, 192, 192, 192, None, 192, 192, 192, None, 10),
+    ksizes = (3, 3, 3, None, 3, 3, 3, None, 3, 1, 1, None, None),
+    strides = (1, 1, 1, None, 1, 1, 1, None, 1, 1, 1, None, None),
+    init_size = 32
+):
+    dims = [init_size, ] * 4 + [init_size//2, ] * 4 + [init_size//4, ] * 3 + [1, 1]
+    init_dim = fan[0]
+    n_classes = fan[-1]
 
+    layers = {}
+    for l, type_ in enumerate(types):
+        layers[l] = {'type': type_,
+                     'dim': dims[l],
+                     'ksize': ksizes[l],
+                     'stride': strides[l],
+                     'f_in': fan[l],
+                     'f_out': fan[l+1]
+                     }
+
+    return layers
 
 def lrelu(x, a=0.1):
     if a < 1e-16:
@@ -116,13 +139,21 @@ def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False, seed=Non
 
 def deconv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
            seed=None, name='deconv'):
-    shape = [ksize, ksize, f_in, f_out]
+
+    w_shape = [ksize, ksize, f_out, f_in]  # deconv requires f_out, f_in
     initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
     weights = tf.get_variable(name + '_W',
-                              shape=shape,
+                              shape=w_shape,
                               dtype='float',
                               initializer=initializer)
-    x = tf.nn.conv2d_transpose(x, weights, strides=[1, stride, stride, 1],
+
+    out_shape = x.get_shape().as_list()
+    out_shape[-1] = f_out
+    # print(weights.get_shape().as_list(), x.get_shape().as_list(), out_shape)
+
+    x = tf.nn.conv2d_transpose(x, weights,
+                               output_shape=out_shape,
+                               strides=[1, stride, stride, 1],
                                padding=padding)
 
     if use_bias:
@@ -192,7 +223,7 @@ def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
     h = conv_bn_lrelu(h, 2, 96, 96)
     h = conv_bn_lrelu(h, 3, 96, 96)
 
-    # Max_pool usually downsamples by 2 - but using SAME padding here
+    # Max_pool downsamples W,H by 2, leaves C same
     h = max_pool(h, ksize=2, stride=2)
     h = bn(h, dim=96, is_training=is_training,
            update_batch_stats=update_batch_stats, name='pool1_bn')
@@ -221,75 +252,84 @@ def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
     return h
 
 
-def decoder(x, is_training=True, update_batch_stats=True, stochastic=True,
-       seed=1234):
+def decoder(x, is_training=True, update_batch_stats=False, stochastic=True,
+       seed=1234, batch_size=100, layers=None):
     """
-    Returns logit (pre-softmax)
+    Starts from logit (x has dim 10)
 
-    VAT Conv-Large:
-    layer_sizes = [
-    128, 128, 128, 128,
-    256, 256, 256, 256,
-    512, 256, 128]
-    kernel_sizes = [
-    3, 3, 3, 2,
-    3, 3, 3, 2,
-    3, 1, 1
-    ]
-
-    Ladder Conv-Large (similar to VAT Conv-Small on CIFAR-10)
-    layer_sizes = [
-    96, 96, 96, 96,
-    192, 192, 192, 192,
-    192, 192, 10]
-    kernel_sizes = [
-    3, 3, 3, 2,
-    3, 3, 3, 2,
-    3, 1, 1
-    ]
     """
 
-    h = x
-    # rng = np.random.RandomState(seed)
+    # init_size = 28  # MNIST
+    # init_size = 32  # CIFAR-10
+    if layers is None:
+        layers = make_layer_spec()
 
+    h = x  # batch x 1 x 1 x 10
 
-    def conv_bn_lrelu(h, l, f_in, f_out, ksize=3):
-        h = conv(h, ksize=ksize, stride=1, f_in=f_in, f_out=f_out, seed=None,
-             name='c'+str(l))
-        h = lrelu(bn(h, f_out, is_training=is_training,
-                     update_batch_stats=update_batch_stats, name='b'+str(l)),
-                  PARAMS.lrelu_a)
+    # 10: fc
+    # Dense batch x 10 -> batch x 192
+    l = 12
+    h = fc(h, dim_in=layers[l]["f_out"], dim_out=layers[l]["f_in"],
+           seed=None, name='dec_fc')
+
+    # De-global mean pool with copying:
+    # batch x 1 x 1 x 192 -> batch x 8 x 8 x 192
+    l = 11
+    h = tf.reshape(h, [-1, 1, 1, layers[l]["f_out"]])
+    h = tf.tile(h, [1, layers[l]['dim'], layers[l]['dim'], 1])
+
+    def deconv_bn_lrelu(h, l):
+        """Inherits layers, PARAMS, is_training, update_batch_stats from outer environment."""
+        h = deconv(h, ksize=layers[l]['ksize'], stride=layers[l]['stride'], f_in=layers[l]["f_out"], f_out=layers[l]["f_in"], name=layers[l]['type']+str(l))
+
+        # print(l, layers[l]["f_out"], layers[l]["f_in"])
+
+        h = bn(h, layers[l]["f_in"], is_training=is_training, update_batch_stats=update_batch_stats, name='dec_b'+str(l))
+
+        h = lrelu(h, PARAMS.lrelu_a)
         return h
 
-    h = conv_bn_lrelu(h, 1, 3, 96)
-    h = conv_bn_lrelu(h, 2, 96, 96)
-    h = conv_bn_lrelu(h, 3, 96, 96)
+    # 9 to 7: deconv
+    for l in [10,9,8]:
+        h = deconv_bn_lrelu(h, l)
 
-    # Max_pool usually downsamples by 2 - but using SAME padding here
-    h = max_pool(h, ksize=2, stride=2)
-    h = bn(h, dim=96, is_training=is_training,
-           update_batch_stats=update_batch_stats, name='pool1_bn')
-    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+    # De-max-pool
+    def depool(h):
+        """Deconvolution with a filter of ones and stride 2 upsamples with
+        copying to double the size."""
+        output_shape = h.get_shape().as_list()
+        output_shape[1] *= 2
+        output_shape[2] *= 2
+        c = output_shape[-1]
+        h = tf.nn.conv2d_transpose(
+            h,
+            filter=tf.ones([2,2,c,c]),
+            output_shape=output_shape,
+            padding='SAME',
+            strides=[1,2,2,1],
+            data_format='NHWC'
+        )
+        return h
 
-    h = conv_bn_lrelu(h, 4, 96, 192)
-    h = conv_bn_lrelu(h, 5, 192, 192)
-    h = conv_bn_lrelu(h, 6, 192, 192)
+    l = 7
+    h = depool(h)
+    h = bn(h, dim=layers[l]["f_in"], is_training=is_training,
+           update_batch_stats=update_batch_stats, name='dec_pool2_bn')
 
-    h = max_pool(h, ksize=2, stride=2)
-    h = bn(h, dim=192, is_training=is_training,
-           update_batch_stats=update_batch_stats, name='pool2_bn')
-    # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+    # 6 to 4: deconv
+    for l in [6,5,4]:
+        # print(l, layers[l])
+        h = deconv_bn_lrelu(h, l)
 
-    h = conv_bn_lrelu(h, 7, 192, 192)
-    h = conv_bn_lrelu(h, 8, 192, 192, ksize=1)
-    h = conv_bn_lrelu(h, 9, 192, 192, ksize=1)
+    # depool
+    l = 3
+    h = depool(h)
+    h = bn(h, dim=layers[l]["f_in"], is_training=is_training,
+           update_batch_stats=update_batch_stats, name='dec_pool1_bn')
 
-    h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average pooling
-    h = fc(h, 192, 10, seed=None, name='fc')
-
-    if PARAMS.top_bn:
-        h = bn(h, 10, is_training=is_training,
-                 update_batch_stats=update_batch_stats, name='bfc')
+    # 3 to 1: deconv
+    for l in [2,1,0]:
+        h = deconv_bn_lrelu(h, l)
 
     return h
 
