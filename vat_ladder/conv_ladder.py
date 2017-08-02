@@ -23,7 +23,8 @@ def make_layer_spec(
     strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None),
     init_size = 32
 ):
-    dims = [init_size, ] * 4 + [init_size//2, ] * 4 + [init_size//4, ] * 3 + [1, 1]
+    dims = [init_size, ] * 4 + [init_size//2, ] * 4 + [init_size//4, ] * 4 + \
+           [1,]
     init_dim = fan[0]
     n_classes = fan[-1]
 
@@ -219,28 +220,30 @@ def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
                      update_batch_stats=update_batch_stats, name='b'+str(l)),
                   PARAMS.lrelu_a)
         return h
+    with tf.variable_scope('enc'):
+        for l in range(len(layers.keys())):
+            if layers[l]['type'] == 'c':
+                h = conv_bn_lrelu(h, l, layers[l]['f_in'], layers[l]['f_out'],
+                                  ksize=layers[l]['ksize'])
+            elif layers[l]['type'] == 'max':
+                h = max_pool(h,
+                             ksize=layers[l]['ksize'],
+                             stride=layers[l]['stride'])
+                h = bn(h, dim=layers[l]['f_in'], is_training=is_training,
+                       update_batch_stats=update_batch_stats, name='b' + str(l))
+                # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
+            elif layers[l]['type'] == 'avg':
+                h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average poolig
+            elif layers[l]['type'] == 'fc':
+                h = fc(h, layers[l]['f_in'], layers[l]['f_out'], seed=None,
+                       name='fc')
+                if PARAMS.top_bn:
+                    h = bn(h, 10, is_training=is_training,
+                           update_batch_stats=update_batch_stats, name='b'+str(l))
+            else:
+                print('Layer type not defined')
 
-    for l in range(len(layers.keys())):
-        if layers[l]['type'] == 'c':
-            h = conv_bn_lrelu(h, l, layers[l]['f_in'], layers[l]['f_out'],
-                              ksize=layers[l]['ksize'])
-        elif layers[l]['type'] == 'max':
-            h = max_pool(h,
-                         ksize=layers[l]['ksize'],
-                         stride=layers[l]['stride'])
-            h = bn(h, dim=layers[l]['f_in'], is_training=is_training,
-                   update_batch_stats=update_batch_stats, name='b' + str(l))
-            # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
-        elif layers[h]['type'] == 'avg':
-            h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average poolig
-        elif layers[h]['type'] == 'fc':
-            h = fc(h, layers[l]['f_in'], layers[l]['f_out'], seed=None,
-                   name='fc')
-            if PARAMS.top_bn:
-                h = bn(h, 10, is_training=is_training,
-                       update_batch_stats=update_batch_stats, name='b'+str(l))
-        else:
-            print('Layer type not defined')
+            print(l, h.get_shape())
 
     return h
 
@@ -259,34 +262,18 @@ def decoder(x, is_training=True, update_batch_stats=False, stochastic=True,
 
     h = x  # batch x 1 x 1 x 10
 
-    # 10: fc
-    # Dense batch x 10 -> batch x 192
-    l = 12
-    h = fc(h, dim_in=layers[l]["f_out"], dim_out=layers[l]["f_in"],
-           seed=None, name='dec_fc')
-
-    # De-global mean pool with copying:
-    # batch x 1 x 1 x 192 -> batch x 8 x 8 x 192
-    l = 11
-    h = tf.reshape(h, [-1, 1, 1, layers[l]["f_out"]])
-    h = tf.tile(h, [1, layers[l]['dim'], layers[l]['dim'], 1])
-
     def deconv_bn_lrelu(h, l):
         """Inherits layers, PARAMS, is_training, update_batch_stats from outer environment."""
-        h = deconv(h, ksize=layers[l]['ksize'], stride=layers[l]['stride'], f_in=layers[l]["f_out"], f_out=layers[l]["f_in"], name=layers[l]['type']+str(l))
+        h = deconv(h, ksize=layers[l]['ksize'], stride=layers[l]['stride'],
+                   f_in=layers[l]["f_out"], f_out=layers[l]["f_in"],
+                   name=layers[l]['type'] + str(l))
 
-        # print(l, layers[l]["f_out"], layers[l]["f_in"])
-
-        h = bn(h, layers[l]["f_in"], is_training=is_training, update_batch_stats=update_batch_stats, name='dec_b'+str(l))
+        h = bn(h, layers[l]["f_in"], is_training=is_training,
+               update_batch_stats=update_batch_stats, name='b' + str(l))
 
         h = lrelu(h, PARAMS.lrelu_a)
         return h
 
-    # 9 to 7: deconv
-    for l in [10,9,8]:
-        h = deconv_bn_lrelu(h, l)
-
-    # De-max-pool
     def depool(h):
         """Deconvolution with a filter of ones and stride 2 upsamples with
         copying to double the size."""
@@ -296,33 +283,40 @@ def decoder(x, is_training=True, update_batch_stats=False, stochastic=True,
         c = output_shape[-1]
         h = tf.nn.conv2d_transpose(
             h,
-            filter=tf.ones([2,2,c,c]),
+            filter=tf.ones([2, 2, c, c]),
             output_shape=output_shape,
             padding='SAME',
-            strides=[1,2,2,1],
+            strides=[1, 2, 2, 1],
             data_format='NHWC'
         )
         return h
 
-    l = 7
-    h = depool(h)
-    h = bn(h, dim=layers[l]["f_out"], is_training=is_training,
-           update_batch_stats=update_batch_stats, name='dec_pool2_bn')
+    with tf.variable_scope('dec'):
+        # 10: fc
+        # Dense batch x 10 -> batch x 192
+        for l in reversed(range(len(layers.keys()))):
+            type_ = layers[l]['type']
+            if type_ == 'fc':
+                h = fc(h, dim_in=layers[l]["f_out"], dim_out=layers[l]["f_in"],
+                       seed=None, name=layers[l]['type'] + str(l))
+            elif type_ == 'avg':
+                # De-global mean pool with copying:
+                # batch x 1 x 1 x 192 -> batch x 8 x 8 x 192
+                h = tf.reshape(h, [-1, 1, 1, layers[l]["f_out"]])
+                h = tf.tile(h, [1, layers[l]['dim'], layers[l]['dim'], 1])
+            elif type_ == 'c':
+                # Deconv
+                h = deconv_bn_lrelu(h, l)
+            elif type_ == 'max':
+                # De-max-pool
+                h = depool(h)
+                h = bn(h, dim=layers[l]["f_out"], is_training=is_training,
+                       update_batch_stats=update_batch_stats,
+                       name=layers[l]['type'] + str(l))
+            else:
+                print('Layer type not defined')
 
-    # 6 to 4: deconv
-    for l in [6,5,4]:
-        # print(l, layers[l])
-        h = deconv_bn_lrelu(h, l)
-
-    # depool
-    l = 3
-    h = depool(h)
-    h = bn(h, dim=layers[l]["f_in"], is_training=is_training,
-           update_batch_stats=update_batch_stats, name='dec_pool1_bn')
-
-    # 3 to 1: deconv
-    for l in [2,1,0]:
-        h = deconv_bn_lrelu(h, l)
+            print(l, h.get_shape())
 
     return h
 
