@@ -35,6 +35,9 @@ def test_cnn_ladder():
 
 def test_simple_dae():
     """Test of encoder/decoder in a simple denoising set up"""
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
     mnist = input_data.read_data_sets("MNIST_data",
                                       one_hot=True)
     layers = make_layer_spec(
@@ -68,9 +71,9 @@ def test_simple_dae():
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        for step in range(500):
+        for step in range(100):
             images, labels = mnist.train.next_batch(batch_size)
-            _, step_aer, step_loss, step_nll, step_rc = sess.run([train_op, aer, loss, nll, rc], feed_dict={x_vec: images, y: labels, nll_wt: 100.0*(0.9**step)})
+            _, step_aer, step_loss, step_nll, step_rc = sess.run([train_op, aer, loss, nll, rc], feed_dict={x_vec: images, y: labels, nll_wt: 1000.0*(0.99**step)})
             print(step, step_aer, step_loss, step_nll, step_rc, sep='\t', flush=True)
 
         saver.save(sess, 'test.ckpt')
