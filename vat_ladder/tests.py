@@ -34,7 +34,7 @@ def test_cnn_ladder():
 
     print(enc_out.get_shape(), dec_out.get_shape())
 
-def test_simple_dae():
+def test_simple_dae(training=True):
     """Test of encoder/decoder in a simple denoising set up"""
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -70,19 +70,34 @@ def test_simple_dae():
 
     saver = tf.train.Saver()
 
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        for step in range(100):
-            images, labels = mnist.train.next_batch(batch_size)
-            _, step_aer, step_loss, step_nll, step_rc = sess.run([train_op, aer, loss, nll, rc], feed_dict={x_vec: images, y: labels, nll_wt: 1000.0*(0.99**step)})
-            print(step, step_aer, step_loss, step_nll, step_rc, sep='\t', flush=True)
+    if training:
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            for step in range(100):
+                images, labels = mnist.train.next_batch(batch_size)
+                _, step_aer, step_loss, step_nll, step_rc = sess.run([train_op, aer, loss, nll, rc], feed_dict={x_vec: images, y: labels, nll_wt: 1000.0*(0.99**step)})
+                print(step, step_aer, step_loss, step_nll, step_rc, sep='\t', flush=True)
 
-        saver.save(sess, 'test.ckpt')
+            saver.save(sess, 'test.ckpt')
+
+    else:
+        with tf.Session() as sess:
+            saver.restore(sess, 'test.ckpt')
+            num_steps = mnist.test.num_examples//batch_size
+            mean_aer = 0
+            for step in range(num_steps):
+                images, labels = mnist.test.next_batch(batch_size)
+                step_aer = sess.run(aer, feed_dict={x_vec: images, y: labels, nll_wt: 1.0})
+                print(step, step_aer)
+                mean_aer += step_aer
+
+            print("Mean AER:", mean_aer/num_steps)
+
 
 
 
 if __name__ == '__main__':
-    test_simple_dae()
+    test_simple_dae(training=False)
     # test_cnn_ladder()
     # print(*make_layer_spec().items(), sep='\n')
     # make_layer_spec()
