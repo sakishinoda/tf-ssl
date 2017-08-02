@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 import IPython
 from conv_ladder import *
 from tensorflow.examples.tutorials.mnist import input_data
