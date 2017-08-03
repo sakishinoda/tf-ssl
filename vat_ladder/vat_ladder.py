@@ -26,15 +26,15 @@ np.random.seed(params.seed)
 tf.set_random_seed(params.seed)
 
 # Set layer sizes for encoders
-ls = params.encoder_layers
+LS = params.encoder_layers
 
-num_layers = len(ls) - 1  # number of layers
+NUM_LAYERS = len(LS) - 1  # number of layers
 
-num_epochs = params.end_epoch
-num_labeled = params.num_labeled
+NUM_EPOCHS = params.end_epoch
+NUM_LABELED = params.num_labeled
 
 print("===  Loading Data ===")
-mnist = input_data.read_data_sets("MNIST_data", n_labeled=num_labeled,
+mnist = input_data.read_data_sets("MNIST_data", n_labeled=NUM_LABELED,
                                   one_hot=True, verbose=True)
 num_examples = mnist.train.num_examples
 
@@ -43,24 +43,24 @@ starter_learning_rate = params.initial_learning_rate
 # epoch after which to begin learning rate decay
 decay_after = params.decay_start_epoch
 batch_size = params.labeled_batch_size
-num_iter = (num_examples//batch_size) * num_epochs  # number of loop iterations
+num_iter = (num_examples//batch_size) * NUM_EPOCHS  # number of loop iterations
 
 
 # -----------------------------
 # LADDER SETUP
 # -----------------------------
-inputs = tf.placeholder(tf.float32, shape=(None, ls[0]))
+inputs = tf.placeholder(tf.float32, shape=(None, LS[0]))
 outputs = tf.placeholder(tf.float32)
 
 
-shapes = list(zip(ls[:-1], ls[1:]))  # shapes of linear layers
+shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
 
 weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
            'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
            # batch normalization parameter to shift the normalized value
-           'beta': [bias_init(0.0, ls[l + 1], "beta") for l in range(num_layers)],
+           'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)],
            # batch normalization parameter to scale the normalized value
-           'gamma': [bias_init(1.0, ls[l + 1], "beta") for l in range(num_layers)]}
+           'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)]}
 
 # scaling factor for noise used in corrupted encoder
 noise_std = params.encoder_noise_sd
@@ -81,33 +81,47 @@ TRAIN_FLAG = tf.placeholder(tf.bool)
 # -----------------------------
 # BATCH NORMALIZATION SETUP
 # -----------------------------
-class BatchNorm(object):
-    def __init__(self):
-        self.bn_assigns = []
+class BatchNormLayers(object):
+    def __init__(self, ls, scope='bn'):
+        self.bn_assigns = []  # this list stores the updates to be made to average mean and variance
+        self.ewma = tf.train.ExponentialMovingAverage(
+            decay=0.99)  # to calculate the moving averages of mean and variance
 
+        # average mean and variance of all layers
+        with tf.variable_scope(scope):
+            self.running_var = [tf.get_variable(
+                'v'+str(l),
+                initializer=tf.constant(1.0, shape=[l]),
+                trainable=False) for l in ls[1:]]
+            self.running_mean = [tf.get_variable(
+                'm'+str(l),
+                initializer=tf.constant(0.0, shape=[l]),
+                trainable=False) for l in ls[1:]]
 
-ewma = tf.train.ExponentialMovingAverage(decay=0.99)  # to calculate the moving averages of mean and variance
-bn_assigns = []  # this list stores the updates to be made to average mean and variance
-# average mean and variance of all layers
-running_var = [tf.Variable(tf.constant(1.0, shape=[l]), trainable=False) for l in ls[1:]]
-running_mean = [tf.Variable(tf.constant(0.0, shape=[l]), trainable=False) for l in ls[1:]]
+    def update_batch_normalization(self, batch, l):
+        "batch normalize + update average mean and variance of layer l"
+        mean, var = tf.nn.moments(batch, axes=[0])
+        assign_mean = self.running_mean[l-1].assign(mean)
+        assign_var = self.running_var[l-1].assign(var)
+        self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
+        with tf.control_dependencies([assign_mean, assign_var]):
+            return (batch - mean) / tf.sqrt(var + 1e-10)
 
-
-def update_batch_normalization(batch, l):
-    "batch normalize + update average mean and variance of layer l"
-    mean, var = tf.nn.moments(batch, axes=[0])
-    assign_mean = running_mean[l-1].assign(mean)
-    assign_var = running_var[l-1].assign(var)
-    bn_assigns.append(ewma.apply([running_mean[l-1], running_var[l-1]]))
-    with tf.control_dependencies([assign_mean, assign_var]):
-        return (batch - mean) / tf.sqrt(var + 1e-10)
+    @staticmethod
+    def batch_normalization(batch, mean=None, var=None):
+        if mean is None or var is None:
+            mean, var = tf.nn.moments(batch, axes=[0])
+        return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
 
 # -----------------------------
 # -----------------------------
 # ENCODER
 # -----------------------------
 # -----------------------------
-def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
+
+bn = BatchNormLayers(LS)
+
+def encoder(inputs, noise_std, bn, is_training=TRAIN_FLAG, update_batch_stats=True):
     """
     is_training has to be a placeholder TF boolean
     Note: if is_training is false, update_batch_stats is false, since the
@@ -120,8 +134,8 @@ def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
     d['unlabeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
     d['labeled']['z'][0], d['unlabeled']['z'][0] = split_lu(h)
 
-    for l in range(1, num_layers+1):
-        print("Layer ", l, ": ", ls[l - 1], " -> ", ls[l])
+    for l in range(1, NUM_LAYERS+1):
+        print("Layer ", l, ": ", LS[l - 1], " -> ", LS[l])
         d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
         z_pre = tf.matmul(h, weights['W'][l-1])  # pre-activation
         z_pre_l, z_pre_u = split_lu(z_pre)  # split labeled and unlabeled examples
@@ -135,14 +149,14 @@ def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
             if noise_std > 0:
                 # Corrupted encoder
                 # batch normalization + noise
-                z = join(batch_normalization(z_pre_l), batch_normalization(z_pre_u, m, v))
+                z = join(bn.batch_normalization(z_pre_l), bn.batch_normalization(z_pre_u, m, v))
                 z += tf.random_normal(tf.shape(z_pre)) * noise_std
             else:
                 # Clean encoder
                 # batch normalization + update the average mean and variance using batch mean and variance of labeled examples
-                bn_l = update_batch_normalization(z_pre_l, l) if \
-                    update_batch_stats else batch_normalization(z_pre_l)
-                bn_u = batch_normalization(z_pre_u, m, v)
+                bn_l = bn.update_batch_normalization(z_pre_l, l) if \
+                    update_batch_stats else bn.batch_normalization(z_pre_l)
+                bn_u = bn.batch_normalization(z_pre_u, m, v)
                 z = join(bn_l, bn_u)
             return z
 
@@ -150,9 +164,9 @@ def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
         def eval_batch_norm():
             # Evaluation batch normalization
             # obtain average mean and variance and use it to normalize the batch
-            mean = ewma.average(running_mean[l-1])
-            var = ewma.average(running_var[l-1])
-            z = batch_normalization(z_pre, mean, var)
+            mean = bn.ewma.average(bn.running_mean[l-1])
+            var = bn.ewma.average(bn.running_var[l-1])
+            z = bn.batch_normalization(z_pre, mean, var)
             # Instead of the above statement, the use of the following 2 statements containing a typo
             # consistently produces a 0.2% higher accuracy for unclear reasons.
             # m_l, v_l = tf.nn.moments(z_pre_l, axes=[0])
@@ -163,7 +177,7 @@ def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
         z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
         # z = training_batch_norm() if is_training else eval_batch_norm()
 
-        if l == num_layers:
+        if l == NUM_LAYERS:
             # use softmax activation in output layer
             h = tf.nn.softmax(weights['gamma'][l-1] * (z + weights["beta"][l-1]))
         else:
@@ -178,12 +192,10 @@ def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
 
 
 print( "=== Corrupted Encoder === ")
-logits_corr, corr_stats = encoder(inputs, noise_std, is_training=TRAIN_FLAG,
-                                  update_batch_stats=False)
+logits_corr, corr = encoder(inputs, noise_std, bn, is_training=TRAIN_FLAG, update_batch_stats=False)
 
 print( "=== Clean Encoder ===")
-logits_clean, clean_stats = encoder(inputs, 0.0, is_training=TRAIN_FLAG,
-                                    update_batch_stats=True)  # 0.0 -> do not add noise
+logits_clean, clean = encoder(inputs, 0.0, bn, is_training=TRAIN_FLAG, update_batch_stats=True)  # 0.0 -> do not add noise
 
 # -----------------------------
 # -----------------------------
@@ -219,7 +231,7 @@ def forward(x, is_training=TRAIN_FLAG, update_batch_stats=False, seed=1234):
 
     def training_logit():
         print("=== VAT Clean Pass === ")
-        logit,_ = encoder(x, 0.0,
+        logit, _ = encoder(x, 0.0,
                           is_training=is_training,
                           update_batch_stats=update_batch_stats)
         return logit
@@ -284,25 +296,25 @@ print( "=== Decoder ===")
 
 z_est = {}
 d_cost = []  # to store the denoising cost of all layers
-for l in range(num_layers, -1, -1):
-    print("Layer ", l, ": ", ls[l + 1] if l + 1 < len(ls) else
-    None, " -> ", ls[l], ", denoising cost: ", denoising_cost[l])
+for l in range(NUM_LAYERS, -1, -1):
+    print("Layer ", l, ": ", LS[l + 1] if l + 1 < len(LS) else
+    None, " -> ", LS[l], ", denoising cost: ", denoising_cost[l])
 
-    z, z_c = clean_stats['unlabeled']['z'][l], corr_stats['unlabeled']['z'][l]
-    m, v = clean_stats['unlabeled']['m'].get(l, 0), clean_stats['unlabeled']['v'].get(l, 1 - 1e-10)
+    z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
+    m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1 - 1e-10)
     # print(l)
-    if l == num_layers:
+    if l == NUM_LAYERS:
         u = unlabeled(logits_corr)
     else:
         u = tf.matmul(z_est[l+1], weights['V'][l])
 
-    u = batch_normalization(u)
+    u = bn.batch_normalization(u)
 
-    z_est[l] = combinator(z_c, u, ls[l])
+    z_est[l] = combinator(z_c, u, LS[l])
 
     z_est_bn = (z_est[l] - m) / v
     # append the cost of this layer to d_cost
-    d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / ls[l]) * denoising_cost[l])
+    d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
 
 
 # -----------------------------
@@ -335,7 +347,7 @@ learning_rate = tf.Variable(starter_learning_rate, trainable=False)
 train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
 # add the updates of batch normalization statistics to train_step
-bn_updates = tf.group(*bn_assigns)
+bn_updates = tf.group(*bn.bn_assigns)
 with tf.control_dependencies([train_step]):
     train_step = tf.group(bn_updates)
 
@@ -406,14 +418,14 @@ for i in tqdm(range(i_iter, num_iter)):
         feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
 
 
-    if (i > 1) and ((i+1) % (num_iter//num_epochs) == 0):
+    if (i > 1) and ((i+1) % (num_iter//NUM_EPOCHS) == 0):
         now = time.time() - start
         epoch_n = i//(num_examples//batch_size)
         if (epoch_n+1) >= decay_after:
             # decay learning rate
             # learning_rate = starter_learning_rate * ((num_epochs - epoch_n) / (num_epochs - decay_after))
-            ratio = 1.0 * (num_epochs - (epoch_n+1))  # epoch_n + 1 because learning rate is set for next epoch
-            ratio = max(0., ratio / (num_epochs - decay_after))
+            ratio = 1.0 * (NUM_EPOCHS - (epoch_n + 1))  # epoch_n + 1 because learning rate is set for next epoch
+            ratio = max(0., ratio / (NUM_EPOCHS - decay_after))
             sess.run(learning_rate.assign(starter_learning_rate * ratio))
         saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
         # print "Epoch ", epoch_n, ", Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False}), "%"

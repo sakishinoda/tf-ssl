@@ -139,10 +139,7 @@ def wts_init(shape, name):
     return tf.Variable(tf.random_normal(shape), name=name) / \
            math.sqrt(shape[0])
 
-def batch_normalization(batch, mean=None, var=None):
-    if mean is None or var is None:
-        mean, var = tf.nn.moments(batch, axes=[0])
-    return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
+
 
 
 # -----------------------------
