@@ -299,7 +299,7 @@ def cnn_decoder(clean, corr, logits_corr, bn, combinator,
                        name=layers[l]['type'] + str(l))
             else:
                 print('Layer type not defined')
-
+            IPython.embed()
             h = bn.batch_normalization(h)
             z_est[l] = combinator(z_c, h, LS[l])
             z_est_bn = (z_est[l] - m) / v
@@ -362,13 +362,13 @@ class BatchNormLayers(object):
         # average mean and variance of all layers
         with tf.variable_scope(scope):
             self.running_var = [tf.get_variable(
-                'v'+str(l),
+                'v'+str(i),
                 initializer=tf.constant(1.0, shape=[l]),
-                trainable=False) for l in ls[1:]]
+                trainable=False) for i,l in enumerate(ls[1:])]
             self.running_mean = [tf.get_variable(
-                'm'+str(l),
+                'm'+str(i),
                 initializer=tf.constant(0.0, shape=[l]),
-                trainable=False) for l in ls[1:]]
+                trainable=False) for i,l in enumerate(ls[1:])]
 
     def update_batch_normalization(self, batch, l):
         "batch normalize + update average mean and variance of layer l"
@@ -444,7 +444,6 @@ def generate_virtual_adversarial_perturbation(x, logit, is_training):
         d = tf.stop_gradient(grad)
     return params.epsilon * get_normalized_vector(d)
 
-
 def virtual_adversarial_loss(x, logit, is_training, name="vat_loss"):
     print("=== VAT Pass: Generating VAT perturbation ===")
     r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
@@ -470,7 +469,11 @@ np.random.seed(params.seed)
 tf.set_random_seed(params.seed)
 
 # Set layer sizes for encoders
-LS = params.encoder_layers
+if params.cnn:
+    layers = make_layer_spec()
+    LS = layers['fan']
+else:
+    LS = params.encoder_layers
 
 NUM_LAYERS = len(LS) - 1  # number of layers
 
@@ -485,23 +488,31 @@ starter_learning_rate = params.initial_learning_rate
 
 # epoch after which to begin learning rate decay
 decay_after = params.decay_start_epoch
-batch_size = params.labeled_batch_size
+batch_size = params.batch_size
 num_iter = (num_examples//batch_size) * NUM_EPOCHS  # number of loop iterations
 
 # -----------------------------
 # LADDER SETUP
 # -----------------------------
-inputs = tf.placeholder(tf.float32, shape=(None, LS[0]))
+inputs_ph = tf.placeholder(tf.float32, shape=(None, LS[0]))
 outputs = tf.placeholder(tf.float32)
 
-shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
-
-weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
-           'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
-           # batch normalization parameter to shift the normalized value
+weights = {# batch normalization parameter to shift the normalized value
            'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)],
            # batch normalization parameter to scale the normalized value
            'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)]}
+
+if params.cnn:
+    inputs = tf.reshape(inputs_ph, shape=[
+        -1, layers['init_size'], layers['init_size'], layers['fan'][0]
+    ])
+else:
+    inputs = inputs_ph
+    shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
+    weights.update({
+        'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
+        'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
+        })
 
 # scaling factor for noise used in corrupted encoder
 noise_std = params.encoder_noise_sd
@@ -521,8 +532,9 @@ train_flag = tf.placeholder(tf.bool)
 # Set up Batch Norm
 bn = BatchNormLayers(LS)
 
-# Choose encoder
-encoder = mlp_encoder
+# Choose encoder/decoder
+encoder = cnn_encoder
+decoder = cnn_decoder
 
 print( "=== Corrupted Encoder === ")
 logits_corr, corr = encoder(inputs, noise_std, bn, is_training=train_flag, update_batch_stats=False)
@@ -538,7 +550,7 @@ combinator = gauss_combinator
 
 # IPython.embed()
 print( "=== Decoder ===")
-z_est, d_cost = mlp_decoder(clean, corr, logits_corr, bn, combinator)
+z_est, d_cost = decoder(clean, corr, logits_corr, bn, combinator)
 
 # -----------------------------
 # PUTTING IT ALL TOGETHER
@@ -615,14 +627,15 @@ log_file = log_dir + "/" + "train_log"
 print("=== Training ===")
 
 [init_acc, init_loss] = sess.run([accuracy, loss], feed_dict={
-    inputs: mnist.train.labeled_ds.images, outputs:
+    inputs_ph: mnist.train.labeled_ds.images, outputs:
         mnist.train.labeled_ds.labels,
     train_flag: False})
 print("Initial Train Accuracy: ", init_acc, "%")
 print("Initial Train Loss: ", init_loss)
 
 [init_acc] = sess.run([accuracy], feed_dict={
-    inputs: mnist.test.images, outputs: mnist.test.labels, train_flag: False})
+    inputs_ph: mnist.test.images, outputs: mnist.test.labels, train_flag:
+        False})
 print("Initial Test Accuracy: ", init_acc, "%")
 # print("Initial Test Loss: ", init_loss)
 
@@ -633,7 +646,7 @@ for i in tqdm(range(i_iter, num_iter)):
 
     _ = sess.run(
         [train_step],
-        feed_dict={inputs: images, outputs: labels, train_flag: True})
+        feed_dict={inputs_ph: images, outputs: labels, train_flag: True})
 
 
     if (i > 1) and ((i+1) % (num_iter//NUM_EPOCHS) == 0):
@@ -653,10 +666,11 @@ for i in tqdm(range(i_iter, num_iter)):
             # train_log_w = csv.writer(train_log)
             log_i = [now, epoch_n] + sess.run(
                 [accuracy],
-                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, train_flag: False}
+                feed_dict={inputs_ph: mnist.test.images, outputs: mnist.test.labels, train_flag: False}
             ) + sess.run(
                 [loss, cost, u_cost, vat_loss, ent_loss],
-                feed_dict={inputs: images, outputs: labels, train_flag: True})
+                feed_dict={inputs_ph: images, outputs: labels, train_flag:
+                    True})
             # train_log_w.writerow(log_i)
             print(*log_i, sep=',', flush=True, file=train_log)
 
