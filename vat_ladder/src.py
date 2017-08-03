@@ -61,6 +61,12 @@ def get_cli_params():
     # option to not save the model at all
     parser.add_argument('--do_not_save', action='store_true')
 
+    # vat params
+    parser.add_argument('--epsilon', default = 8.0, type=float)
+    parser.add_argument('--num_power_iterations', default=1, type=int)
+    parser.add_argument('--xi', default=1e-6, type=float)
+
+
     # weight of vat cost
     parser.add_argument('--vat_weight', default=0, type=float)
 

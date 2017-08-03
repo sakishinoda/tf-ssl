@@ -15,67 +15,58 @@ from src import *
 # PARAMETER PARSING
 # -----------------------------
 
-PARAMS = process_cli_params(get_cli_params())
-
-# norm length for (virtual) adversarial training
-EPSILON = 8.0
-# the number of power iterations
-NUM_POWER_ITERATIONS = 1
-# small constant for finite difference
-XI = 1e-6
-# Weight of vat wrt other losses
-ALPHA = PARAMS.vat_weight
+params = process_cli_params(get_cli_params())
 
 # Set GPU device to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]=str(PARAMS.which_gpu)
+os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 
 # Set seeds
-np.random.seed(PARAMS.seed)
-tf.set_random_seed(PARAMS.seed)
+np.random.seed(params.seed)
+tf.set_random_seed(params.seed)
 
 # Set layer sizes for encoders
-layer_sizes = PARAMS.encoder_layers
+ls = params.encoder_layers
 
-num_layers = len(layer_sizes) - 1  # number of layers
+num_layers = len(ls) - 1  # number of layers
 
-num_epochs = PARAMS.end_epoch
-num_labeled = PARAMS.num_labeled
+num_epochs = params.end_epoch
+num_labeled = params.num_labeled
 
 print("===  Loading Data ===")
 mnist = input_data.read_data_sets("MNIST_data", n_labeled=num_labeled,
                                   one_hot=True, verbose=True)
 num_examples = mnist.train.num_examples
 
-starter_learning_rate = PARAMS.initial_learning_rate
+starter_learning_rate = params.initial_learning_rate
 
 # epoch after which to begin learning rate decay
-decay_after = PARAMS.decay_start_epoch
-batch_size = PARAMS.labeled_batch_size
+decay_after = params.decay_start_epoch
+batch_size = params.labeled_batch_size
 num_iter = (num_examples//batch_size) * num_epochs  # number of loop iterations
 
 
 # -----------------------------
 # LADDER SETUP
 # -----------------------------
-inputs = tf.placeholder(tf.float32, shape=(None, layer_sizes[0]))
+inputs = tf.placeholder(tf.float32, shape=(None, ls[0]))
 outputs = tf.placeholder(tf.float32)
 
 
-shapes = list(zip(layer_sizes[:-1], layer_sizes[1:]))  # shapes of linear layers
+shapes = list(zip(ls[:-1], ls[1:]))  # shapes of linear layers
 
 weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
            'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
            # batch normalization parameter to shift the normalized value
-           'beta': [bias_init(0.0, layer_sizes[l + 1], "beta") for l in range(num_layers)],
+           'beta': [bias_init(0.0, ls[l + 1], "beta") for l in range(num_layers)],
            # batch normalization parameter to scale the normalized value
-           'gamma': [bias_init(1.0, layer_sizes[l + 1], "beta") for l in range(num_layers)]}
+           'gamma': [bias_init(1.0, ls[l + 1], "beta") for l in range(num_layers)]}
 
 # scaling factor for noise used in corrupted encoder
-noise_std = PARAMS.encoder_noise_sd
+noise_std = params.encoder_noise_sd
 
 # hyperparameters that denote the importance of each layer
-denoising_cost = PARAMS.rc_weights
+denoising_cost = params.rc_weights
 
 # Lambdas for extracting labeled/unlabeled, etc.
 join = lambda l, u: tf.concat([l, u], 0)
@@ -90,11 +81,16 @@ TRAIN_FLAG = tf.placeholder(tf.bool)
 # -----------------------------
 # BATCH NORMALIZATION SETUP
 # -----------------------------
+class BatchNorm(object):
+    def __init__(self):
+        self.bn_assigns = []
+
+
 ewma = tf.train.ExponentialMovingAverage(decay=0.99)  # to calculate the moving averages of mean and variance
 bn_assigns = []  # this list stores the updates to be made to average mean and variance
 # average mean and variance of all layers
-running_mean = [tf.Variable(tf.constant(0.0, shape=[l]), trainable=False) for l in layer_sizes[1:]]
-running_var = [tf.Variable(tf.constant(1.0, shape=[l]), trainable=False) for l in layer_sizes[1:]]
+running_var = [tf.Variable(tf.constant(1.0, shape=[l]), trainable=False) for l in ls[1:]]
+running_mean = [tf.Variable(tf.constant(0.0, shape=[l]), trainable=False) for l in ls[1:]]
 
 
 def update_batch_normalization(batch, l):
@@ -125,7 +121,7 @@ def encoder(inputs, noise_std, is_training=TRAIN_FLAG, update_batch_stats=True):
     d['labeled']['z'][0], d['unlabeled']['z'][0] = split_lu(h)
 
     for l in range(1, num_layers+1):
-        print("Layer ", l, ": ", layer_sizes[l-1], " -> ", layer_sizes[l])
+        print("Layer ", l, ": ", ls[l - 1], " -> ", ls[l])
         d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
         z_pre = tf.matmul(h, weights['W'][l-1])  # pre-activation
         z_pre_l, z_pre_u = split_lu(z_pre)  # split labeled and unlabeled examples
@@ -230,7 +226,7 @@ def forward(x, is_training=TRAIN_FLAG, update_batch_stats=False, seed=1234):
 
     def testing_logit():
         print("=== VAT Corrupted Pass ===")
-        logit, _ = encoder(x, PARAMS.encoder_noise_sd,
+        logit, _ = encoder(x, params.encoder_noise_sd,
                            is_training=is_training,
                            update_batch_stats=update_batch_stats)
         return logit
@@ -250,8 +246,8 @@ def get_normalized_vector(d):
 def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
     d = tf.random_normal(shape=tf.shape(x))
 
-    for k in range(NUM_POWER_ITERATIONS):
-        d = XI * get_normalized_vector(d)
+    for k in range(params.num_power_iterations):
+        d = params.xi * get_normalized_vector(d)
         logit_p = logit
         print("=== Power Iteration: {} ===".format(k))
         logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
@@ -259,7 +255,7 @@ def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
         grad = tf.gradients(dist, [d], aggregation_method=2)[0]
         d = tf.stop_gradient(grad)
 
-    return EPSILON * get_normalized_vector(d)
+    return params.epsilon * get_normalized_vector(d)
 
 def virtual_adversarial_loss(x, logit, is_training=TRAIN_FLAG, name="vat_loss"):
     print("=== VAT Pass: Generating VAT perturbation ===")
@@ -289,8 +285,8 @@ print( "=== Decoder ===")
 z_est = {}
 d_cost = []  # to store the denoising cost of all layers
 for l in range(num_layers, -1, -1):
-    print("Layer ", l, ": ", layer_sizes[l+1] if l+1 < len(layer_sizes) else
-    None, " -> ", layer_sizes[l], ", denoising cost: ", denoising_cost[l])
+    print("Layer ", l, ": ", ls[l + 1] if l + 1 < len(ls) else
+    None, " -> ", ls[l], ", denoising cost: ", denoising_cost[l])
 
     z, z_c = clean_stats['unlabeled']['z'][l], corr_stats['unlabeled']['z'][l]
     m, v = clean_stats['unlabeled']['m'].get(l, 0), clean_stats['unlabeled']['v'].get(l, 1 - 1e-10)
@@ -302,11 +298,11 @@ for l in range(num_layers, -1, -1):
 
     u = batch_normalization(u)
 
-    z_est[l] = combinator(z_c, u, layer_sizes[l])
+    z_est[l] = combinator(z_c, u, ls[l])
 
     z_est_bn = (z_est[l] - m) / v
     # append the cost of this layer to d_cost
-    d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / layer_sizes[l]) * denoising_cost[l])
+    d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / ls[l]) * denoising_cost[l])
 
 
 # -----------------------------
@@ -319,8 +315,8 @@ for l in range(num_layers, -1, -1):
 # ul_x = unlabeled(inputs)
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-vat_loss = PARAMS.vat_weight * virtual_adversarial_loss(inputs, logits_corr)
-ent_loss = PARAMS.ent_weight * entropy_y_x(logits_corr)
+vat_loss = params.vat_weight * virtual_adversarial_loss(inputs, logits_corr)
+ent_loss = params.ent_weight * entropy_y_x(logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
@@ -355,7 +351,7 @@ i_iter = 0
 
 # -----------------------------
 # Resume from checkpoint
-ckpt_dir = "checkpoints/" + PARAMS.id + "/"
+ckpt_dir = "checkpoints/" + params.id + "/"
 ckpt = tf.train.get_checkpoint_state(ckpt_dir)  # get latest checkpoint (if any)
 if ckpt and ckpt.model_checkpoint_path:
     # if checkpoint exists, restore the parameters and set epoch_n and i_iter
@@ -372,13 +368,13 @@ else:
 
 # -----------------------------
 # Write logs to appropriate directory
-log_dir = "logs/" + PARAMS.id
+log_dir = "logs/" + params.id
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
 desc_file = log_dir + "/" + "description"
 with open(desc_file, 'a') as f:
-    print(*order_param_settings(PARAMS), sep='\n', file=f, flush=True)
+    print(*order_param_settings(params), sep='\n', file=f, flush=True)
     print("Trainable parameters:", count_trainable_params(), file=f,
           flush=True)
 
