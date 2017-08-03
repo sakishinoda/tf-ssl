@@ -23,7 +23,7 @@ def get_cli_params():
     # parser.add_argument('--save_epochs', default=None, type=float)
     parser.add_argument('--num_labeled', default=100, type=int)
 
-    parser.add_argument('--labeled_batch_size', default=100, type=int)
+    parser.add_argument('--batch_size', default=100, type=int)
     # parser.add_argument('--unlabeled_batch_size', default=250, type=int)
 
     parser.add_argument('--initial_learning_rate', default=0.002, type=float)
@@ -76,6 +76,13 @@ def get_cli_params():
     # description to print
     parser.add_argument('--description', default=None)
 
+    parser.add_argument('--cnn', action='store_true')
+    # arguments for the cnn encoder/decoder
+    parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
+    parser.add_argument('--lrelu_a', default=0.1, type=float)
+    parser.add_argument('--top_bn', action='store_true')
+    parser.add_argument('--bn_stats_decay_factor', default=0.99, type=float)
+
     params = parser.parse_args()
     # params.write_to = 'logs/' + params.id + '.results' if params.write_to is None else params.write_to
 
@@ -101,6 +108,7 @@ def order_param_settings(params):
         param_list.append(str(k) + ": " + str(param_dict[k]))
 
     return param_list
+
 
 # -----------------------------
 # MODEL BUILDING
@@ -143,9 +151,7 @@ def wts_init(shape, name):
 
 
 # -----------------------------
-# -----------------------------
 # RECOMBINATION FUNCTIONS
-# -----------------------------
 # -----------------------------
 
 def amlp_combinator(z_c, u, size):

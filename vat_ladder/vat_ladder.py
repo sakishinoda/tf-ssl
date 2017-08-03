@@ -10,118 +10,13 @@ import numpy as np
 
 import time
 from src import *
+from conv_ladder import *
 
 # -----------------------------
-# PARAMETER PARSING
+# ENCODERS
 # -----------------------------
 
-params = process_cli_params(get_cli_params())
-
-# Set GPU device to use
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
-
-# Set seeds
-np.random.seed(params.seed)
-tf.set_random_seed(params.seed)
-
-# Set layer sizes for encoders
-LS = params.encoder_layers
-
-NUM_LAYERS = len(LS) - 1  # number of layers
-
-NUM_EPOCHS = params.end_epoch
-NUM_LABELED = params.num_labeled
-
-print("===  Loading Data ===")
-mnist = input_data.read_data_sets("MNIST_data", n_labeled=NUM_LABELED,
-                                  one_hot=True, verbose=True)
-num_examples = mnist.train.num_examples
-
-starter_learning_rate = params.initial_learning_rate
-
-# epoch after which to begin learning rate decay
-decay_after = params.decay_start_epoch
-batch_size = params.labeled_batch_size
-num_iter = (num_examples//batch_size) * NUM_EPOCHS  # number of loop iterations
-
-
-# -----------------------------
-# LADDER SETUP
-# -----------------------------
-inputs = tf.placeholder(tf.float32, shape=(None, LS[0]))
-outputs = tf.placeholder(tf.float32)
-
-
-shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
-
-weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
-           'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
-           # batch normalization parameter to shift the normalized value
-           'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)],
-           # batch normalization parameter to scale the normalized value
-           'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)]}
-
-# scaling factor for noise used in corrupted encoder
-noise_std = params.encoder_noise_sd
-
-# hyperparameters that denote the importance of each layer
-denoising_cost = params.rc_weights
-
-# Lambdas for extracting labeled/unlabeled, etc.
-join = lambda l, u: tf.concat([l, u], 0)
-labeled = lambda x: tf.slice(x, [0, 0], [batch_size, -1]) if x is not None else x
-unlabeled = lambda x: tf.slice(x, [batch_size, 0], [-1, -1]) if x is not None else x
-split_lu = lambda x: (labeled(x), unlabeled(x))
-
-# Boolean training flag
-TRAIN_FLAG = tf.placeholder(tf.bool)
-
-
-# -----------------------------
-# BATCH NORMALIZATION SETUP
-# -----------------------------
-class BatchNormLayers(object):
-    def __init__(self, ls, scope='bn'):
-        self.bn_assigns = []  # this list stores the updates to be made to average mean and variance
-        self.ewma = tf.train.ExponentialMovingAverage(
-            decay=0.99)  # to calculate the moving averages of mean and variance
-
-        # average mean and variance of all layers
-        with tf.variable_scope(scope):
-            self.running_var = [tf.get_variable(
-                'v'+str(l),
-                initializer=tf.constant(1.0, shape=[l]),
-                trainable=False) for l in ls[1:]]
-            self.running_mean = [tf.get_variable(
-                'm'+str(l),
-                initializer=tf.constant(0.0, shape=[l]),
-                trainable=False) for l in ls[1:]]
-
-    def update_batch_normalization(self, batch, l):
-        "batch normalize + update average mean and variance of layer l"
-        mean, var = tf.nn.moments(batch, axes=[0])
-        assign_mean = self.running_mean[l-1].assign(mean)
-        assign_var = self.running_var[l-1].assign(var)
-        self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
-        with tf.control_dependencies([assign_mean, assign_var]):
-            return (batch - mean) / tf.sqrt(var + 1e-10)
-
-    @staticmethod
-    def batch_normalization(batch, mean=None, var=None):
-        if mean is None or var is None:
-            mean, var = tf.nn.moments(batch, axes=[0])
-        return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
-
-# -----------------------------
-# -----------------------------
-# ENCODER
-# -----------------------------
-# -----------------------------
-
-bn = BatchNormLayers(LS)
-
-def encoder(inputs, noise_std, bn, is_training=TRAIN_FLAG, update_batch_stats=True):
+def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
     """
     is_training has to be a placeholder TF boolean
     Note: if is_training is false, update_batch_stats is false, since the
@@ -191,16 +86,176 @@ def encoder(inputs, noise_std, bn, is_training=TRAIN_FLAG, update_batch_stats=Tr
     return h, d
 
 
-print( "=== Corrupted Encoder === ")
-logits_corr, corr = encoder(inputs, noise_std, bn, is_training=TRAIN_FLAG, update_batch_stats=False)
+def cnn_encoder(x, noise_std, bn, is_training, update_batch_stats=True,
+            stochastic=True,
+       seed=1234, layers=None):
 
-print( "=== Clean Encoder ===")
-logits_clean, clean = encoder(inputs, 0.0, bn, is_training=TRAIN_FLAG, update_batch_stats=True)  # 0.0 -> do not add noise
+    h = x + tf.random_normal(tf.shape(x)) * noise_std
+    d = {
+        'labeled': {
+            'z': {}, # pre-activation
+            'm': {}, # mean
+            'v': {}, # variance
+            'h': {}  # activation
+        },
+        'unlabeled': {
+            'z': {},  # pre-activation
+            'm': {},  # mean
+            'v': {},  # variance
+            'h': {}  # activation
+        }
+    }
+
+    if layers is None:
+        layers = make_layer_spec()
+
+    def split_bn(z_pre, is_training, noise_std=0.0):
+        z_pre_l, z_pre_u = split_lu(z_pre)
+        m_u, v_u = tf.nn.moments(z_pre_u, axes=[0])
+
+        # save mean and variance of unlabeled examples for decoding
+        d['unlabeled']['m'][l], d['unlabeled']['v'][l] = m_u, v_u
+
+        # if is_training:
+        def training_batch_norm():
+            # Training batch normalization
+            # batch normalization for labeled and unlabeled examples is performed separately
+            if noise_std > 0:
+                # Corrupted encoder
+                # batch normalization + noise
+                bn_l = bn.batch_normalization(z_pre_l)
+                bn_u = bn.batch_normalization(z_pre_u, m_u, v_u)
+                z = join(bn_l, bn_u)
+                z += tf.random_normal(tf.shape(z_pre)) * noise_std
+            else:
+                # Clean encoder
+                # batch normalization + update the average mean and variance using batch mean and variance of labeled examples
+                bn_l = bn.update_batch_normalization(z_pre_l, l) if \
+                    update_batch_stats else bn.batch_normalization(z_pre_l)
+                bn_u = bn.batch_normalization(z_pre_u, m_u, v_u)
+                z = join(bn_l, bn_u)
+            return z
+
+        def eval_batch_norm():
+            mean = bn.ewma.average(bn.running_mean[l - 1])
+            var = bn.ewma.average(bn.running_var[l - 1])
+            z = bn.batch_normalization(z_pre, mean, var)
+            return z
+
+        z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
+
+
+        return z
+
+    with tf.variable_scope('enc'):
+        for l in range(len(layers.keys())):
+            print("Layer ", l, ": ", layers[l]['f_in'], " -> ", layers[l][
+                'f_out'])
+            d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
+
+            if layers[l]['type'] == 'c':
+                h = conv(h,
+                             ksize=layers[l]['ksize'],
+                             stride=1,
+                             f_in=layers[l]['f_in'],
+                             f_out=layers[l]['f_out'],
+                             seed=None, name='c' + str(l))
+                h = split_bn(h, is_training=is_training, noise_std=noise_std)
+                h = lrelu(h, params.lrelu_a)
+
+            elif layers[l]['type'] == 'max':
+                h = max_pool(h,
+                             ksize=layers[l]['ksize'],
+                             stride=layers[l]['stride'])
+                h = split_bn(h, is_training=is_training, noise_std=noise_std)
+
+            elif layers[l]['type'] == 'avg':
+                # Global average poolingg
+                h = tf.reduce_mean(h, reduction_indices=[1, 2])
+
+            elif layers[l]['type'] == 'fc':
+                h = fc(h, layers[l]['f_in'],
+                       layers[l]['f_out'],
+                       seed=None,
+                       name='fc')
+                if params.top_bn:
+                    h = split_bn(h, is_training=is_training, noise_std=noise_std)
+                        # bn(h, 10, is_training=is_training,
+                        #    update_batch_stats=update_batch_stats,
+                        #    name='b'+str(l))
+            else:
+                print('Layer type not defined')
+
+            print(l, h.get_shape())
+
+    return h
 
 # -----------------------------
+# DECODERS
+# -----------------------------
+
+def mlp_decoder():
+    z_est = {}
+    d_cost = []  # to store the denoising cost of all layers
+    for l in range(NUM_LAYERS, -1, -1):
+        print("Layer ", l, ": ", LS[l + 1] if l + 1 < len(LS) else
+        None, " -> ", LS[l], ", denoising cost: ", denoising_cost[l])
+
+        z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
+        m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1 - 1e-10)
+        # print(l)
+        if l == NUM_LAYERS:
+            u = unlabeled(logits_corr)
+        else:
+            u = tf.matmul(z_est[l+1], weights['V'][l])
+
+        u = bn.batch_normalization(u)
+
+        z_est[l] = combinator(z_c, u, LS[l])
+
+        z_est_bn = (z_est[l] - m) / v
+        # append the cost of this layer to d_cost
+        d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
+
+    return z_est, d_cost
+
+# -----------------------------
+# BATCH NORMALIZATION SETUP
+# -----------------------------
+class BatchNormLayers(object):
+    def __init__(self, ls, scope='bn'):
+        self.bn_assigns = []  # this list stores the updates to be made to average mean and variance
+        self.ewma = tf.train.ExponentialMovingAverage(
+            decay=0.99)  # to calculate the moving averages of mean and variance
+
+        # average mean and variance of all layers
+        with tf.variable_scope(scope):
+            self.running_var = [tf.get_variable(
+                'v'+str(l),
+                initializer=tf.constant(1.0, shape=[l]),
+                trainable=False) for l in ls[1:]]
+            self.running_mean = [tf.get_variable(
+                'm'+str(l),
+                initializer=tf.constant(0.0, shape=[l]),
+                trainable=False) for l in ls[1:]]
+
+    def update_batch_normalization(self, batch, l):
+        "batch normalize + update average mean and variance of layer l"
+        mean, var = tf.nn.moments(batch, axes=[0])
+        assign_mean = self.running_mean[l-1].assign(mean)
+        assign_var = self.running_var[l-1].assign(var)
+        self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
+        with tf.control_dependencies([assign_mean, assign_var]):
+            return (batch - mean) / tf.sqrt(var + 1e-10)
+
+    @staticmethod
+    def batch_normalization(batch, mean=None, var=None):
+        if mean is None or var is None:
+            mean, var = tf.nn.moments(batch, axes=[0])
+        return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
+
 # -----------------------------
 # VAT FUNCTIONS
-# -----------------------------
 # -----------------------------
 
 def logsoftmax(x):
@@ -218,16 +273,7 @@ def entropy_y_x(logit):
     p = tf.nn.softmax(logit)
     return -tf.reduce_mean(tf.reduce_sum(p * logsoftmax(logit), 1))
 
-# vat encoder is clean encoder but without updating batch norm
-# def logit(x, is_training=TRAIN_FLAG, update_batch_stats=False, stochastic=True,
-#           seed=1234):
-#     noise_std = 0.0 if stochastic is False else PARAMS.encoder_noise_sd
-#     print("=== VAT PASS ===")
-#     logits, _ = encoder(x, noise_std, is_training=is_training,
-#                        update_batch_stats=update_batch_stats)
-#     return logits
-
-def forward(x, is_training=TRAIN_FLAG, update_batch_stats=False, seed=1234):
+def forward(x, is_training, update_batch_stats=False, seed=1234):
 
     def training_logit():
         print("=== VAT Clean Pass === ")
@@ -255,9 +301,8 @@ def get_normalized_vector(d):
                                       keep_dims=True))
     return d
 
-def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
+def generate_virtual_adversarial_perturbation(x, logit, is_training):
     d = tf.random_normal(shape=tf.shape(x))
-
     for k in range(params.num_power_iterations):
         d = params.xi * get_normalized_vector(d)
         logit_p = logit
@@ -266,10 +311,10 @@ def generate_virtual_adversarial_perturbation(x, logit, is_training=TRAIN_FLAG):
         dist = kl_divergence_with_logit(logit_p, logit_m)
         grad = tf.gradients(dist, [d], aggregation_method=2)[0]
         d = tf.stop_gradient(grad)
-
     return params.epsilon * get_normalized_vector(d)
 
-def virtual_adversarial_loss(x, logit, is_training=TRAIN_FLAG, name="vat_loss"):
+
+def virtual_adversarial_loss(x, logit, is_training, name="vat_loss"):
     print("=== VAT Pass: Generating VAT perturbation ===")
     r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
     logit = tf.stop_gradient(logit)
@@ -279,55 +324,99 @@ def virtual_adversarial_loss(x, logit, is_training=TRAIN_FLAG, name="vat_loss"):
     loss = kl_divergence_with_logit(logit_p, logit_m)
     return tf.identity(loss, name=name)
 
+# -----------------------------
+# PARAMETER PARSING
+# -----------------------------
+
+params = process_cli_params(get_cli_params())
+
+# Set GPU device to use
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
+
+# Set seeds
+np.random.seed(params.seed)
+tf.set_random_seed(params.seed)
+
+# Set layer sizes for encoders
+LS = params.encoder_layers
+
+NUM_LAYERS = len(LS) - 1  # number of layers
+
+NUM_EPOCHS = params.end_epoch
+NUM_LABELED = params.num_labeled
+
+print("===  Loading Data ===")
+mnist = input_data.read_data_sets("MNIST_data", n_labeled=NUM_LABELED, one_hot=True)
+num_examples = mnist.train.num_examples
+
+starter_learning_rate = params.initial_learning_rate
+
+# epoch after which to begin learning rate decay
+decay_after = params.decay_start_epoch
+batch_size = params.labeled_batch_size
+num_iter = (num_examples//batch_size) * NUM_EPOCHS  # number of loop iterations
 
 # -----------------------------
+# LADDER SETUP
+# -----------------------------
+inputs = tf.placeholder(tf.float32, shape=(None, LS[0]))
+outputs = tf.placeholder(tf.float32)
+
+shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
+
+weights = {'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
+           'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
+           # batch normalization parameter to shift the normalized value
+           'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)],
+           # batch normalization parameter to scale the normalized value
+           'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)]}
+
+# scaling factor for noise used in corrupted encoder
+noise_std = params.encoder_noise_sd
+
+# hyperparameters that denote the importance of each layer
+denoising_cost = params.rc_weights
+
+# Lambdas for extracting labeled/unlabeled, etc.
+join = lambda l, u: tf.concat([l, u], 0)
+labeled = lambda x: tf.slice(x, [0, 0], [batch_size, -1]) if x is not None else x
+unlabeled = lambda x: tf.slice(x, [batch_size, 0], [-1, -1]) if x is not None else x
+split_lu = lambda x: (labeled(x), unlabeled(x))
+
+# Boolean training flag
+train_flag = tf.placeholder(tf.bool)
+
+# Set up Batch Norm
+bn = BatchNormLayers(LS)
+
+# Choose encoder
+encoder = mlp_encoder
+
+print( "=== Corrupted Encoder === ")
+logits_corr, corr = encoder(inputs, noise_std, bn, is_training=train_flag, update_batch_stats=False)
+
+print( "=== Clean Encoder ===")
+logits_clean, clean = encoder(inputs, 0.0, bn, is_training=train_flag, update_batch_stats=True)  # 0.0 -> do not add noise
+
 # -----------------------------
 # DECODER
 # -----------------------------
-# -----------------------------
-
 # Choose recombination function
 combinator = gauss_combinator
 
-
 # IPython.embed()
 print( "=== Decoder ===")
-# Decoder
+z_est, d_cost = mlp_decoder()
 
-z_est = {}
-d_cost = []  # to store the denoising cost of all layers
-for l in range(NUM_LAYERS, -1, -1):
-    print("Layer ", l, ": ", LS[l + 1] if l + 1 < len(LS) else
-    None, " -> ", LS[l], ", denoising cost: ", denoising_cost[l])
-
-    z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
-    m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1 - 1e-10)
-    # print(l)
-    if l == NUM_LAYERS:
-        u = unlabeled(logits_corr)
-    else:
-        u = tf.matmul(z_est[l+1], weights['V'][l])
-
-    u = bn.batch_normalization(u)
-
-    z_est[l] = combinator(z_c, u, LS[l])
-
-    z_est_bn = (z_est[l] - m) / v
-    # append the cost of this layer to d_cost
-    d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
-
-
-# -----------------------------
 # -----------------------------
 # PUTTING IT ALL TOGETHER
 # -----------------------------
-# -----------------------------
-
 # vat cost
 # ul_x = unlabeled(inputs)
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-vat_loss = params.vat_weight * virtual_adversarial_loss(inputs, logits_corr)
+vat_loss = params.vat_weight * virtual_adversarial_loss(inputs, logits_corr, is_training=train_flag)
 ent_loss = params.ent_weight * entropy_y_x(logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
@@ -354,8 +443,6 @@ with tf.control_dependencies([train_step]):
 saver = tf.train.Saver()
 
 # -----------------------------
-# -----------------------------
-
 print("===  Starting Session ===")
 sess = tf.Session()
 
@@ -399,12 +486,12 @@ print("=== Training ===")
 [init_acc, init_loss] = sess.run([accuracy, loss], feed_dict={
     inputs: mnist.train.labeled_ds.images, outputs:
         mnist.train.labeled_ds.labels,
-    TRAIN_FLAG: False})
+    train_flag: False})
 print("Initial Train Accuracy: ", init_acc, "%")
 print("Initial Train Loss: ", init_loss)
 
 [init_acc] = sess.run([accuracy], feed_dict={
-    inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False})
+    inputs: mnist.test.images, outputs: mnist.test.labels, train_flag: False})
 print("Initial Test Accuracy: ", init_acc, "%")
 # print("Initial Test Loss: ", init_loss)
 
@@ -415,7 +502,7 @@ for i in tqdm(range(i_iter, num_iter)):
 
     _ = sess.run(
         [train_step],
-        feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
+        feed_dict={inputs: images, outputs: labels, train_flag: True})
 
 
     if (i > 1) and ((i+1) % (num_iter//NUM_EPOCHS) == 0):
@@ -435,15 +522,15 @@ for i in tqdm(range(i_iter, num_iter)):
             # train_log_w = csv.writer(train_log)
             log_i = [now, epoch_n] + sess.run(
                 [accuracy],
-                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}
+                feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, train_flag: False}
             ) + sess.run(
                 [loss, cost, u_cost, vat_loss, ent_loss],
-                feed_dict={inputs: images, outputs: labels, TRAIN_FLAG: True})
+                feed_dict={inputs: images, outputs: labels, train_flag: True})
             # train_log_w.writerow(log_i)
             print(*log_i, sep=',', flush=True, file=train_log)
 
 print("Final Accuracy: ", sess.run(accuracy, feed_dict={
-    inputs: mnist.test.images, outputs: mnist.test.labels, TRAIN_FLAG: False}),
+    inputs: mnist.test.images, outputs: mnist.test.labels, train_flag: False}),
       "%")
 
 sess.close()

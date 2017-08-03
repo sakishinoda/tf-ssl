@@ -5,16 +5,16 @@ Dropout on the pooling layers is replaced with batch norm.
 Batch norm on convolution layers are carried out per-channel.
 """
 import tensorflow as tf
-import numpy as np
-import argparse
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
-parser.add_argument('--lrelu_a', default=0.1, type=float)
-parser.add_argument('--top_bn', action='store_true')
-parser.add_argument('--bn_stats_decay_factor', default=0.99, type=float)
-parser.add_argument('--batch_size', default=100, type=int)
-PARAMS = parser.parse_args()
+# import numpy as np
+# import argparse
+#
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
+# parser.add_argument('--lrelu_a', default=0.1, type=float)
+# parser.add_argument('--top_bn', action='store_true')
+# parser.add_argument('--bn_stats_decay_factor', default=0.99, type=float)
+# parser.add_argument('--batch_size', default=100, type=int)
+# PARAMS = parser.parse_args()
 
 def make_layer_spec(
     types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'c', 'c', 'c', 'avg', 'fc'),
@@ -47,12 +47,15 @@ def lrelu(x, a=0.1):
         return tf.maximum(x, a * x)
 
 
-def bn(x, dim, is_training=True, update_batch_stats=True, collections=None, name="bn"):
+def bn(x, dim, is_training=True, update_batch_stats=True, collections=None, name="bn", mean=None, var=None):
     params_shape = (dim,)
     n = tf.to_float(tf.reduce_prod(tf.shape(x)[:-1]))
     axis = list(range(int(tf.shape(x).get_shape().as_list()[0]) - 1))
-    mean = tf.reduce_mean(x, axis)
-    var = tf.reduce_mean(tf.pow(x - mean, 2.0), axis)
+    if mean is None:
+        mean = tf.reduce_mean(x, axis)
+    if var is None:
+        var = tf.reduce_mean(tf.pow(x - mean, 2.0), axis)
+
     avg_mean = tf.get_variable(
         name=name + "_mean",
         shape=params_shape,
@@ -179,73 +182,6 @@ def max_pool(x, ksize=2, stride=2):
                           strides=[1, stride, stride, 1],
                           padding='SAME')
 
-
-def encoder(x, is_training=True, update_batch_stats=True, stochastic=True,
-       seed=1234, layers=None):
-    """
-    Returns logit (pre-softmax)
-
-    VAT Conv-Large:
-    layer_sizes = [
-    128, 128, 128, 128,
-    256, 256, 256, 256,
-    512, 256, 128]
-    kernel_sizes = [
-    3, 3, 3, 2,
-    3, 3, 3, 2,
-    3, 1, 1
-    ]
-
-    Ladder Conv-Large (similar to VAT Conv-Small on CIFAR-10)
-    layer_sizes = [
-    96, 96, 96, 96,
-    192, 192, 192, 192,
-    192, 192, 10]
-    kernel_sizes = [
-    3, 3, 3, 2,
-    3, 3, 3, 2,
-    3, 1, 1
-    ]
-    """
-
-    h = x
-    if layers is None:
-        layers = make_layer_spec()
-    # rng = np.random.RandomState(seed)
-
-    def conv_bn_lrelu(h, l, f_in, f_out, ksize=3):
-        h = conv(h, ksize=ksize, stride=1, f_in=f_in, f_out=f_out, seed=None,
-             name='c'+str(l))
-        h = lrelu(bn(h, f_out, is_training=is_training,
-                     update_batch_stats=update_batch_stats, name='b'+str(l)),
-                  PARAMS.lrelu_a)
-        return h
-    with tf.variable_scope('enc'):
-        for l in range(len(layers.keys())):
-            if layers[l]['type'] == 'c':
-                h = conv_bn_lrelu(h, l, layers[l]['f_in'], layers[l]['f_out'],
-                                  ksize=layers[l]['ksize'])
-            elif layers[l]['type'] == 'max':
-                h = max_pool(h,
-                             ksize=layers[l]['ksize'],
-                             stride=layers[l]['stride'])
-                h = bn(h, dim=layers[l]['f_in'], is_training=is_training,
-                       update_batch_stats=update_batch_stats, name='b' + str(l))
-                # h = tf.nn.dropout(h, keep_prob=PARAMS.keep_prob_hidden, seed=None) if stochastic else h
-            elif layers[l]['type'] == 'avg':
-                h = tf.reduce_mean(h, reduction_indices=[1, 2])  # Global average poolig
-            elif layers[l]['type'] == 'fc':
-                h = fc(h, layers[l]['f_in'], layers[l]['f_out'], seed=None,
-                       name='fc')
-                if PARAMS.top_bn:
-                    h = bn(h, 10, is_training=is_training,
-                           update_batch_stats=update_batch_stats, name='b'+str(l))
-            else:
-                print('Layer type not defined')
-
-            print(l, h.get_shape())
-
-    return h
 
 
 def decoder(x, is_training=True, update_batch_stats=False, stochastic=True,
