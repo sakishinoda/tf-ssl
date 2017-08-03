@@ -86,9 +86,8 @@ def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
     return h, d
 
 
-def cnn_encoder(x, noise_std, bn, is_training, update_batch_stats=True,
-            stochastic=True,
-       seed=1234, layers=None):
+def cnn_encoder(x, noise_std, bn, is_training,
+                update_batch_stats=True, layers=None):
 
     h = x + tf.random_normal(tf.shape(x)) * noise_std
     d = {
@@ -190,11 +189,12 @@ def cnn_encoder(x, noise_std, bn, is_training, update_batch_stats=True,
 
     return h
 
+
 # -----------------------------
 # DECODERS
 # -----------------------------
 
-def mlp_decoder():
+def mlp_decoder(clean, corr, logits_corr, bn, combinator):
     z_est = {}
     d_cost = []  # to store the denoising cost of all layers
     for l in range(NUM_LAYERS, -1, -1):
@@ -218,6 +218,137 @@ def mlp_decoder():
         d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
 
     return z_est, d_cost
+
+
+def cnn_decoder(clean, corr, logits_corr, bn, combinator,
+                is_training,
+                update_batch_stats=False,
+                layers=None):
+    """
+    Starts from logit (x has dim 10)
+
+    """
+
+    # init_size = 28  # MNIST
+    # init_size = 32  # CIFAR-10
+    if layers is None:
+        layers = make_layer_spec()
+
+    def deconv_bn_lrelu(h, l):
+        """Inherits layers, PARAMS, is_training, update_batch_stats from outer environment."""
+        h = deconv(h, ksize=layers[l]['ksize'], stride=layers[l]['stride'],
+                   f_in=layers[l]["f_out"], f_out=layers[l]["f_in"],
+                   name=layers[l]['type'] + str(l))
+
+        h = bn(h, layers[l]["f_in"], is_training=is_training,
+               update_batch_stats=update_batch_stats, name='b' + str(l))
+
+        h = lrelu(h, PARAMS.lrelu_a)
+        return h
+
+    def depool(h):
+        """Deconvolution with a filter of ones and stride 2 upsamples with
+        copying to double the size."""
+        output_shape = h.get_shape().as_list()
+        output_shape[1] *= 2
+        output_shape[2] *= 2
+        c = output_shape[-1]
+        h = tf.nn.conv2d_transpose(
+            h,
+            filter=tf.ones([2, 2, c, c]),
+            output_shape=output_shape,
+            padding='SAME',
+            strides=[1, 2, 2, 1],
+            data_format='NHWC'
+        )
+        return h
+
+    z_est = {}
+    d_cost = []
+
+    with tf.variable_scope('dec'):
+        # 10: fc
+        # Dense batch x 10 -> batch x 192
+        for l in range(NUM_LAYERS, -1, -1):
+            print("Layer {}: {} -> {}, denoising cost: {}".format(
+                l, LS[l+1] if l+1<len(LS) else None, LS[l], denoising_cost[l]
+            ))
+
+            z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
+            m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1-1e-10)
+
+            type_ = layers[l]['type']
+            if l == NUM_LAYERS:
+                h = unlabeled(logits_corr)
+            elif type_ == 'fc':
+                h = fc(h, dim_in=layers[l]["f_out"], dim_out=layers[l]["f_in"],
+                       seed=None, name=layers[l]['type'] + str(l))
+            elif type_ == 'avg':
+                # De-global mean pool with copying:
+                # batch x 1 x 1 x 192 -> batch x 8 x 8 x 192
+                h = tf.reshape(h, [-1, 1, 1, layers[l]["f_out"]])
+                h = tf.tile(h, [1, layers[l]['dim'], layers[l]['dim'], 1])
+            elif type_ == 'c':
+                # Deconv
+                h = deconv_bn_lrelu(h, l)
+            elif type_ == 'max':
+                # De-max-pool
+                h = depool(h)
+                h = bn(h, dim=layers[l]["f_out"], is_training=is_training,
+                       update_batch_stats=update_batch_stats,
+                       name=layers[l]['type'] + str(l))
+            else:
+                print('Layer type not defined')
+
+            h = bn.batch_normalization(h)
+            z_est[l] = combinator(z_c, h, LS[l])
+            z_est_bn = (z_est[l] - m) / v
+
+            d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
+
+    return z_est, d_cost
+
+
+# -----------------------------
+# RECOMBINATION FUNCTIONS
+# -----------------------------
+
+def amlp_combinator(z_c, u, size):
+    uz = tf.multiply(z_c, u)
+    x = tf.stack([z_c, u, uz], axis=-1)
+    print(size)
+    # print(z_c.get_shape, u.get_shape, uz.get_shape)
+
+    h = fclayer(x, size_out=4, wts_init=tf.random_normal_initializer(
+        stddev=params.combinator_sd), reuse=None) #, scope='combinator_hidden')
+
+    o = fclayer(h, size_out=1, wts_init=tf.random_normal_initializer(
+        stddev=params.combinator_sd), reuse=None,
+                activation=tf.nn.relu) #, scope='combinator_out')
+
+    return tf.squeeze(o)
+
+
+def gauss_combinator(z_c, u, size):
+    "gaussian denoising function proposed in the original paper"
+    wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
+    a1 = wi(0., 'a1')
+    a2 = wi(1., 'a2')
+    a3 = wi(0., 'a3')
+    a4 = wi(0., 'a4')
+    a5 = wi(0., 'a5')
+
+    a6 = wi(0., 'a6')
+    a7 = wi(1., 'a7')
+    a8 = wi(0., 'a8')
+    a9 = wi(0., 'a9')
+    a10 = wi(0., 'a10')
+
+    mu = a1 * tf.sigmoid(a2 * u + a3) + a4 * u + a5
+    v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
+
+    z_est = (z_c - mu) * v + mu
+    return z_est
 
 # -----------------------------
 # BATCH NORMALIZATION SETUP
@@ -407,7 +538,7 @@ combinator = gauss_combinator
 
 # IPython.embed()
 print( "=== Decoder ===")
-z_est, d_cost = mlp_decoder()
+z_est, d_cost = mlp_decoder(clean, corr, logits_corr, bn, combinator)
 
 # -----------------------------
 # PUTTING IT ALL TOGETHER
