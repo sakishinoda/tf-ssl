@@ -526,7 +526,7 @@ bn_updates = tf.group(*bn_assigns)
 with tf.control_dependencies([train_step]):
     train_step = tf.group(bn_updates)
 
-saver = tf.train.Saver()
+saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5, max_to_keep=5)
 
 # -----------------------------
 # -----------------------------
