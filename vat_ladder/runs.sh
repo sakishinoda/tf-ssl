@@ -51,4 +51,4 @@ nohup python vat_ladder.py --id "GaussVatEntMin_seed-1111" --rc_weights 1000.0-1
 nohup python vat_ladder.py --id "GaussVatEntMin_seed-1" --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 --vat_weight 1.0 --ent_weight 1.0 --which_gpu 1 --seed 1 &
 
 
-nohup python vat_ladder.py --id "test" --which_gpu 0 &
+nohup python vat_ladder.py --id "GaussVatRC_seed-1" --description "VAT for every reconstruction activation (at each layer in encoder/decoder): Gauss combinator full MLP ladder with VAT cost at each level, weighted by the same RC weights as the regular reconstruction, and includes top level VAT weight, no entropy term" --vat_weight 1.0 --ent_weight 0.0 --which_gpu 0 --vat_rc &

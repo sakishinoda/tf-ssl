@@ -625,13 +625,14 @@ with tf.variable_scope('dec', reuse=None):
 vat_loss = params.vat_weight * virtual_adversarial_loss(
         inputs, logits_corr, is_training=train_flag)
 
-for l in range(1, params.num_layers):
-    l_inputs = join(corr['labeled']['h'][l-1], corr['unlabeled']['h'][l-1])
-    vat_loss += (params.vat_weight *
-                 denoising_cost[l] *
-                 virtual_adversarial_loss(
-                     l_inputs, logits_corr,
-                     is_training=train_flag, start_layer=l))
+if params.vat_rc:
+    for l in range(1, params.num_layers):
+        l_inputs = join(corr['labeled']['h'][l-1], corr['unlabeled']['h'][l-1])
+        vat_loss += (params.vat_weight *
+                     denoising_cost[l] *
+                     virtual_adversarial_loss(
+                         l_inputs, logits_corr,
+                         is_training=train_flag, start_layer=l))
 
 ent_loss = params.ent_weight * entropy_y_x(logits_corr)
 
