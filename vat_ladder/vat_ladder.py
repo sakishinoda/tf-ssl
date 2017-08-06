@@ -72,6 +72,7 @@ def get_cli_params():
     # Weight to apply to supervised cost in total loss
     # parser.add_argument('--sc_weight', default=1, type=float)
 
+    parser.add_argument('--gauss', default='store_true')
     # Standard deviation of the Gaussian noise to inject at each level
     parser.add_argument('--encoder_noise_sd', default=0.3, type=float)
 
@@ -456,7 +457,7 @@ def gauss_combinator(z_c, u, size):
 
 
 # Choose recombination function
-combinator = gauss_combinator
+combinator = gauss_combinator if PARAMS.gauss else amlp_combinator
 
 
 # -----------------------------
