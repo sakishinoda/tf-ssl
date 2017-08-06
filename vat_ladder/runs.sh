@@ -49,3 +49,6 @@ nohup python vat_ladder.py --id "VatEntMin_seed-100" --rc_weights 0.0-0.0-0.0-0.
 # GaussVatEntMin
 nohup python vat_ladder.py --id "GaussVatEntMin_seed-1111" --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 --vat_weight 1.0 --ent_weight 1.0 --which_gpu 0 --seed 1111 &
 nohup python vat_ladder.py --id "GaussVatEntMin_seed-1" --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 --vat_weight 1.0 --ent_weight 1.0 --which_gpu 1 --seed 1 &
+
+
+nohup python vat_ladder.py --id "test" --which_gpu 0 &

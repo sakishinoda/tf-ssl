@@ -1,11 +1,11 @@
 # -----------------------------
 # IMPORTS
 # -----------------------------
-import IPython
+# import IPython
 import tensorflow as tf
 import input_data
 import os
-from tqdm import tqdm
+# from tqdm import tqdm
 import numpy as np
 
 import time
@@ -221,7 +221,8 @@ def mlp_decoder(clean, corr, logits_corr, bn, combinator,
         None, " -> ", LS[l], ", denoising cost: ", denoising_cost[l])
 
         z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
-        m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1 - 1e-10)
+        m, v = clean['unlabeled']['m'].get(l, 0), \
+               clean['unlabeled']['v'].get(l, 1 - 1e-10)
         # print(l)
         if l == params.num_layers:
             u = unlabeled(logits_corr)
@@ -298,14 +299,17 @@ def cnn_decoder(clean, corr, logits_corr, bn, combinator,
             ))
 
             z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
-            m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1-1e-10)
+            m, v = clean['unlabeled']['m'].get(l, 0), \
+                   clean['unlabeled']['v'].get(l, 1-1e-10)
 
             type_ = layers[l-1]['type']
             print(type_)
             if l == params.num_layers:
                 h = unlabeled(logits_corr)
             elif type_ == 'fc':
-                h = fc(h, dim_in=layers[l-1]["f_out"], dim_out=layers[l-1]["f_in"],
+                h = fc(h,
+                       dim_in=layers[l-1]["f_out"],
+                       dim_out=layers[l-1]["f_in"],
                        seed=None, name=layers[l-1]['type'] + str(l))
             elif type_ == 'avg':
                 # De-global mean pool with copying:
@@ -326,7 +330,8 @@ def cnn_decoder(clean, corr, logits_corr, bn, combinator,
             z_est[l] = combinator(z_c, h, LS[l])
             z_est_bn = (z_est[l] - m) / v
 
-            d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
+            d_cost.append((tf.reduce_mean(tf.reduce_sum(
+                tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
 
         return z_est, d_cost
 
@@ -368,7 +373,8 @@ class BatchNormLayers(object):
 
         assign_mean = self.running_mean[l-1].assign(mean)
         assign_var = self.running_var[l-1].assign(var)
-        self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
+        self.bn_assigns.append(
+            self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
 
         with tf.control_dependencies([assign_mean, assign_var]):
             return (batch - mean) / tf.sqrt(var + 1e-10)
@@ -553,9 +559,11 @@ inputs = tf.reshape(inputs_ph, shape=[
     ]) if params.cnn else inputs_ph
 
 weights = {# batch normalization parameter to shift the normalized value
-           'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(params.num_layers)],
+           'beta': [bias_init(0.0, LS[l + 1], "beta")
+                    for l in range(params.num_layers)],
            # batch normalization parameter to scale the normalized value
-           'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(params.num_layers)]}
+           'gamma': [bias_init(1.0, LS[l + 1], "beta")
+                     for l in range(params.num_layers)]}
 
 if not params.cnn:
     weights.update({
@@ -635,10 +643,13 @@ cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
 
 loss = cost + u_cost + vat_loss + ent_loss # total cost
 
-pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
+pred_cost = -tf.reduce_mean(
+    tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
 
-correct_prediction = tf.equal(tf.argmax(logits_clean, 1), tf.argmax(outputs, 1))  # no of correct predictions
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float")) * tf.constant(100.0)
+correct_prediction = tf.equal(
+    tf.argmax(logits_clean, 1), tf.argmax(outputs, 1))  # no of correct predictions
+accuracy = tf.reduce_mean(
+    tf.cast(correct_prediction, "float")) * tf.constant(100.0)
 
 learning_rate = tf.Variable(starter_learning_rate, trainable=False)
 train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
@@ -706,7 +717,8 @@ print("Initial Test Accuracy: ", init_acc, "%")
 
 
 start = time.time()
-for i in tqdm(range(i_iter, num_iter)):
+# for i in tqdm(range(i_iter, num_iter)):
+for i in range(i_iter, num_iter):
     images, labels = mnist.train.next_batch(batch_size)
 
     _ = sess.run(
@@ -731,7 +743,8 @@ for i in tqdm(range(i_iter, num_iter)):
             # train_log_w = csv.writer(train_log)
             log_i = [now, epoch_n] + sess.run(
                 [accuracy],
-                feed_dict={inputs_ph: mnist.test.images, outputs: mnist.test.labels, train_flag: False}
+                feed_dict={inputs_ph: mnist.test.images,
+                           outputs: mnist.test.labels, train_flag: False}
             ) + sess.run(
                 [loss, cost, u_cost, vat_loss, ent_loss],
                 feed_dict={inputs_ph: images, outputs: labels, train_flag:
