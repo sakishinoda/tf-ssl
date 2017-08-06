@@ -17,7 +17,7 @@ from conv_ladder import *
 # -----------------------------
 
 def mlp_encoder(inputs, noise_std, bn, is_training,
-                update_batch_stats=True, layers=None):
+                update_batch_stats=True, layers=None, start_layer=1):
     """
     is_training has to be a placeholder TF boolean
     Note: if is_training is false, update_batch_stats is false, since the
@@ -30,7 +30,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
     d['unlabeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
     d['labeled']['z'][0], d['unlabeled']['z'][0] = split_lu(h)
 
-    for l in range(1, params.num_layers+1):
+    for l in range(start_layer, params.num_layers+1):
         print("Layer ", l, ": ", LS[l - 1], " -> ", LS[l])
         d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
         z_pre = tf.matmul(h, weights['W'][l-1])  # pre-activation
@@ -291,9 +291,6 @@ def cnn_decoder(clean, corr, logits_corr, bn, combinator,
         # 10: fc
         # Dense batch x 10 -> batch x 192
         for l in range(params.num_layers, -1, -1):
-            IPython.embed()
-            # l = k-1
-            # IPython.embed()
 
             print("Layer {}: {} -> {}, denoising cost: {}".format(
                 l, LS[l+1] if l+1<len(LS) else None,
@@ -368,8 +365,7 @@ class BatchNormLayers(object):
         print(l, mean.get_shape().as_list(),
               self.running_mean[l-1].get_shape().as_list(),
               batch.get_shape().as_list())
-        # print(mean.get_shape(), var.get_shape())
-        # IPython.embed()
+
         assign_mean = self.running_mean[l-1].assign(mean)
         assign_var = self.running_var[l-1].assign(var)
         self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
@@ -383,7 +379,7 @@ class BatchNormLayers(object):
         bn_axes = list(range(len(batch.get_shape().as_list())-1))
         if mean is None or var is None:
             mean, var = tf.nn.moments(batch, axes=bn_axes)
-        print(mean.get_shape().as_list(), batch.get_shape().as_list())
+
         return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
 
 # -----------------------------
@@ -447,27 +443,29 @@ def entropy_y_x(logit):
     p = tf.nn.softmax(logit)
     return -tf.reduce_mean(tf.reduce_sum(p * logsoftmax(logit), 1))
 
-def forward(x, is_training, update_batch_stats=False, seed=1234):
+def forward(x, is_training, update_batch_stats=False, seed=1234, start_layer=1):
 
     def training_logit():
         print("=== VAT Clean Pass === ")
         logit, _ = encoder(x, 0.0, bn,
                           is_training=is_training,
-                          update_batch_stats=update_batch_stats)
+                          update_batch_stats=update_batch_stats,
+                          start_layer=start_layer)
         return logit
 
     def testing_logit():
         print("=== VAT Corrupted Pass ===")
         logit, _ = encoder(x, params.encoder_noise_sd, bn,
                            is_training=is_training,
-                           update_batch_stats=update_batch_stats)
+                           update_batch_stats=update_batch_stats,
+                           start_layer=start_layer)
         return logit
 
     # return tf.cond(is_training, training_logit, testing_logit)
     return training_logit()
 
 def get_normalized_vector(d):
-    # IPython.embed()
+
     d_dims = len(d.get_shape()) - 1
     axes = [range(1, d_dims)] if d_dims > 1 else [1]
     d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=axes, keep_dims=True))
@@ -475,25 +473,30 @@ def get_normalized_vector(d):
                                       keep_dims=True))
     return d
 
-def generate_virtual_adversarial_perturbation(x, logit, is_training):
+def generate_virtual_adversarial_perturbation(x, logit, is_training,
+                                              start_layer=1):
     d = tf.random_normal(shape=tf.shape(x))
     for k in range(params.num_power_iterations):
         d = params.xi * get_normalized_vector(d)
         logit_p = logit
         print("=== Power Iteration: {} ===".format(k))
-        logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
+        logit_m = forward(x + d, update_batch_stats=False,
+                          is_training=is_training, start_layer=start_layer)
         dist = kl_divergence_with_logit(logit_p, logit_m)
         grad = tf.gradients(dist, [d], aggregation_method=2)[0]
         d = tf.stop_gradient(grad)
     return params.epsilon * get_normalized_vector(d)
 
-def virtual_adversarial_loss(x, logit, is_training, name="vat_loss"):
+def virtual_adversarial_loss(x, logit, is_training, name="vat_loss",
+                             start_layer=1):
     print("=== VAT Pass: Generating VAT perturbation ===")
-    r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
+    r_vadv = generate_virtual_adversarial_perturbation(
+        x, logit, is_training=is_training, start_layer=start_layer)
     logit = tf.stop_gradient(logit)
     logit_p = logit
     print("=== VAT Pass: Computing VAT Loss (KL Divergence)")
-    logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
+    logit_m = forward(x + r_vadv, update_batch_stats=False,
+                      is_training=is_training, start_layer=start_layer)
     loss = kl_divergence_with_logit(logit_p, logit_m)
     return tf.identity(loss, name=name)
 
@@ -598,7 +601,7 @@ with tf.variable_scope('enc', reuse=True):
 # Choose recombination function
 combinator = gauss_combinator
 
-# IPython.embed()
+
 print( "=== Decoder ===")
 with tf.variable_scope('dec', reuse=None):
     z_est, d_cost = decoder(clean, corr, logits_corr, bn, combinator,
@@ -611,7 +614,17 @@ with tf.variable_scope('dec', reuse=None):
 # ul_x = unlabeled(inputs)
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-vat_loss = params.vat_weight * virtual_adversarial_loss(inputs, logits_corr, is_training=train_flag)
+vat_loss = params.vat_weight * virtual_adversarial_loss(
+        inputs, logits_corr, is_training=train_flag)
+
+for l in range(1, params.num_layers):
+    l_inputs = join(corr['labeled']['h'][l-1], corr['unlabeled']['h'][l-1])
+    vat_loss += (params.vat_weight *
+                 denoising_cost[l] *
+                 virtual_adversarial_loss(
+                     l_inputs, logits_corr,
+                     is_training=train_flag, start_layer=l))
+
 ent_loss = params.ent_weight * entropy_y_x(logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
