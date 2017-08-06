@@ -70,6 +70,7 @@ def get_cli_params():
     # weight of vat cost
     parser.add_argument('--vat_weight', default=0, type=float)
     parser.add_argument('--vat_rc', action='store_true')
+    parser.add_argument('--vat_corr', action='store_true')
 
     # weight of entropy minimisation cost
     parser.add_argument('--ent_weight', default=0, type=float)
