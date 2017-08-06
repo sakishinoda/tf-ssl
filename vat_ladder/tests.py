@@ -3,6 +3,7 @@ import numpy as np
 import os
 import IPython
 from conv_ladder import *
+from src import *
 from tensorflow.examples.tutorials.mnist import input_data
 
 def test_copying_by_strided_deconv():
@@ -23,7 +24,6 @@ def test_copying_by_strided_deconv():
         [h_eval, g_eval] = sess.run([h, g], feed_dict={x: x_fill})
         print(x_fill, h_eval, g, sep='\n')
         IPython.embed()
-
 
 def test_cnn_ladder():
     batch_size = 100
@@ -92,6 +92,9 @@ def test_simple_dae(training=True):
                 mean_aer += step_aer
 
             print("Mean AER:", mean_aer/num_steps)
+
+
+# def test_batch_norm():
 
 
 

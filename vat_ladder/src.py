@@ -78,6 +78,8 @@ def get_cli_params():
 
     parser.add_argument('--cnn', action='store_true')
     # arguments for the cnn encoder/decoder
+    parser.add_argument('--cnn_init_size', default=32, type=int)
+
     parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
     parser.add_argument('--lrelu_a', default=0.1, type=float)
     parser.add_argument('--top_bn', action='store_true')
@@ -95,6 +97,25 @@ def process_cli_params(params):
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
     params.encoder_layers = encoder_layers
     params.rc_weights = rc_weights
+
+    if params.cnn:
+        params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
+                                'c', 'c',
+                       'c', 'avg', 'fc')
+        params.cnn_fan = (3, 96, 96, 96, 96, 192, 192, 192, 192, 192, 192, 192,
+                      192, 10)
+        params.cnn_ksizes = (3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, None, None)
+        params.cnn_strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None)
+        params.num_layers = len(params.cnn_fan) - 1
+        # assert len(params.rc_weights) == len(params.cnn_fan) -1
+
+
+    else:
+        params.num_layers = len(params.encoder_layers) - 1
+
+    # NUM_EPOCHS = params.end_epoch
+    # NUM_LABELED = params.num_labeled
+
     return params
 
 def count_trainable_params():
@@ -146,6 +167,5 @@ def wts_init(shape, name):
     # effectively a Xavier initializer
     return tf.Variable(tf.random_normal(shape), name=name) / \
            math.sqrt(shape[0])
-
 
 

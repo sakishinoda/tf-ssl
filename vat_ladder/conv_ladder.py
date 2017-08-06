@@ -16,13 +16,14 @@ import tensorflow as tf
 # parser.add_argument('--batch_size', default=100, type=int)
 # PARAMS = parser.parse_args()
 
-def make_layer_spec(
-    types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'c', 'c', 'c', 'avg', 'fc'),
-    fan = (3, 96, 96, 96, 96, 192, 192, 192, 192, 192, 192, 192, 192, 10),
-    ksizes = (3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, None, None),
-    strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None),
-    init_size = 32
-):
+def make_layer_spec(params):
+    types = params.cnn_layer_types
+    init_size = params.cnn_init_size
+    fan = params.cnn_fan
+    ksizes = params.cnn_ksizes
+    strides = params.cnn_strides
+
+
     dims = [init_size, ] * 4 + [init_size//2, ] * 4 + [init_size//4, ] * 4 + \
            [1,]
     init_dim = fan[0]

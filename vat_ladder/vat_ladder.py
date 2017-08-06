@@ -16,7 +16,8 @@ from conv_ladder import *
 # ENCODERS
 # -----------------------------
 
-def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
+def mlp_encoder(inputs, noise_std, bn, is_training,
+                update_batch_stats=True, layers=None):
     """
     is_training has to be a placeholder TF boolean
     Note: if is_training is false, update_batch_stats is false, since the
@@ -29,7 +30,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
     d['unlabeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
     d['labeled']['z'][0], d['unlabeled']['z'][0] = split_lu(h)
 
-    for l in range(1, NUM_LAYERS+1):
+    for l in range(1, params.num_layers+1):
         print("Layer ", l, ": ", LS[l - 1], " -> ", LS[l])
         d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
         z_pre = tf.matmul(h, weights['W'][l-1])  # pre-activation
@@ -41,7 +42,8 @@ def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
         def training_batch_norm():
             # Training batch normalization
             # batch normalization for labeled and unlabeled examples is performed separately
-            if noise_std > 0:
+            # if noise_std > 0:
+            if not update_batch_stats:
                 # Corrupted encoder
                 # batch normalization + noise
                 z = join(bn.batch_normalization(z_pre_l), bn.batch_normalization(z_pre_u, m, v))
@@ -72,7 +74,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
         z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
         # z = training_batch_norm() if is_training else eval_batch_norm()
 
-        if l == NUM_LAYERS:
+        if l == params.num_layers:
             # use softmax activation in output layer
             h = tf.nn.softmax(weights['gamma'][l-1] * (z + weights["beta"][l-1]))
         else:
@@ -81,7 +83,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training, update_batch_stats=True):
 
         d['labeled']['z'][l], d['unlabeled']['z'][l] = split_lu(z)
         d['unlabeled']['m'][l], d['unlabeled']['v'][l] = m, v  # save mean and variance of unlabeled examples for decoding
-    d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
+        d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
 
     return h, d
 
@@ -106,20 +108,24 @@ def cnn_encoder(x, noise_std, bn, is_training,
     }
 
     if layers is None:
-        layers = make_layer_spec()
+        layers = make_layer_spec(params)
+
+    def split_moments(z_pre):
+        z_pre_l, z_pre_u = split_lu(z_pre)
+        # bn_axes = [0, 1, 2] if params.cnn else [0]
+        bn_axes = list(range(len(z_pre.get_shape().as_list())-1))
+        m_u, v_u = tf.nn.moments(z_pre_u, axes=bn_axes)
+        return m_u, v_u, z_pre_l, z_pre_u
 
     def split_bn(z_pre, is_training, noise_std=0.0):
-        z_pre_l, z_pre_u = split_lu(z_pre)
-        m_u, v_u = tf.nn.moments(z_pre_u, axes=[0])
-
-        # save mean and variance of unlabeled examples for decoding
-        d['unlabeled']['m'][l], d['unlabeled']['v'][l] = m_u, v_u
-
+        m_u, v_u, z_pre_l, z_pre_u = split_moments(z_pre)
         # if is_training:
         def training_batch_norm():
             # Training batch normalization
             # batch normalization for labeled and unlabeled examples is performed separately
-            if noise_std > 0:
+            # if noise_std > 0:
+            if not update_batch_stats:
+                assert noise_std > 0
                 # Corrupted encoder
                 # batch normalization + noise
                 bn_l = bn.batch_normalization(z_pre_l)
@@ -136,75 +142,88 @@ def cnn_encoder(x, noise_std, bn, is_training,
             return z
 
         def eval_batch_norm():
-            mean = bn.ewma.average(bn.running_mean[l - 1])
-            var = bn.ewma.average(bn.running_var[l - 1])
+            mean = bn.ewma.average(bn.running_mean[l-1])
+            var = bn.ewma.average(bn.running_var[l-1])
             z = bn.batch_normalization(z_pre, mean, var)
             return z
 
         z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
 
+        return z, m_u, v_u
 
-        return z
 
-    with tf.variable_scope('enc'):
-        for l in range(len(layers.keys())):
-            print("Layer ", l, ": ", layers[l]['f_in'], " -> ", layers[l][
-                'f_out'])
-            d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
+    for l in range(1, params.num_layers+1):
 
-            if layers[l]['type'] == 'c':
-                h = conv(h,
-                             ksize=layers[l]['ksize'],
-                             stride=1,
-                             f_in=layers[l]['f_in'],
-                             f_out=layers[l]['f_out'],
-                             seed=None, name='c' + str(l))
-                h = split_bn(h, is_training=is_training, noise_std=noise_std)
-                h = lrelu(h, params.lrelu_a)
+        print("Layer {}: {} -> {}".format(
+            l, layers[l-1]['f_in'], layers[l-1]['f_out']))
 
-            elif layers[l]['type'] == 'max':
-                h = max_pool(h,
-                             ksize=layers[l]['ksize'],
-                             stride=layers[l]['stride'])
-                h = split_bn(h, is_training=is_training, noise_std=noise_std)
+        d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
 
-            elif layers[l]['type'] == 'avg':
-                # Global average poolingg
-                h = tf.reduce_mean(h, reduction_indices=[1, 2])
+        if layers[l-1]['type'] == 'c':
+            h = conv(h,
+                     ksize=layers[l-1]['ksize'],
+                     stride=1,
+                     f_in=layers[l-1]['f_in'],
+                     f_out=layers[l-1]['f_out'],
+                     seed=None, name='c' + str(l-1))
+            h, m, v = split_bn(h, is_training=is_training, noise_std=noise_std)
+            h = lrelu(h, params.lrelu_a)
 
-            elif layers[l]['type'] == 'fc':
-                h = fc(h, layers[l]['f_in'],
-                       layers[l]['f_out'],
-                       seed=None,
-                       name='fc')
-                if params.top_bn:
-                    h = split_bn(h, is_training=is_training, noise_std=noise_std)
-                        # bn(h, 10, is_training=is_training,
-                        #    update_batch_stats=update_batch_stats,
-                        #    name='b'+str(l))
+        elif layers[l-1]['type'] == 'max':
+            h = max_pool(h,
+                         ksize=layers[l-1]['ksize'],
+                         stride=layers[l-1]['stride'])
+            h, m, v = split_bn(h, is_training=is_training, noise_std=noise_std)
+
+        elif layers[l-1]['type'] == 'avg':
+            # Global average poolingg
+            h = tf.reduce_mean(h, reduction_indices=[1, 2])
+            m, v, _, _ = split_moments(h)
+
+        elif layers[l-1]['type'] == 'fc':
+            h = fc(h, layers[l-1]['f_in'],
+                   layers[l-1]['f_out'],
+                   seed=None,
+                   name='fc')
+            if params.top_bn:
+                h, m, v = split_bn(h, is_training=is_training,
+                                 noise_std=noise_std)
             else:
-                print('Layer type not defined')
+                m, v, _, _ = split_moments(h)
+        else:
+            print('Layer type not defined')
+            m, v, _, _ = split_moments(h)
 
-            print(l, h.get_shape())
+        print(l, h.get_shape())
+        d['labeled']['z'][l], d['unlabeled']['z'][l] = split_lu(h)
+        # save mean and variance of unlabeled examples for decoding
+        d['unlabeled']['m'][l], d['unlabeled']['v'][l] = m, v
 
-    return h
+    d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
+
+    return h, d
 
 
 # -----------------------------
 # DECODERS
 # -----------------------------
 
-def mlp_decoder(clean, corr, logits_corr, bn, combinator):
+def mlp_decoder(clean, corr, logits_corr, bn, combinator,
+                is_training,
+                params,
+                update_batch_stats=False,
+                layers=None
+                ):
     z_est = {}
     d_cost = []  # to store the denoising cost of all layers
-    for l in range(NUM_LAYERS, -1, -1):
+    for l in range(params.num_layers, -1, -1):
         print("Layer ", l, ": ", LS[l + 1] if l + 1 < len(LS) else
         None, " -> ", LS[l], ", denoising cost: ", denoising_cost[l])
 
         z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
         m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1 - 1e-10)
         # print(l)
-        if l == NUM_LAYERS:
+        if l == params.num_layers:
             u = unlabeled(logits_corr)
         else:
             u = tf.matmul(z_est[l+1], weights['V'][l])
@@ -221,93 +240,151 @@ def mlp_decoder(clean, corr, logits_corr, bn, combinator):
 
 
 def cnn_decoder(clean, corr, logits_corr, bn, combinator,
-                is_training,
-                update_batch_stats=False,
-                layers=None):
-    """
-    Starts from logit (x has dim 10)
+                 is_training,
+                 params,
+                 update_batch_stats=False,
+                 layers=None):
+        """
+        Starts from logit (x has dim 10)
 
-    """
+        """
 
-    # init_size = 28  # MNIST
-    # init_size = 32  # CIFAR-10
-    if layers is None:
-        layers = make_layer_spec()
+        # init_size = 28  # MNIST
+        # init_size = 32  # CIFAR-10
 
-    def deconv_bn_lrelu(h, l):
-        """Inherits layers, PARAMS, is_training, update_batch_stats from outer environment."""
-        h = deconv(h, ksize=layers[l]['ksize'], stride=layers[l]['stride'],
-                   f_in=layers[l]["f_out"], f_out=layers[l]["f_in"],
-                   name=layers[l]['type'] + str(l))
+        z_est = {}
+        d_cost = []
 
-        h = bn(h, layers[l]["f_in"], is_training=is_training,
-               update_batch_stats=update_batch_stats, name='b' + str(l))
+        if layers is None:
+            layers = make_layer_spec(params)
 
-        h = lrelu(h, PARAMS.lrelu_a)
-        return h
+        def deconv_bn_lrelu(h, l):
+            """Inherits layers, PARAMS, is_training, update_batch_stats from outer environment."""
+            h = deconv(h, ksize=layers[l]['ksize'], stride=layers[l]['stride'],
+                       f_in=layers[l]["f_out"], f_out=layers[l]["f_in"],
+                       name=layers[l]['type'] + str(l))
 
-    def depool(h):
-        """Deconvolution with a filter of ones and stride 2 upsamples with
-        copying to double the size."""
-        output_shape = h.get_shape().as_list()
-        output_shape[1] *= 2
-        output_shape[2] *= 2
-        c = output_shape[-1]
-        h = tf.nn.conv2d_transpose(
-            h,
-            filter=tf.ones([2, 2, c, c]),
-            output_shape=output_shape,
-            padding='SAME',
-            strides=[1, 2, 2, 1],
-            data_format='NHWC'
-        )
-        return h
+            h = bn(h, layers[l]["f_in"], is_training=is_training,
+                   update_batch_stats=update_batch_stats, name='b' + str(l))
 
-    z_est = {}
-    d_cost = []
+            h = lrelu(h, params.lrelu_a)
+            return h
 
-    with tf.variable_scope('dec'):
+        def depool(h):
+            """Deconvolution with a filter of ones and stride 2 upsamples with
+            copying to double the size."""
+            output_shape = h.get_shape().as_list()
+            output_shape[1] *= 2
+            output_shape[2] *= 2
+            c = output_shape[-1]
+            h = tf.nn.conv2d_transpose(
+                h,
+                filter=tf.ones([2, 2, c, c]),
+                output_shape=output_shape,
+                padding='SAME',
+                strides=[1, 2, 2, 1],
+                data_format='NHWC'
+            )
+            return h
+
+
         # 10: fc
         # Dense batch x 10 -> batch x 192
-        for l in range(NUM_LAYERS, -1, -1):
+        for l in range(params.num_layers, -1, -1):
+            IPython.embed()
+            # l = k-1
+            # IPython.embed()
+
             print("Layer {}: {} -> {}, denoising cost: {}".format(
-                l, LS[l+1] if l+1<len(LS) else None, LS[l], denoising_cost[l]
+                l, LS[l+1] if l+1<len(LS) else None,
+                LS[l], denoising_cost[l]
             ))
 
             z, z_c = clean['unlabeled']['z'][l], corr['unlabeled']['z'][l]
             m, v = clean['unlabeled']['m'].get(l, 0), clean['unlabeled']['v'].get(l, 1-1e-10)
 
-            type_ = layers[l]['type']
-            if l == NUM_LAYERS:
+            type_ = layers[l-1]['type']
+            print(type_)
+            if l == params.num_layers:
                 h = unlabeled(logits_corr)
             elif type_ == 'fc':
-                h = fc(h, dim_in=layers[l]["f_out"], dim_out=layers[l]["f_in"],
-                       seed=None, name=layers[l]['type'] + str(l))
+                h = fc(h, dim_in=layers[l-1]["f_out"], dim_out=layers[l-1]["f_in"],
+                       seed=None, name=layers[l-1]['type'] + str(l))
             elif type_ == 'avg':
                 # De-global mean pool with copying:
                 # batch x 1 x 1 x 192 -> batch x 8 x 8 x 192
-                h = tf.reshape(h, [-1, 1, 1, layers[l]["f_out"]])
-                h = tf.tile(h, [1, layers[l]['dim'], layers[l]['dim'], 1])
+                h = tf.reshape(h, [-1, 1, 1, layers[l-1]["f_out"]])
+                h = tf.tile(h, [1, layers[l-1]['dim'], layers[l-1]['dim'], 1])
             elif type_ == 'c':
                 # Deconv
                 h = deconv_bn_lrelu(h, l)
             elif type_ == 'max':
                 # De-max-pool
                 h = depool(h)
-                h = bn(h, dim=layers[l]["f_out"], is_training=is_training,
-                       update_batch_stats=update_batch_stats,
-                       name=layers[l]['type'] + str(l))
+
             else:
                 print('Layer type not defined')
-            IPython.embed()
+
             h = bn.batch_normalization(h)
             z_est[l] = combinator(z_c, h, LS[l])
             z_est_bn = (z_est[l] - m) / v
 
             d_cost.append((tf.reduce_mean(tf.reduce_sum(tf.square(z_est_bn - z), 1)) / LS[l]) * denoising_cost[l])
 
-    return z_est, d_cost
+        return z_est, d_cost
 
+
+
+# -----------------------------
+# BATCH NORMALIZATION SETUP
+# -----------------------------
+class BatchNormLayers(object):
+    def __init__(self, ls, params, scope='bn'):
+        self.params = params
+        self.bn_assigns = []  # this list stores the updates to be made to average mean and variance
+        self.ewma = tf.train.ExponentialMovingAverage(
+            decay=0.99)  # to calculate the moving averages of mean and variance
+
+        # average mean and variance of all layers
+        with tf.variable_scope(scope):
+            self.running_var = [tf.get_variable(
+                'v'+str(i),
+                initializer=tf.constant(1.0, shape=[l]),
+                trainable=False) for i,l in enumerate(ls[1:])]
+            self.running_mean = [tf.get_variable(
+                'm'+str(i),
+                initializer=tf.constant(0.0, shape=[l]),
+                trainable=False) for i,l in enumerate(ls[1:])]
+
+    def update_batch_normalization(self, batch, l):
+        """
+        batch normalize + update average mean and variance of layer l
+        if CNN, use channel-wise batch norm
+        """
+
+        # bn_axes = [0, 1, 2] if self.params.cnn else [0]
+        bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        mean, var = tf.nn.moments(batch, axes=bn_axes)
+        print(l, mean.get_shape().as_list(),
+              self.running_mean[l-1].get_shape().as_list(),
+              batch.get_shape().as_list())
+        # print(mean.get_shape(), var.get_shape())
+        # IPython.embed()
+        assign_mean = self.running_mean[l-1].assign(mean)
+        assign_var = self.running_var[l-1].assign(var)
+        self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
+
+        with tf.control_dependencies([assign_mean, assign_var]):
+            return (batch - mean) / tf.sqrt(var + 1e-10)
+
+
+    def batch_normalization(self, batch, mean=None, var=None):
+        # bn_axes = [0, 1, 2] if self.params.cnn else [0]
+        bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        if mean is None or var is None:
+            mean, var = tf.nn.moments(batch, axes=bn_axes)
+        print(mean.get_shape().as_list(), batch.get_shape().as_list())
+        return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
 
 # -----------------------------
 # RECOMBINATION FUNCTIONS
@@ -350,40 +427,6 @@ def gauss_combinator(z_c, u, size):
     z_est = (z_c - mu) * v + mu
     return z_est
 
-# -----------------------------
-# BATCH NORMALIZATION SETUP
-# -----------------------------
-class BatchNormLayers(object):
-    def __init__(self, ls, scope='bn'):
-        self.bn_assigns = []  # this list stores the updates to be made to average mean and variance
-        self.ewma = tf.train.ExponentialMovingAverage(
-            decay=0.99)  # to calculate the moving averages of mean and variance
-
-        # average mean and variance of all layers
-        with tf.variable_scope(scope):
-            self.running_var = [tf.get_variable(
-                'v'+str(i),
-                initializer=tf.constant(1.0, shape=[l]),
-                trainable=False) for i,l in enumerate(ls[1:])]
-            self.running_mean = [tf.get_variable(
-                'm'+str(i),
-                initializer=tf.constant(0.0, shape=[l]),
-                trainable=False) for i,l in enumerate(ls[1:])]
-
-    def update_batch_normalization(self, batch, l):
-        "batch normalize + update average mean and variance of layer l"
-        mean, var = tf.nn.moments(batch, axes=[0])
-        assign_mean = self.running_mean[l-1].assign(mean)
-        assign_var = self.running_var[l-1].assign(var)
-        self.bn_assigns.append(self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
-        with tf.control_dependencies([assign_mean, assign_var]):
-            return (batch - mean) / tf.sqrt(var + 1e-10)
-
-    @staticmethod
-    def batch_normalization(batch, mean=None, var=None):
-        if mean is None or var is None:
-            mean, var = tf.nn.moments(batch, axes=[0])
-        return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
 
 # -----------------------------
 # VAT FUNCTIONS
@@ -408,14 +451,14 @@ def forward(x, is_training, update_batch_stats=False, seed=1234):
 
     def training_logit():
         print("=== VAT Clean Pass === ")
-        logit, _ = encoder(x, 0.0,
+        logit, _ = encoder(x, 0.0, bn,
                           is_training=is_training,
                           update_batch_stats=update_batch_stats)
         return logit
 
     def testing_logit():
         print("=== VAT Corrupted Pass ===")
-        logit, _ = encoder(x, params.encoder_noise_sd,
+        logit, _ = encoder(x, params.encoder_noise_sd, bn,
                            is_training=is_training,
                            update_batch_stats=update_batch_stats)
         return logit
@@ -454,6 +497,8 @@ def virtual_adversarial_loss(x, logit, is_training, name="vat_loss"):
     loss = kl_divergence_with_logit(logit_p, logit_m)
     return tf.identity(loss, name=name)
 
+
+# def main():
 # -----------------------------
 # PARAMETER PARSING
 # -----------------------------
@@ -468,20 +513,8 @@ os.environ["CUDA_VISIBLE_DEVICES"]=str(params.which_gpu)
 np.random.seed(params.seed)
 tf.set_random_seed(params.seed)
 
-# Set layer sizes for encoders
-if params.cnn:
-    layers = make_layer_spec()
-    LS = layers['fan']
-else:
-    LS = params.encoder_layers
-
-NUM_LAYERS = len(LS) - 1  # number of layers
-
-NUM_EPOCHS = params.end_epoch
-NUM_LABELED = params.num_labeled
-
 print("===  Loading Data ===")
-mnist = input_data.read_data_sets("MNIST_data", n_labeled=NUM_LABELED, one_hot=True)
+mnist = input_data.read_data_sets("MNIST_data", n_labeled=params.num_labeled, one_hot=True)
 num_examples = mnist.train.num_examples
 
 starter_learning_rate = params.initial_learning_rate
@@ -489,26 +522,39 @@ starter_learning_rate = params.initial_learning_rate
 # epoch after which to begin learning rate decay
 decay_after = params.decay_start_epoch
 batch_size = params.batch_size
-num_iter = (num_examples//batch_size) * NUM_EPOCHS  # number of loop iterations
+num_iter = (num_examples//batch_size) * params.end_epoch  # number of loop iterations
 
 # -----------------------------
 # LADDER SETUP
 # -----------------------------
+
+# Set layer sizes for encoders
+# Choose encoder/decoder
+# Make appropriately sized placeholder
+if params.cnn:
+    encoder, decoder = cnn_encoder,  cnn_decoder
+    layers = make_layer_spec(params)
+    LS = params.cnn_fan
+else:
+    encoder = mlp_encoder
+    decoder = mlp_decoder
+    layers = None
+    LS = params.encoder_layers
+    shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
+
 inputs_ph = tf.placeholder(tf.float32, shape=(None, LS[0]))
 outputs = tf.placeholder(tf.float32)
 
-weights = {# batch normalization parameter to shift the normalized value
-           'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)],
-           # batch normalization parameter to scale the normalized value
-           'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(NUM_LAYERS)]}
+inputs = tf.reshape(inputs_ph, shape=[
+        -1, params.cnn_init_size, params.cnn_init_size, params.cnn_fan[0]
+    ]) if params.cnn else inputs_ph
 
-if params.cnn:
-    inputs = tf.reshape(inputs_ph, shape=[
-        -1, layers['init_size'], layers['init_size'], layers['fan'][0]
-    ])
-else:
-    inputs = inputs_ph
-    shapes = list(zip(LS[:-1], LS[1:]))  # shapes of linear layers
+weights = {# batch normalization parameter to shift the normalized value
+           'beta': [bias_init(0.0, LS[l + 1], "beta") for l in range(params.num_layers)],
+           # batch normalization parameter to scale the normalized value
+           'gamma': [bias_init(1.0, LS[l + 1], "beta") for l in range(params.num_layers)]}
+
+if not params.cnn:
     weights.update({
         'W': [wts_init(s, "W") for s in shapes],  # Encoder weights
         'V': [wts_init(s[::-1], "V") for s in shapes],  # Decoder weights
@@ -518,29 +564,33 @@ else:
 noise_std = params.encoder_noise_sd
 
 # hyperparameters that denote the importance of each layer
-denoising_cost = params.rc_weights
+denoising_cost = params.rc_weights if not params.cnn else ([1.,] * len(LS))
 
 # Lambdas for extracting labeled/unlabeled, etc.
 join = lambda l, u: tf.concat([l, u], 0)
-labeled = lambda x: tf.slice(x, [0, 0], [batch_size, -1]) if x is not None else x
-unlabeled = lambda x: tf.slice(x, [batch_size, 0], [-1, -1]) if x is not None else x
 split_lu = lambda x: (labeled(x), unlabeled(x))
+labeled = lambda x: x[:batch_size] if x is not None else x
+unlabeled = lambda x: x[batch_size:] if x is not None else x
+# labeled = lambda x: tf.slice(x, [0, 0], [batch_size, -1]) if x is not None else x
+# unlabeled = lambda x: tf.slice(x, [batch_size, 0], [-1, -1]) if x is not None else x
 
 # Boolean training flag
 train_flag = tf.placeholder(tf.bool)
 
 # Set up Batch Norm
-bn = BatchNormLayers(LS)
-
-# Choose encoder/decoder
-encoder = cnn_encoder
-decoder = cnn_decoder
-
-print( "=== Corrupted Encoder === ")
-logits_corr, corr = encoder(inputs, noise_std, bn, is_training=train_flag, update_batch_stats=False)
+bn = BatchNormLayers(LS, params)
 
 print( "=== Clean Encoder ===")
-logits_clean, clean = encoder(inputs, 0.0, bn, is_training=train_flag, update_batch_stats=True)  # 0.0 -> do not add noise
+with tf.variable_scope('enc', reuse=None):
+    logits_clean, clean = encoder(inputs, 0.0, bn, is_training=train_flag,
+                                  update_batch_stats=True, layers=layers)
+
+print( "=== Corrupted Encoder === ")
+with tf.variable_scope('enc', reuse=True):
+    logits_corr, corr = encoder(inputs, noise_std, bn, is_training=train_flag,
+                                update_batch_stats=False, layers=layers)
+
+#  add noise
 
 # -----------------------------
 # DECODER
@@ -550,7 +600,9 @@ combinator = gauss_combinator
 
 # IPython.embed()
 print( "=== Decoder ===")
-z_est, d_cost = decoder(clean, corr, logits_corr, bn, combinator)
+with tf.variable_scope('dec', reuse=None):
+    z_est, d_cost = decoder(clean, corr, logits_corr, bn, combinator,
+                            is_training=train_flag, params=params)
 
 # -----------------------------
 # PUTTING IT ALL TOGETHER
@@ -649,14 +701,14 @@ for i in tqdm(range(i_iter, num_iter)):
         feed_dict={inputs_ph: images, outputs: labels, train_flag: True})
 
 
-    if (i > 1) and ((i+1) % (num_iter//NUM_EPOCHS) == 0):
+    if (i > 1) and ((i+1) % (num_iter//params.end_epoch) == 0):
         now = time.time() - start
         epoch_n = i//(num_examples//batch_size)
         if (epoch_n+1) >= decay_after:
             # decay learning rate
             # learning_rate = starter_learning_rate * ((num_epochs - epoch_n) / (num_epochs - decay_after))
-            ratio = 1.0 * (NUM_EPOCHS - (epoch_n + 1))  # epoch_n + 1 because learning rate is set for next epoch
-            ratio = max(0., ratio / (NUM_EPOCHS - decay_after))
+            ratio = 1.0 * (params.end_epoch - (epoch_n + 1))  # epoch_n + 1 because learning rate is set for next epoch
+            ratio = max(0., ratio / (params.end_epoch - decay_after))
             sess.run(learning_rate.assign(starter_learning_rate * ratio))
         saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
         # print "Epoch ", epoch_n, ", Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False}), "%"
@@ -679,3 +731,7 @@ print("Final Accuracy: ", sess.run(accuracy, feed_dict={
       "%")
 
 sess.close()
+
+
+# if __name__ == '__main__':
+#     main()
