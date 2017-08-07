@@ -16,83 +16,6 @@ from conv_ladder import *
 # ENCODERS
 # -----------------------------
 
-def vat_corrupter(inputs, noise_std, bn, is_training,
-                update_batch_stats=True, layers=None, start_layer=1,
-                  clean_logits=None):
-    """
-    is_training has to be a placeholder TF boolean
-    Note: if is_training is false, update_batch_stats is false, since the
-    update is only called in the training setting
-    """
-    r_vadv = generate_virtual_adversarial_perturbation(
-        inputs, clean_logits, is_training=is_training, start_layer=0)
-
-    h = inputs + r_vadv  # add noise to input
-    d = {}  # to store the pre-activation, activation, mean and variance for each layer
-    # The data for labeled and unlabeled examples are stored separately
-    d['labeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
-    d['unlabeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
-    d['labeled']['z'][0], d['unlabeled']['z'][0] = split_lu(h)
-
-    for l in range(start_layer, params.num_layers+1):
-        print("Layer ", l, ": ", LS[l - 1], " -> ", LS[l])
-        d['labeled']['h'][l-1], d['unlabeled']['h'][l-1] = split_lu(h)
-        z_pre = tf.matmul(h, weights['W'][l-1])  # pre-activation
-        z_pre_l, z_pre_u = split_lu(z_pre)  # split labeled and unlabeled examples
-
-        m, v = tf.nn.moments(z_pre_u, axes=[0])
-
-        # if training:
-        def training_batch_norm():
-            # Training batch normalization
-            # batch normalization for labeled and unlabeled examples is performed separately
-            # if noise_std > 0:
-            if not update_batch_stats:
-                # Corrupted encoder
-                # batch normalization + noise
-                z = join(bn.batch_normalization(z_pre_l), bn.batch_normalization(z_pre_u, m, v))
-                z += generate_virtual_adversarial_perturbation(
-                    z_pre, clean_logits, is_training=is_training, start_layer=l)
-            else:
-                # Clean encoder
-                # batch normalization + update the average mean and variance using batch mean and variance of labeled examples
-                bn_l = bn.update_batch_normalization(z_pre_l, l) if \
-                    update_batch_stats else bn.batch_normalization(z_pre_l)
-                bn_u = bn.batch_normalization(z_pre_u, m, v)
-                z = join(bn_l, bn_u)
-            return z
-
-        # else:
-        def eval_batch_norm():
-            # Evaluation batch normalization
-            # obtain average mean and variance and use it to normalize the batch
-            mean = bn.ewma.average(bn.running_mean[l-1])
-            var = bn.ewma.average(bn.running_var[l-1])
-            z = bn.batch_normalization(z_pre, mean, var)
-            # Instead of the above statement, the use of the following 2 statements containing a typo
-            # consistently produces a 0.2% higher accuracy for unclear reasons.
-            # m_l, v_l = tf.nn.moments(z_pre_l, axes=[0])
-            # z = join(batch_normalization(z_pre_l, m_l, mean, var), batch_normalization(z_pre_u, mean, var))
-            return z
-
-        # perform batch normalization according to value of boolean "training" placeholder:
-        z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
-        # z = training_batch_norm() if is_training else eval_batch_norm()
-
-        if l == params.num_layers:
-            # use softmax activation in output layer
-            h = tf.nn.softmax(weights['gamma'][l-1] * (z + weights["beta"][l-1]))
-        else:
-            # use ReLU activation in hidden layers
-            h = tf.nn.relu(z + weights["beta"][l-1])
-
-        d['labeled']['z'][l], d['unlabeled']['z'][l] = split_lu(z)
-        d['unlabeled']['m'][l], d['unlabeled']['v'][l] = m, v  # save mean and variance of unlabeled examples for decoding
-        d['labeled']['h'][l], d['unlabeled']['h'][l] = split_lu(h)
-
-    return h, d
-
-
 def mlp_encoder(inputs, noise_std, bn, is_training,
                 update_batch_stats=True, layers=None, start_layer=1,
                 corrupt=None,
@@ -102,7 +25,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
     Note: if is_training is false, update_batch_stats is false, since the
     update is only called in the training setting
     """
-    def generate_noise(start_layer):
+    def generate_noise(inputs, start_layer):
         if corrupt == 'vatgauss':
             noise = generate_virtual_adversarial_perturbation(
                 inputs, clean_logits, is_training=is_training,
@@ -118,7 +41,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
             noise = tf.zeros(tf.shape(inputs))
         return noise
 
-    h = inputs + generate_noise(1) # add noise to input
+    h = inputs + generate_noise(inputs, 1) # add noise to input
     d = {}  # to store the pre-activation, activation, mean and variance for each layer
     # The data for labeled and unlabeled examples are stored separately
     d['labeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
@@ -142,7 +65,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
                 # Corrupted encoder
                 # batch normalization + noise
                 z = join(bn.batch_normalization(z_pre_l), bn.batch_normalization(z_pre_u, m, v))
-                noise = generate_noise(l+1)
+                noise = generate_noise(z_pre, l+1)
                 z += noise
             else:
                 # Clean encoder
