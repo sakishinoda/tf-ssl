@@ -771,7 +771,7 @@ ckpt = tf.train.get_checkpoint_state(ckpt_dir)  # get latest checkpoint (if any)
 if ckpt and ckpt.model_checkpoint_path:
     # if checkpoint exists, restore the parameters and set epoch_n and i_iter
     saver.restore(sess, ckpt.model_checkpoint_path)
-    epoch_n = int(ckpt.model_checkpoint_path.split('-')[1])
+    epoch_n = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
     i_iter = (epoch_n+1) * (num_examples//batch_size)
     print("Restored Epoch ", epoch_n)
 else:
