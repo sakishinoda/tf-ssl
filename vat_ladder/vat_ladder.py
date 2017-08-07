@@ -716,11 +716,9 @@ with tf.variable_scope('dec', reuse=None):
 # ul_x = unlabeled(inputs)
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-if params.vat_weight > 0.0:
-    vat_loss = params.vat_weight * virtual_adversarial_loss(
+
+vat_loss = params.vat_weight * virtual_adversarial_loss(
             inputs, logits_corr, is_training=train_flag)
-else:
-    vat_loss = 0.0
 
 if params.vat_rc:
     for l in range(1, params.num_layers):
@@ -732,8 +730,7 @@ if params.vat_rc:
                          is_training=train_flag, start_layer=l))
 
 
-ent_loss = params.ent_weight * entropy_y_x(logits_corr) if params.ent_weight \
-                                                           > 0.0 else 0.0
+ent_loss = params.ent_weight * entropy_y_x(logits_corr)
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
