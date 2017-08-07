@@ -19,6 +19,7 @@ def get_cli_params():
     # parser.add_argument('--train_flag', action='store_true')
     parser.add_argument('--decay_start_epoch', default=100, type=int)
     parser.add_argument('--end_epoch', default=150, type=int)
+    parser.add_argument('--test_frequency_in_epochs', default=1, type=int)
     # parser.add_argument('--print_interval', default=50, type=int)
     # parser.add_argument('--save_epochs', default=None, type=float)
     parser.add_argument('--num_labeled', default=100, type=int)

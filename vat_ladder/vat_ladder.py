@@ -823,7 +823,8 @@ for i in range(i_iter, num_iter):
         feed_dict={inputs_ph: images, outputs: labels, train_flag: True})
 
 
-    if (i > 1) and ((i+1) % (num_iter//params.end_epoch) == 0):
+    if (i > 1) and ((i+1) % (params.test_frequency_in_epochs*(
+                num_iter//params.end_epoch)) == 0):
         now = time.time() - start
         epoch_n = i//(num_examples//batch_size)
         if (epoch_n+1) >= decay_after:
@@ -843,7 +844,7 @@ for i in range(i_iter, num_iter):
                 feed_dict={inputs_ph: mnist.test.images,
                            outputs: mnist.test.labels, train_flag: False}
             ) + sess.run(
-                [loss, cost, u_cost, vat_loss, ent_loss],
+                [accuracy, loss, cost, u_cost, vat_loss, ent_loss],
                 feed_dict={inputs_ph: images, outputs: labels, train_flag:
                     True})
             # train_log_w.writerow(log_i)
