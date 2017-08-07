@@ -131,7 +131,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
                 z = join(bn.batch_normalization(z_pre_l), bn.batch_normalization(z_pre_u, m, v))
                 noise = generate_virtual_adversarial_perturbation(
                     z_pre, clean_logits, is_training=is_training,
-                    start_layer=l) if corrupt_with_vat else tf.random_normal(
+                    start_layer=l+1) if corrupt_with_vat else tf.random_normal(
                     tf.shape(z_pre)) * noise_std
                 z += noise
             else:
@@ -716,8 +716,11 @@ with tf.variable_scope('dec', reuse=None):
 # ul_x = unlabeled(inputs)
 # ul_logit = unlabeled(logits_corr)
 # ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-vat_loss = params.vat_weight * virtual_adversarial_loss(
-        inputs, logits_corr, is_training=train_flag)
+if params.vat_weight > 0.0:
+    vat_loss = params.vat_weight * virtual_adversarial_loss(
+            inputs, logits_corr, is_training=train_flag)
+else:
+    vat_loss = 0.0
 
 if params.vat_rc:
     for l in range(1, params.num_layers):
@@ -728,7 +731,9 @@ if params.vat_rc:
                          l_inputs, logits_corr,
                          is_training=train_flag, start_layer=l))
 
-ent_loss = params.ent_weight * entropy_y_x(logits_corr)
+
+ent_loss = params.ent_weight * entropy_y_x(logits_corr) if params.ent_weight \
+                                                           > 0.0 else 0.0
 
 # calculate total unsupervised cost by adding the denoising cost of all layers
 u_cost = tf.add_n(d_cost)
