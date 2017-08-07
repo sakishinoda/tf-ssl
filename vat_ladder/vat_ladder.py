@@ -95,17 +95,30 @@ def vat_corrupter(inputs, noise_std, bn, is_training,
 
 def mlp_encoder(inputs, noise_std, bn, is_training,
                 update_batch_stats=True, layers=None, start_layer=1,
-                corrupt_with_vat=False, clean_logits=None):
+                corrupt=None,
+                clean_logits=None):
     """
     is_training has to be a placeholder TF boolean
     Note: if is_training is false, update_batch_stats is false, since the
     update is only called in the training setting
     """
-    noise = generate_virtual_adversarial_perturbation(
-        inputs, clean_logits, is_training=is_training, start_layer=1) if \
-        corrupt_with_vat else tf.random_normal(tf.shape(inputs)) * noise_std
+    def generate_noise(start_layer):
+        if corrupt == 'vatgauss':
+            noise = generate_virtual_adversarial_perturbation(
+                inputs, clean_logits, is_training=is_training,
+                start_layer=start_layer) + \
+                tf.random_normal(tf.shape(inputs)) * noise_std
+        elif corrupt == 'vat':
+            noise = generate_virtual_adversarial_perturbation(
+                inputs, clean_logits, is_training=is_training,
+                start_layer=start_layer)
+        elif corrupt == 'gauss':
+            noise = tf.random_normal(tf.shape(inputs)) * noise_std
+        else:
+            noise = tf.zeros(tf.shape(inputs))
+        return noise
 
-    h = inputs + noise # add noise to input
+    h = inputs + generate_noise(1) # add noise to input
     d = {}  # to store the pre-activation, activation, mean and variance for each layer
     # The data for labeled and unlabeled examples are stored separately
     d['labeled'] = {'z': {}, 'm': {}, 'v': {}, 'h': {}}
@@ -129,10 +142,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
                 # Corrupted encoder
                 # batch normalization + noise
                 z = join(bn.batch_normalization(z_pre_l), bn.batch_normalization(z_pre_u, m, v))
-                noise = generate_virtual_adversarial_perturbation(
-                    z_pre, clean_logits, is_training=is_training,
-                    start_layer=l+1) if corrupt_with_vat else tf.random_normal(
-                    tf.shape(z_pre)) * noise_std
+                noise = generate_noise(l+1)
                 z += noise
             else:
                 # Clean encoder
@@ -680,21 +690,15 @@ bn = BatchNormLayers(LS, params)
 print( "=== Clean Encoder ===")
 with tf.variable_scope('enc', reuse=None):
     logits_clean, clean = encoder(inputs, 0.0, bn, is_training=train_flag,
-                                  update_batch_stats=True, layers=layers)
+                                  update_batch_stats=True, layers=layers,
+                                  corrupt=None)
 
 print( "=== Corrupted Encoder === ")
 with tf.variable_scope('enc', reuse=True):
-    if params.vat_corr:
-        logits_corr, corr = encoder(inputs, noise_std, bn, is_training=train_flag,
+    logits_corr, corr = encoder(inputs, noise_std, bn, is_training=train_flag,
                                 update_batch_stats=False, layers=layers,
-                                corrupt_with_vat=True, clean_logits=logits_clean)
-    else:
-        logits_corr, corr = encoder(inputs, noise_std, bn,
-                                    is_training=train_flag,
-                                    update_batch_stats=False, layers=layers,
-                                    corrupt_with_vat=False,
-                                    clean_logits=None)
-
+                                corrupt=params.corrupt,
+                                clean_logits=logits_clean)
 #  add noise
 
 # -----------------------------
