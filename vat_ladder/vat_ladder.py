@@ -844,7 +844,7 @@ for i in range(i_iter, num_iter):
                 feed_dict={inputs_ph: mnist.test.images,
                            outputs: mnist.test.labels, train_flag: False}
             ) + sess.run(
-                [accuracy, loss, cost, u_cost, vat_loss, ent_loss],
+                [loss, cost, u_cost, vat_loss, ent_loss],
                 feed_dict={inputs_ph: images, outputs: labels, train_flag:
                     True})
             # train_log_w.writerow(log_i)

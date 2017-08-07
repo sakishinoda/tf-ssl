@@ -52,22 +52,39 @@ nohup python vat_ladder.py --id "GaussVatEntMin_seed-1" --rc_weights 1000.0-10.0
 
 # GaussVatRC
 nohup python vat_ladder.py --id "GaussVatRC_seed-1" --description "VAT for every reconstruction activation (at each layer in encoder/decoder): Gauss combinator full MLP ladder with VAT cost at each level, weighted by the same RC weights as the regular reconstruction, and includes top level VAT weight, no entropy term" --vat_weight 1.0 --ent_weight 0.0 --which_gpu 0 --vat_rc --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
+
 nohup python vat_ladder.py --id "GaussVatRC_seed-100" --seed 100 --vat_weight 1.0 --ent_weight 0.0 --which_gpu 1 --vat_rc --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
+
 nohup python vat_ladder.py --id "GaussVatRC_seed-1111" --seed 1111 --vat_weight 1.0 --ent_weight 0.0 --which_gpu 2 --vat_rc --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
 
-
-
 nohup python /home/sshinoda/tf-ssl/vat_ladder/vat_ladder.py --id "GaussVatRC_seed-11" --seed 11 --vat_weight 1.0 --ent_weight 0.0 --which_gpu 0 --vat_rc --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
+
 nohup python /home/sshinoda/tf-ssl/vat_ladder/vat_ladder.py --id "GaussVatRC_seed-111" --seed 111 --vat_weight 1.0 --ent_weight 0.0 --which_gpu 1 --vat_rc --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
 
 # GaussVatCorr
-python vat_ladder.py --id "GaussVatCorr_seed-1" --description "VAT perturbation applied at each activation level to form the corrupted encoder. No overall VAT cost applied" --vat_weight 0.0 --ent_weight 0.0 --which_gpu 2 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 --do_not_save
+python vat_ladder.py --id "GaussVatCorr_seed-1" --description "VAT perturbation applied at each activation level to form the corrupted encoder. No overall VAT cost applied" --vat_weight 0.0 --ent_weight 0.0 --which_gpu 2 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
 
-
-# CRON 2
 nohup python /home/sshinoda/tf-ssl/vat_ladder/vat_ladder.py --id "GaussVatCorr_seed-100" --seed 100 --vat_weight 0.0 --ent_weight 0.0 --which_gpu 1 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
+
 nohup python vat_ladder.py --id "GaussVatCorr_seed-1111" --seed 1111 --vat_weight 0.0 --ent_weight 0.0 --which_gpu 1 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
+
 nohup python vat_ladder.py --id "GaussVatCorr_seed-1111" --seed 11 --vat_weight 0.0 --ent_weight 0.0 --which_gpu 1 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
 
-
 nohup python vat_ladder.py --id "GaussVatCorr_seed-1111" --seed 111 --vat_weight 0.0 --ent_weight 0.0 --which_gpu 1 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10 &
+
+# GaussVatCorrEntMin
+python vat_ladder.py --id "GaussVatCorrEntMin_seed-1" --seed 1 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+
+python vat_ladder.py --id "GaussVatCorrEntMin_seed-100" --seed 100 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+
+python vat_ladder.py --id "GaussVatCorr_seed-1111" --seed 1111 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+
+
+# GaussVatCostCorrEntMin
+python vat_ladder.py --id "GaussVatCostCorrEntMin_seed-1" --seed 1 --vat_weight 1.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+
+python vat_ladder.py --id "GaussVatCostCorrEntMin_seed-100" --seed 100 --vat_weight 1.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+
+python vat_ladder.py --id "GaussVatCostCorrEntMin_seed-1111" --seed 1111 --vat_weight 1.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+
+
