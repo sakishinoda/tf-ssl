@@ -102,7 +102,7 @@ def mlp_encoder(inputs, noise_std, bn, is_training,
     update is only called in the training setting
     """
     noise = generate_virtual_adversarial_perturbation(
-        inputs, clean_logits, is_training=is_training, start_layer=0) if \
+        inputs, clean_logits, is_training=is_training, start_layer=1) if \
         corrupt_with_vat else tf.random_normal(tf.shape(inputs)) * noise_std
 
     h = inputs + noise # add noise to input
