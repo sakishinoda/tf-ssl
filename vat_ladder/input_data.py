@@ -142,14 +142,13 @@ class DataSet(object):
 
 class SemiDataSet(object):
     def __init__(self, images, labels, n_labeled):
-        self.n_labeled = n_labeled
+        self._n_labeled = n_labeled
 
-        # Unlabled DataSet
-        self.unlabeled_ds = DataSet(images, labels)
-        self.num_examples = self.unlabeled_ds.num_examples
+        # Unlabeled DataSet
+        self._unlabeled_ds = DataSet(images, labels)
+        self._num_examples = self.unlabeled_ds.num_examples
 
         # Labeled DataSet
-        self.num_examples = self.unlabeled_ds.num_examples
         indices = numpy.arange(self.num_examples)
         shuffled_indices = numpy.random.permutation(indices)
         images = images[shuffled_indices]
@@ -164,7 +163,7 @@ class SemiDataSet(object):
             i_labeled += list(i)
         l_images = images[i_labeled]
         l_labels = labels[i_labeled]
-        self.labeled_ds = DataSet(l_images, l_labels)
+        self._labeled_ds = DataSet(l_images, l_labels)
 
     def next_batch(self, batch_size):
         unlabeled_images, _ = self.unlabeled_ds.next_batch(batch_size)
@@ -174,6 +173,24 @@ class SemiDataSet(object):
             labeled_images, labels = self.labeled_ds.next_batch(batch_size)
         images = numpy.vstack([labeled_images, unlabeled_images])
         return images, labels
+
+    @property
+    def n_labeled(self):
+        return self._n_labeled
+
+    @property
+    def num_examples(self):
+        return self._num_examples
+
+    @property
+    def labeled_ds(self):
+        return self._labeled_ds
+
+    @property
+    def unlabeled_ds(self):
+        return self._unlabeled_ds
+
+
 
 
 def read_data_sets(train_dir, n_labeled = 100, fake_data=False,

@@ -667,8 +667,8 @@ cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y_N), 1))  # supervised cost
 
 loss = cost + u_cost + vat_loss + ent_loss # total cost
 
-pred_cost = -tf.reduce_mean(
-    tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
+# pred_cost = -tf.reduce_mean(
+#     tf.reduce_sum(outputs * tf.log(logits_clean), 1))  # cost used for prediction
 
 correct_prediction = tf.equal(
     tf.argmax(logits_clean, 1), tf.argmax(outputs, 1))  # no of correct predictions
