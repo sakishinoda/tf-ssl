@@ -114,3 +114,9 @@ python vat_ladder.py --id "CorrGaussVat_seed-100" --seed 100 --vat_weight 1.0 --
 
 
 
+# -------------------------------------
+# VAT Benchmark
+# -------------------------------------
+python vat_ladder.py --id "VAT_seed-1" --seed 1 --vat_weight 1.0 --ent_weight 0.0 --which_gpu 0 --encoder_layers 784-1200-1200-10 --rc_weights 0-0-0-0
+
+python vat_ladder.py --id "VAT_seed-11" --seed 1 --vat_weight 1.0 --ent_weight 0.0 --which_gpu 0 --encoder_layers 784-1200-1200-10 --rc_weights 0-0-0-0

@@ -5,7 +5,7 @@
 import tensorflow as tf
 import input_data
 import os
-# from tqdm import tqdm
+from tqdm import tqdm
 import numpy as np
 
 import time
@@ -741,8 +741,8 @@ print("Initial Test Accuracy: ", init_acc, "%")
 
 
 start = time.time()
-# for i in tqdm(range(i_iter, num_iter)):
-for i in range(i_iter, num_iter):
+for i in tqdm(range(i_iter, num_iter)):
+# for i in range(i_iter, num_iter):
     images, labels = mnist.train.next_batch(batch_size)
 
     _ = sess.run(
