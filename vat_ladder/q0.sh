@@ -2,12 +2,8 @@
 
 # GPU 0
 
-python vat_ladder.py --id "GaussVatCorrEntMin_seed-1" --seed 1 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
-
-python vat_ladder.py --id "GaussVatCorrEntMin_seed-100" --seed 100 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
-
-python vat_ladder.py --id "GaussVatCorrEntMin_seed-11" --seed 11 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
-
-python vat_ladder.py --id "GaussVatCorrEntMin_seed-111" --seed 111 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
-
-python vat_ladder.py --id "GaussVatCorrEntMin_seed-1111" --seed 1111 --vat_weight 0.0 --ent_weight 1.0 --which_gpu 0 --vat_corr --rc_weights 1000.0-10.0-0.10-0.10-0.10-0.10-0.10
+#python mlp_ladder.py --rc_weights 1000-10-0.1-0.1-0.1-0.1-0.1 --id "MlpLadder_seed-1" --seed 1 --test_frequency_in_epochs 5 --which_gpu 0
+python mlp_ladder.py --rc_weights 1000-10-0.1-0.1-0.1-0.1-0.1 --id "MlpLadder_seed-100" --seed 100 --test_frequency_in_epochs 5 --which_gpu 0
+python mlp_ladder.py --rc_weights 1000-10-0.1-0.1-0.1-0.1-0.1 --id "MlpLadder_seed-11" --seed 11 --test_frequency_in_epochs 5 --which_gpu 0
+python mlp_ladder.py --rc_weights 1000-10-0.1-0.1-0.1-0.1-0.1 --id "MlpLadder_seed-111" --seed 111 --test_frequency_in_epochs 5 --which_gpu 0
+python mlp_ladder.py --rc_weights 1000-10-0.1-0.1-0.1-0.1-0.1 --id "MlpLadder_seed-1111" --seed 1111 --test_frequency_in_epochs 5 --which_gpu 0
