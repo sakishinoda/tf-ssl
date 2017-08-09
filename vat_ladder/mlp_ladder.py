@@ -6,6 +6,7 @@ import input_data
 import time
 from tqdm import tqdm
 from src import *
+import IPython
 
 def get_batch_ops(batch_size):
     join = lambda l, u: tf.concat([l, u], 0)
@@ -49,7 +50,7 @@ class Encoder(object):
         encoder_layers: sequence of ints
         bn: BatchNormLayers
         is_training: tensorflow bool
-        noise_std: float
+        noise_sd: float
         start_layer: int
         batch_size: int
         update_batch_stats: bool
@@ -67,12 +68,14 @@ class Encoder(object):
                  encoder_layers,
                  bn,
                  is_training,
-                 noise_std=0.0,
+                 noise_sd=0.0,
                  start_layer=0,
                  batch_size=100,
-                 update_batch_stats=True):
+                 update_batch_stats=True,
+                 scope='enc',
+                 reuse=None):
 
-        self.noise_std = noise_std
+        self.noise_sd = noise_sd
         self.labeled = Activations()
         self.unlabeled = Activations()
         join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
@@ -85,22 +88,29 @@ class Encoder(object):
         h = inputs + self.generate_noise(inputs, l)
         self.labeled.z[l], self.unlabeled.z[l] = split_lu(h)
 
-        for l in range(start_layer, self.num_layers + 1):
+        for l in range(start_layer+1, self.num_layers + 1):
             print("Layer {}: {} -> {}".format(l, ls[l - 1], ls[l]))
             self.labeled.h[l-1], self.unlabeled.z[l-1] = split_lu(h)
             # z_pre = tf.matmul(h, self.W[l-1])
-            z_pre = layers.fully_connected(h, num_outputs=ls[l])
+            z_pre = layers.fully_connected(
+                h,
+                num_outputs=ls[l],
+                weights_initializer=tf.random_normal_initializer(stddev=math.sqrt(ls[l-1])),
+                biases_initializer=None,
+                activation_fn=None,
+                scope=scope+str(l),
+                reuse=reuse)
             z_pre_l, z_pre_u = split_lu(z_pre)
-            m, v = tf.nn.moments(z_pre_u, axes=[0])
-            # save mean and variance of unlabeled examples for decoding
-            self.unlabeled.m[l], self.unlabeled.v[l] = m, v
+            # bn_axes = list(range(len(z_pre_u.get_shape().as_list())))
+            bn_axes = [0]
+            m, v = tf.nn.moments(z_pre_u, axes=bn_axes)
 
             # if training:
             def training_batch_norm():
                 # Training batch normalization
                 # batch normalization for labeled and unlabeled examples is performed separately
-                # if noise_std > 0:
-                if not update_batch_stats:
+                # if noise_sd > 0:
+                if self.noise_sd > 0:
                     # Corrupted encoder
                     # batch normalization + noise
                     z = join(bn.batch_normalization(z_pre_l),
@@ -120,8 +130,8 @@ class Encoder(object):
             def eval_batch_norm():
                 # Evaluation batch normalization
                 # obtain average mean and variance and use it to normalize the batch
-                mean = bn.ewma.average(bn.running_mean[l - 1])
-                var = bn.ewma.average(bn.running_var[l - 1])
+                mean = bn.ema.average(bn.running_mean[l-1])
+                var = bn.ema.average(bn.running_var[l-1])
                 z = bn.batch_normalization(z_pre, mean, var)
 
                 return z
@@ -131,14 +141,17 @@ class Encoder(object):
 
             if l == self.num_layers:
                 # return pre-softmax logits in final layer
-                self.logits = bn.gamma[l - 1] * (z + bn.beta[l - 1])
+                self.logits = bn.gamma[l-1] * (z + bn.beta[l-1])
                 h = tf.nn.softmax(self.logits)
             else:
                 # use ReLU activation in hidden layers
                 h = tf.nn.relu(z + bn.beta[l - 1])
 
-            self.labeled.z[l], self.labeled.z[l] = split_lu(z)
+            # save mean and variance of unlabeled examples for decoding
+            self.unlabeled.m[l], self.unlabeled.v[l] = m, v
+            self.labeled.z[l], self.unlabeled.z[l] = split_lu(z)
             self.labeled.h[l], self.unlabeled.h[l] = split_lu(h)
+
 
     def generate_noise(self, inputs, l):
         """Add noise depending on corruption parameters"""
@@ -148,17 +161,17 @@ class Encoder(object):
         #     noise = generate_virtual_adversarial_perturbation(
         #         inputs, clean_logits, is_training=is_training,
         #         start_layer=start_layer) + \
-        #         tf.random_normal(tf.shape(inputs)) * noise_std
+        #         tf.random_normal(tf.shape(inputs)) * noise_sd
         # elif corrupt == 'vat':
         #     noise = generate_virtual_adversarial_perturbation(
         #         inputs, clean_logits, is_training=is_training,
         #         start_layer=start_layer)
         # elif corrupt == 'gauss':
-        #     noise = tf.random_normal(tf.shape(inputs)) * noise_std
+        #     noise = tf.random_normal(tf.shape(inputs)) * noise_sd
         # else:
         #     noise = tf.zeros(tf.shape(inputs))
         # return noise
-        return tf.random_normal(tf.shape(inputs)) * self.noise_std
+        return tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
 # -----------------------------
 # DECODER
@@ -185,7 +198,7 @@ class Decoder(object):
     """
 
     def __init__(self, clean, corr, bn, combinator, encoder_layers,
-                 denoising_cost, batch_size=100):
+                 denoising_cost, batch_size=100, scope='dec', reuse=None):
 
         # self.params = params
         ls = encoder_layers  # seq of layer sizes, len num_layers
@@ -203,12 +216,22 @@ class Decoder(object):
 
             z, z_c = clean.unlabeled.z[l], corr.unlabeled.z[l]
             m, v = clean.unlabeled.m.get(l, 0), \
-                   clean.unlabeled.v.get(l, 1 - 1e-10)
+                   clean.unlabeled.v.get(l, 1-1e-10)
             # print(l)
             if l == num_layers:
                 u = unlabeled(corr.logits)
             else:
-                u = layers.fully_connected(z_est[l+1], num_outputs=ls[l])
+                u = layers.fully_connected(
+                    z_est[l+1],
+                    num_outputs=ls[l],
+                    activation_fn=None,
+                    normalizer_fn=None,
+                    weights_initializer=tf.random_normal_initializer(
+                        stddev=math.sqrt(ls[l+1])),
+                    biases_initializer=None,
+                    scope=scope+str(l),
+                    reuse=reuse
+                    )
 
             u = bn.batch_normalization(u)
 
@@ -216,9 +239,13 @@ class Decoder(object):
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
+            # bn_axes = list(range(len(z_est_bn.get_shape().as_list())))
+            bn_axes = [0]
             d_cost.append((tf.reduce_mean(
-                tf.reduce_sum(tf.square(z_est_bn - z), 1)) / ls[l]) *
-                          denoising_cost[l])
+                tf.reduce_sum(
+                    tf.square(z_est_bn - z),
+                    axis=bn_axes
+                    )) / ls[l]) * denoising_cost[l])
 
         self.z_est = z_est
         self.d_cost = d_cost
@@ -237,7 +264,7 @@ class BatchNormLayers(object):
     Attributes
     ----------
         bn_assigns: list of TF ops
-        ewma: TF op
+        ema: TF op
         running_var: list of tensors
         running_mean: list of tensors
         beta: list of tensors
@@ -250,31 +277,33 @@ class BatchNormLayers(object):
         # store updates to be made to average mean, variance
         self.bn_assigns = []
         # calculate the moving averages of mean and variance
-        self.ewma = tf.train.ExponentialMovingAverage(decay=0.99)
+        self.ema = tf.train.ExponentialMovingAverage(decay=0.99)
 
         # average mean and variance of all layers
         # shift & scale
-        with tf.variable_scope(scope, reuse=None):
+        # with tf.variable_scope(scope, reuse=None):
 
-            self.running_var = [tf.get_variable(
-                'v'+str(i),
-                initializer=tf.constant(1.0, shape=[l]),
-                trainable=False) for i,l in enumerate(ls[1:])]
-            self.running_mean = [tf.get_variable(
-                'm'+str(i),
-                initializer=tf.constant(0.0, shape=[l]),
-                trainable=False) for i,l in enumerate(ls[1:])]
+        self.running_var = [tf.get_variable(
+            'v'+str(i),
+            initializer=tf.constant(1.0, shape=[l]),
+            trainable=False) for i,l in enumerate(ls[1:])]
 
-            # shift
-            self.beta = [tf.get_variable(
-                'beta'+str(i),
-                initializer=tf.constant(0.0, shape=[l])
-            ) for i,l in enumerate(ls[1:])]
-            # scale
-            self.gamma = [tf.get_variable(
-                'gamma'+str(i),
-                initializer=tf.constant(1.0, shape=[l]))
-                for i,l in enumerate(ls[1:])]
+        self.running_mean = [tf.get_variable(
+            'm'+str(i),
+            initializer=tf.constant(0.0, shape=[l]),
+            trainable=False) for i,l in enumerate(ls[1:])]
+
+        # shift
+        self.beta = [tf.get_variable(
+            'beta'+str(i),
+            initializer=tf.constant(0.0, shape=[l])
+        ) for i,l in enumerate(ls[1:])]
+
+        # scale
+        self.gamma = [tf.get_variable(
+            'gamma'+str(i),
+            initializer=tf.constant(1.0, shape=[l]))
+            for i,l in enumerate(ls[1:])]
 
 
     def update_batch_normalization(self, batch, l):
@@ -283,24 +312,29 @@ class BatchNormLayers(object):
         if CNN, use channel-wise batch norm
         """
         # bn_axes = [0, 1, 2] if self.params.cnn else [0]
-        bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        # bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        bn_axes = [0]
         mean, var = tf.nn.moments(batch, axes=bn_axes)
-        print(l, mean.get_shape().as_list(),
-              self.running_mean[l-1].get_shape().as_list(),
-              batch.get_shape().as_list())
+
+        # print(l, mean.get_shape().as_list(),
+              # self.running_mean[l-1].get_shape().as_list(),
+              # batch.get_shape().as_list())
 
         assign_mean = self.running_mean[l-1].assign(mean)
         assign_var = self.running_var[l-1].assign(var)
         self.bn_assigns.append(
-            self.ewma.apply([self.running_mean[l-1], self.running_var[l-1]]))
+            self.ema.apply([self.running_mean[l-1], self.running_var[l-1]]))
 
         with tf.control_dependencies([assign_mean, assign_var]):
-            return (batch - mean) / tf.sqrt(var + 1e-10)
+            return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
 
 
     def batch_normalization(self, batch, mean=None, var=None):
         # bn_axes = [0, 1, 2] if self.params.cnn else [0]
-        bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        # bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        bn_axes = [0]
+        # print(*[x.get_shape().as_list() if x is not None else None for x in [
+        #     batch, mean, var]])
         if mean is None or var is None:
             mean, var = tf.nn.moments(batch, axes=bn_axes)
 
@@ -354,51 +388,56 @@ def main():
     # epoch after which to begin learning rate decay
     decay_after = params.decay_start_epoch
     batch_size = params.batch_size
-    num_iter = (num_examples // batch_size) * params.end_epoch  # number of loop iterations
+    # number of loop iterations
+    num_iter = (num_examples // batch_size) * params.end_epoch
 
     join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
 
-
     ls = params.cnn_fan if params.cnn else params.encoder_layers
-    images_placeholder = tf.placeholder(tf.float32, shape=(None, ls[0]))
-    images = preprocess(images_placeholder, params)
-    targets = tf.placeholder(tf.float32)
+    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, ls[0]))
+    inputs = preprocess(inputs_placeholder, params)
+    outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
 
     bn = BatchNormLayers(ls)
 
-    print("=== Clean Encoder ===")
-    with tf.variable_scope('enc', reuse=None):
-        clean = Encoder(inputs=images, encoder_layers=ls, bn=bn,
-                        is_training=train_flag, noise_std=0.0, start_layer=0,
-                        batch_size=params.batch_size, update_batch_stats=True)
 
     print("=== Corrupted Encoder === ")
-    with tf.variable_scope('enc', reuse=True):
-        corr = Encoder(inputs=images, encoder_layers=ls, bn=bn,
+    # with tf.variable_scope('enc', reuse=None) as scope:
+    corr = Encoder(inputs=inputs, encoder_layers=ls, bn=bn,
                         is_training=train_flag,
-                        noise_std=params.encoder_noise_std, start_layer=0,
-                        batch_size=params.batch_size, update_batch_stats=False)
+                        noise_sd=params.encoder_noise_sd, start_layer=0,
+                        batch_size=params.batch_size, update_batch_stats=False,
+                        scope='enc', reuse=None)
+
+    print("=== Clean Encoder ===")
+    # with tf.variable_scope('enc', reuse=True) as scope:
+    clean = Encoder(inputs=inputs, encoder_layers=ls, bn=bn,
+                        is_training=train_flag, noise_sd=0.0, start_layer=0,
+                        batch_size=params.batch_size, update_batch_stats=True,
+                        scope='enc', reuse=True)
 
     print("=== Decoder ===")
-    with tf.variable_scope('dec', reuse=None):
-        dec = Decoder(clean=clean, corr=corr, bn=bn,
+    # with tf.variable_scope('dec', reuse=None):
+    dec = Decoder(clean=clean, corr=corr, bn=bn,
                       combinator=gauss_combinator,
-                      encoder_layers=ls, denoising_cost=params.rc_weights,
-                      batch_size=params.batch_size)
+                      encoder_layers=ls,
+                      denoising_cost=params.rc_weights,
+                      batch_size=params.batch_size,
+                      scope='dec', reuse=None)
 
 
     # Calculate total unsupervised cost
     u_cost = tf.add_n(dec.d_cost)
-    pred = labeled(corr.logits)
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-        labels=targets, logits=corr.logits))
+    ce = tf.nn.softmax_cross_entropy_with_logits(
+                labels=outputs, logits=labeled(corr.logits))
+    cost = tf.reduce_mean(ce)
 
     loss = cost + u_cost
     loss_list = [loss, cost, u_cost]
 
     # no of correct predictions
-    correct_prediction = tf.equal(tf.argmax(clean.logits, 1), tf.argmax(targets, 1))
+    correct_prediction = tf.equal(tf.argmax(clean.logits, 1), tf.argmax(outputs, 1))
 
     accuracy = tf.reduce_mean(
         tf.cast(correct_prediction, "float")) * tf.constant(100.0)
@@ -411,6 +450,46 @@ def main():
     with tf.control_dependencies([train_step]):
         train_step = tf.group(bn_updates)
 
+    tf.summary.scalar('cost', cost)
+    merged = tf.summary.merge_all()
+
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        writer = tf.summary.FileWriter('logs/debug/', sess.graph)
+
+
+        images, labels = mnist.train.next_batch(batch_size)
+        feed = {inputs_placeholder: images, outputs: labels,
+                train_flag: False}
+        losses = sess.run(loss_list, feed)
+        print(losses)
+
+        def test_nan_cost():
+            l = 1
+            ops = {'m': clean.unlabeled.m.get(l, 0),
+                    'v': clean.unlabeled.v.get(l, 1 - 1e-10),
+                    'z': dec.z_est[l]}
+            ops['zbn'] = (ops['z'] - ops['m']) / ops['v']
+
+            [m, v, z, zbn] = sess.run([ops['m'], ops['v'], ops['z'],
+                                       ops['zbn']], feed)
+
+            wnan = lambda x: np.where(np.isnan(x))
+            return m, v, z, zbn, wnan
+
+        def test():
+            return sess.run(ce, feed)
+
+
+        _, summary = sess.run([train_step, merged], feed)
+        writer.add_summary(summary)
+
+        IPython.embed()
+
+
+
+
+def train():
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5, max_to_keep=5)
 
     # -----------------------------
@@ -453,16 +532,17 @@ def main():
 
     # -----------------------------
     print("=== Training ===")
+    init_feed = {inputs_placeholder: mnist.train.labeled_ds.images,
+                 outputs: mnist.train.labeled_ds.labels,
+                 train_flag: False}
 
-    [init_acc, init_loss] = sess.run([accuracy, loss], feed_dict={
-        images_placeholder: mnist.train.labeled_ds.images, targets:
-            mnist.train.labeled_ds.labels,
-        train_flag: False})
+    init_acc = sess.run(accuracy, init_feed)
+    init_losses = sess.run(loss_list, init_feed)
     print("Initial Train Accuracy: ", init_acc, "%")
-    print("Initial Train Loss: ", init_loss)
+    print("Initial Train Losses: ", *init_losses)
 
     [init_acc] = sess.run([accuracy], feed_dict={
-        images_placeholder: mnist.test.images, targets: mnist.test.labels, train_flag:
+        inputs_placeholder: mnist.test.images, outputs: mnist.test.labels, train_flag:
             False})
     print("Initial Test Accuracy: ", init_acc, "%")
     # print("Initial Test Loss: ", init_loss)
@@ -475,7 +555,7 @@ def main():
 
         _ = sess.run(
             [train_step],
-            feed_dict={images_placeholder: images, targets: labels,
+            feed_dict={inputs_placeholder: images, outputs: labels,
                        train_flag: True})
 
         if (i > 1) and ((i + 1) % (params.test_frequency_in_epochs * (
@@ -489,7 +569,9 @@ def main():
                 epoch_n + 1))  # epoch_n + 1 because learning rate is set for next epoch
                 ratio = max(0., ratio / (params.end_epoch - decay_after))
                 sess.run(learning_rate.assign(starter_learning_rate * ratio))
-            saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
+
+            if not params.do_not_save:
+                saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
 
 
             with open(log_file, 'a') as train_log:
@@ -497,20 +579,21 @@ def main():
                 # train_log_w = csv.writer(train_log)
                 log_i = [now, epoch_n] + sess.run(
                     [accuracy],
-                    feed_dict={images_placeholder: mnist.test.images,
-                               targets: mnist.test.labels, train_flag: False}
+                    feed_dict={inputs_placeholder: mnist.test.images,
+                               outputs: mnist.test.labels, train_flag: False}
                 ) + sess.run(
                     loss_list,
-                    feed_dict={images_placeholder: images, targets: labels,
+                    feed_dict={inputs_placeholder: images, outputs: labels,
                                train_flag:
                         True})
                 # train_log_w.writerow(log_i)
                 print(*log_i, sep=',', flush=True, file=train_log)
 
     print("Final Accuracy: ", sess.run(accuracy, feed_dict={
-        images_placeholder: mnist.test.images, targets: mnist.test.labels,
+        inputs_placeholder: mnist.test.images, outputs: mnist.test.labels,
         train_flag: False}),
           "%")
+
 
     sess.close()
 
