@@ -7,6 +7,7 @@ import gzip
 import os
 import urllib.request, urllib.parse, urllib.error
 
+from math import ceil
 import numpy
 
 SOURCE_URL = 'http://yann.lecun.com/exdb/mnist/'
@@ -140,29 +141,17 @@ class DataSet(object):
     end = self._index_in_epoch
     return self._images[start:end], self._labels[start:end]
 
+
 class SemiDataSet(object):
     def __init__(self, images, labels, n_labeled):
         self._n_labeled = n_labeled
 
+        l_images, l_labels, u_images, u_labels = self.sample_balanced_labeled(images, labels, num_labeled=n_labeled)
+
         # Unlabeled DataSet
-        self._unlabeled_ds = DataSet(images, labels)
-        self._num_examples = self.unlabeled_ds.num_examples
+        self._unlabeled_ds = DataSet(u_images, u_labels)
 
         # Labeled DataSet
-        indices = numpy.arange(self.num_examples)
-        shuffled_indices = numpy.random.permutation(indices)
-        images = images[shuffled_indices]
-        labels = labels[shuffled_indices]
-        y = numpy.array([numpy.arange(10)[l==1][0] for l in labels])
-        idx = indices[y==0][:5]
-        n_classes = y.max() + 1
-        n_from_each_class = int(n_labeled / n_classes)
-        i_labeled = []
-        for c in range(n_classes):
-            i = indices[y==c][:n_from_each_class]
-            i_labeled += list(i)
-        l_images = images[i_labeled]
-        l_labels = labels[i_labeled]
         self._labeled_ds = DataSet(l_images, l_labels)
 
     def next_batch(self, batch_size):
@@ -174,13 +163,34 @@ class SemiDataSet(object):
         images = numpy.vstack([labeled_images, unlabeled_images])
         return images, labels
 
+    def sample_balanced_labeled(self, images, labels, num_labeled):
+        n_total, n_classes = labels.shape
+
+        # First create a fully balanced set larger than desired
+        nl_per_class = int(ceil(num_labeled / n_classes))
+        # rng = self.rng
+        idx = []
+
+        for c in range(n_classes):
+            c_idx = numpy.where(labels[:,c]==1)[0]
+            idx.append(numpy.random.choice(c_idx, nl_per_class))
+        l_idx = numpy.concatenate(idx)
+
+        # Now sample uniformly without replacement from the larger set to get desired
+        l_idx = numpy.random.choice(l_idx, size=num_labeled, replace=False)
+
+        u_idx = numpy.setdiff1d(numpy.arange(n_total), l_idx, assume_unique=True)
+
+        return images[l_idx], labels[l_idx], images[u_idx], labels[u_idx]
+
+
     @property
     def n_labeled(self):
         return self._n_labeled
 
     @property
     def num_examples(self):
-        return self._num_examples
+        return self.num_labeled + self.num_unlabeled
 
     @property
     def labeled_ds(self):
@@ -190,11 +200,18 @@ class SemiDataSet(object):
     def unlabeled_ds(self):
         return self._unlabeled_ds
 
+    @property
+    def num_labeled(self):
+        return self._labeled_ds.num_examples
+
+    @property
+    def num_unlabeled(self):
+        return self._unlabeled_ds.num_examples
 
 
 
 def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
-                   one_hot=False, verbose=False):
+                   one_hot=False, verbose=False, validation_size=0):
   class DataSets(object):
     pass
   data_sets = DataSets()
@@ -209,7 +226,7 @@ def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
   TRAIN_LABELS = 'train-labels-idx1-ubyte.gz'
   TEST_IMAGES = 't10k-images-idx3-ubyte.gz'
   TEST_LABELS = 't10k-labels-idx1-ubyte.gz'
-  VALIDATION_SIZE = 0
+  VALIDATION_SIZE = validation_size
 
   local_file = maybe_download(TRAIN_IMAGES, train_dir, verbose=verbose)
   train_images = extract_images(local_file, verbose=verbose)
