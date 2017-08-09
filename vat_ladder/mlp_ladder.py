@@ -450,46 +450,6 @@ def main():
     with tf.control_dependencies([train_step]):
         train_step = tf.group(bn_updates)
 
-    # tf.summary.scalar('cost', cost)
-    # merged = tf.summary.merge_all()
-
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        # writer = tf.summary.FileWriter('logs/debug/', sess.graph)
-
-
-        images, labels = mnist.train.next_batch(batch_size)
-        feed = {inputs_placeholder: images, outputs: labels,
-                train_flag: False}
-        losses = sess.run(loss_list, feed)
-        print(losses)
-
-        def test_nan_cost():
-            l = 1
-            ops = {'m': clean.unlabeled.m.get(l, 0),
-                    'v': clean.unlabeled.v.get(l, 1 - 1e-10),
-                    'z': dec.z_est[l]}
-            ops['zbn'] = (ops['z'] - ops['m']) / ops['v']
-
-            [m, v, z, zbn] = sess.run([ops['m'], ops['v'], ops['z'],
-                                       ops['zbn']], feed)
-
-            wnan = lambda x: np.where(np.isnan(x))
-            return m, v, z, zbn, wnan
-
-        def test():
-            return sess.run(ce, feed)
-
-
-        # _, summary = sess.run([train_step, merged], feed)
-        # writer.add_summary(summary)
-
-        IPython.embed()
-
-
-
-
-def train():
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5, max_to_keep=5)
 
     # -----------------------------
