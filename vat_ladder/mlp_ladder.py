@@ -95,7 +95,8 @@ class Encoder(object):
             z_pre = layers.fully_connected(
                 h,
                 num_outputs=ls[l],
-                weights_initializer=tf.random_normal_initializer(stddev=math.sqrt(ls[l-1])),
+                weights_initializer=tf.random_normal_initializer(
+                    stddev=1/math.sqrt(ls[l-1])),
                 biases_initializer=None,
                 activation_fn=None,
                 scope=scope+str(l),
@@ -227,7 +228,7 @@ class Decoder(object):
                     activation_fn=None,
                     normalizer_fn=None,
                     weights_initializer=tf.random_normal_initializer(
-                        stddev=math.sqrt(ls[l+1])),
+                        stddev=1/math.sqrt(ls[l+1])),
                     biases_initializer=None,
                     scope=scope+str(l),
                     reuse=reuse
@@ -450,12 +451,12 @@ def main():
     with tf.control_dependencies([train_step]):
         train_step = tf.group(bn_updates)
 
-    tf.summary.scalar('cost', cost)
-    merged = tf.summary.merge_all()
+    # tf.summary.scalar('cost', cost)
+    # merged = tf.summary.merge_all()
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        writer = tf.summary.FileWriter('logs/debug/', sess.graph)
+        # writer = tf.summary.FileWriter('logs/debug/', sess.graph)
 
 
         images, labels = mnist.train.next_batch(batch_size)
@@ -481,8 +482,8 @@ def main():
             return sess.run(ce, feed)
 
 
-        _, summary = sess.run([train_step, merged], feed)
-        writer.add_summary(summary)
+        # _, summary = sess.run([train_step, merged], feed)
+        # writer.add_summary(summary)
 
         IPython.embed()
 
