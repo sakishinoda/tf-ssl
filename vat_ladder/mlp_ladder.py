@@ -240,12 +240,11 @@ class Decoder(object):
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
-            # bn_axes = list(range(len(z_est_bn.get_shape().as_list())))
-            bn_axes = [0]
+            reduce_axes = list(range(1,len(z_est_bn.get_shape().as_list())))
             d_cost.append((tf.reduce_mean(
                 tf.reduce_sum(
                     tf.square(z_est_bn - z),
-                    axis=bn_axes
+                    axis=reduce_axes
                     )) / ls[l]) * denoising_cost[l])
 
         self.z_est = z_est
