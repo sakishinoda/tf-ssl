@@ -17,19 +17,20 @@ parser.add_argument('--which_gpu', default='0')
 parser.add_argument('--log_dir', default='')
 parser.add_argument('--seed', default=1, type=int)
 parser.add_argument('--validation', action='store_true')
-parser.add_argument('--batch_size', default=32)
-parser.add_argument('--ul_batch_size', default=128)
-parser.add_argument('--eval_batch_size', default=100)
-parser.add_argument('--eval_freq', default=5)
-parser.add_argument('--num_epochs', default=120)
+parser.add_argument('--batch_size', default=32, type=int)
+parser.add_argument('--ul_batch_size', default=128, type=int)
+parser.add_argument('--eval_batch_size', default=100, type=int)
+parser.add_argument('--eval_freq', default=5, type=int)
+parser.add_argument('--num_epochs', default=120, type=int)
 parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
+parser.add_argument('--learning_rate', default=0.001, type=float)
+
 
 params = parser.parse_args()
 
 
 params.epoch_decay_start = 80
 params.num_iter_per_epoch = 400
-params.learning_rate = 0.001
 params.mom1 = 0.9
 params.mom2 = 0.5
 
