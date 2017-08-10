@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy
 import sys, os
+import math
 
 import layers as L
 # import cnn
@@ -21,28 +22,25 @@ tf.app.flags.DEFINE_boolean('top_bn', False, "")
 
 def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
 
+    def weight(s, i):
+        return tf.get_variable('w'+str(i), shape=s,
+                               initializer=tf.random_normal_initializer(stddev=(
+                               1/math.sqrt(sum(s)))))
+    def bias(s, i):
+        return tf.get_variable('b'+str(i), shape=s,
+                               initializer=tf.zeros_initializer)
 
-    h = tfl.fully_connected(x,
-                            num_outputs=1200,
-                            activation_fn=tf.nn.relu,
-                            normalizer_fn=None)
+    h = tf.nn.relu(tf.matmul(x, weight([784, 1200], 1))+bias([1200], 1))
 
     h = L.bn(h, 1200, is_training=is_training,
              update_batch_stats=update_batch_stats, name='bn1')
 
-
-    h = tfl.fully_connected(h,
-                            num_outputs=1200,
-                            activation_fn=tf.nn.relu,
-                            normalizer_fn=None)
+    h = tf.nn.relu(tf.matmul(h, weight([1200, 1200], 2))+bias([1200], 2))
 
     h = L.bn(h, 1200, is_training=is_training,
              update_batch_stats=update_batch_stats, name='bn2')
 
-    h = tfl.fully_connected(h,
-                            num_outputs=10,
-                            activation_fn=None,
-                            normalizer_fn=None)  # no bn on top layer
+    h = tf.matmul(h, weight([1200, 10], 3), + bias([10], 3))
 
     return h
     # return cnn.logit(x, is_training=is_training,

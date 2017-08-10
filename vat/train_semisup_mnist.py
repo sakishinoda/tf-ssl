@@ -49,8 +49,8 @@ def build_training_graph(x, y, ul_x, lr, mom):
     nll_loss = L.ce_loss(logit, y)
     with tf.variable_scope(tf.get_variable_scope(), reuse=True):
         if params.method == 'vat':
-            tf.get_variable_scope().reuse_variables()
-            ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
+            ul_logit = vat.forward(ul_x, is_training=True,
+                                   update_batch_stats=False)
             vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
             additional_loss = vat_loss
         elif params.method == 'vatent':
