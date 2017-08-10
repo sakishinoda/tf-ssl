@@ -2,12 +2,13 @@
 import IPython
 import argparse
 import tensorflow as tf
-import vat_mlp as vat
+# import vat_mlp as vat
 import layers as L
 import numpy as np
 import os
 from mnist import read_data_sets
 import time
+import math
 
 
 parser = argparse.ArgumentParser()
@@ -25,8 +26,9 @@ parser.add_argument('--num_epochs', default=120, type=int)
 parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
 parser.add_argument('--learning_rate', default=0.001, type=float)
 parser.add_argument('--num_labeled', default=100, type=int)
-
-
+parser.add_argument('--epsilon', default=8.0, type=float) # 0.3 for SSL MNIST
+parser.add_argument('--num_power_iterations', default=1, type=int)
+parser.add_argument('--xi', default=1e-6, type=float)
 params = parser.parse_args()
 
 
@@ -34,8 +36,100 @@ params.epoch_decay_start = 80
 params.num_iter_per_epoch = 400
 params.mom1 = 0.9
 params.mom2 = 0.5
+params.lrelu_a = 0.1
+params.top_bn = False
 
-# IPython.embed()
+def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
+
+    def weight(s, i):
+        return tf.get_variable('w'+str(i), shape=s,
+                               initializer=tf.random_normal_initializer(stddev=(
+                               1/math.sqrt(sum(s)))))
+    def bias(s, i):
+        return tf.get_variable('b'+str(i), shape=s,
+                               initializer=tf.zeros_initializer)
+
+    h = tf.nn.relu(tf.matmul(x, weight([784, 1200], 1)) + bias([1200], 1))
+
+    h = L.bn(h, 1200, is_training=is_training,
+             update_batch_stats=update_batch_stats, name='bn1')
+
+    h = tf.nn.relu(tf.matmul(h, weight([1200, 1200], 2)) + bias([1200], 2))
+
+    h = L.bn(h, 1200, is_training=is_training,
+             update_batch_stats=update_batch_stats, name='bn2')
+
+    h = tf.matmul(h, weight([1200, 10], 3)) + bias([10], 3)
+
+    return h
+    # return cnn.logit(x, is_training=is_training,
+    #                  update_batch_stats=update_batch_stats,
+    #                  stochastic=stochastic,
+    #                  seed=seed)
+
+
+def forward(x, is_training=True, update_batch_stats=True, seed=1234):
+    if is_training:
+        return logit(x, is_training=True,
+                     update_batch_stats=update_batch_stats,
+                     stochastic=True, seed=seed)
+    else:
+        return logit(x, is_training=False,
+                     update_batch_stats=update_batch_stats,
+                     stochastic=False, seed=seed)
+
+
+def get_normalized_vector(d):
+    red_axes = list(range(1, len(d.get_shape())))
+    # print(d.get_shape(), red_axes)
+    d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=red_axes,
+                                            keep_dims=True))
+    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0),
+                                      axis=red_axes,
+                                      keep_dims=True))
+    return d
+
+
+def generate_virtual_adversarial_perturbation(x, logit, is_training=True):
+    d = tf.random_normal(shape=tf.shape(x))
+
+    for _ in range(params.num_power_iterations):
+        d = params.xi * get_normalized_vector(d)
+        logit_p = logit
+        logit_m = forward(x + d, update_batch_stats=False, is_training=is_training)
+        dist = L.kl_divergence_with_logit(logit_p, logit_m)
+        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+        d = tf.stop_gradient(grad)
+
+    return params.epsilon * get_normalized_vector(d)
+
+
+def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss"):
+    r_vadv = generate_virtual_adversarial_perturbation(x, logit, is_training=is_training)
+    logit = tf.stop_gradient(logit)
+    logit_p = logit
+    logit_m = forward(x + r_vadv, update_batch_stats=False, is_training=is_training)
+    loss = L.kl_divergence_with_logit(logit_p, logit_m)
+    return tf.identity(loss, name=name)
+
+
+def generate_adversarial_perturbation(x, loss):
+    grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+    grad = tf.stop_gradient(grad)
+    return params.epsilon * get_normalized_vector(grad)
+
+
+def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
+    r_adv = generate_adversarial_perturbation(x, loss)
+    logit = forward(x + r_adv, is_training=is_training, update_batch_stats=False)
+    loss = L.ce_loss(logit, y)
+    return loss
+
+
+
+
+
+
 
 def build_training_graph(x, y, ul_x, lr, mom):
     global_step = tf.get_variable(
@@ -45,19 +139,19 @@ def build_training_graph(x, y, ul_x, lr, mom):
         initializer=tf.constant_initializer(0.0),
         trainable=False,
     )
-    logit = vat.forward(x)
+    logit = forward(x)
     # print(logit.get_shape(), y.get_shape())
     # IPython.embed()
     nll_loss = L.ce_loss(logit, y)
     with tf.variable_scope(tf.get_variable_scope(), reuse=True):
         if params.method == 'vat':
-            ul_logit = vat.forward(ul_x, is_training=True,
+            ul_logit = forward(ul_x, is_training=True,
                                    update_batch_stats=False)
-            vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
+            vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
             additional_loss = vat_loss
         elif params.method == 'vatent':
-            ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
-            vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
+            ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
+            vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
             ent_loss = L.entropy_y_x(ul_logit)
             additional_loss = vat_loss + ent_loss
         elif params.method == 'baseline':
@@ -74,7 +168,7 @@ def build_training_graph(x, y, ul_x, lr, mom):
 
 
 def accuracy(x, y):
-    logit = vat.forward(x, is_training=False, update_batch_stats=False)
+    logit = forward(x, is_training=False, update_batch_stats=False)
     return L.accuracy(logit, y)
 
 
