@@ -55,20 +55,20 @@ def convert_images_and_labels(images, labels, filepath):
     writer.close()
 
 
-def read(filename_queue):
+def read(filename_queue, im_len=3072, im_dims=(32,32,3)):
     reader = tf.TFRecordReader()
     _, serialized_example = reader.read(filename_queue)
     features = tf.parse_single_example(
         serialized_example,
         # Defaults are not specified since both keys are required.
         features={
-            'image': tf.FixedLenFeature([3072], tf.float32),
+            'image': tf.FixedLenFeature([im_len], tf.float32),
             'label': tf.FixedLenFeature([], tf.int64),
         })
 
     # Convert label from a scalar uint8 tensor to an int32 scalar.
     image = features['image']
-    image = tf.reshape(image, [32, 32, 3])
+    image = tf.reshape(image, im_dims)
     label = tf.one_hot(tf.cast(features['label'], tf.int32), 10)
     return image, label
 

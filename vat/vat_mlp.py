@@ -13,6 +13,11 @@ tf.app.flags.DEFINE_float('epsilon', 8.0, "norm length for (virtual) adversarial
 tf.app.flags.DEFINE_integer('num_power_iterations', 1, "the number of power iterations")
 tf.app.flags.DEFINE_float('xi', 1e-6, "small constant for finite difference")
 
+# FLAGS = tf.app.flags.FLAGS
+tf.app.flags.DEFINE_float('keep_prob_hidden', 0.5, "dropout rate")
+tf.app.flags.DEFINE_float('lrelu_a', 0.1, "lrelu slope")
+tf.app.flags.DEFINE_boolean('top_bn', False, "")
+
 
 def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
 
@@ -58,8 +63,13 @@ def forward(x, is_training=True, update_batch_stats=True, seed=1234):
 
 
 def get_normalized_vector(d):
-    d /= (1e-12 + tf.reduce_max(tf.abs(d), range(1, len(d.get_shape())), keep_dims=True))
-    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0), range(1, len(d.get_shape())), keep_dims=True))
+    red_axes = list(range(1, len(d.get_shape())))
+    # print(d.get_shape(), red_axes)
+    d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=red_axes,
+                                            keep_dims=True))
+    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0),
+                                      axis=red_axes,
+                                      keep_dims=True))
     return d
 
 

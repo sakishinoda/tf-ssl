@@ -1,222 +1,254 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Routine for decoding the CIFAR-10 binary file format."""
+"""
+Functions for downloading and reading MNIST data.
+Compatible with Python 3
+"""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+import gzip
 import os
-import sys
-import tarfile
+import urllib.request, urllib.parse, urllib.error
 
-import numpy as np
-from scipy import linalg
-import glob
-import pickle
-from input_data import read_data_sets
+from math import ceil
+import numpy
 
-from six.moves import xrange  # pylint: disable=redefined-builtin
-from six.moves import urllib
-
-import tensorflow as tf
-
-from dataset_utils import *
-
-DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
-
-FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('data_dir', '/tmp/cifar10',
-                           'where to store the dataset')
-tf.app.flags.DEFINE_integer('num_labeled_examples', 4000, "The number of labeled examples")
-tf.app.flags.DEFINE_integer('num_valid_examples', 1000, "The number of validation examples")
-tf.app.flags.DEFINE_integer('dataset_seed', 1, "dataset seed")
-
-# Process images of this size. Note that this differs from the original CIFAR
-# image size of 32 x 32. If one alters this number, then the entire model
-# architecture will change and any model would need to be retrained.
-IMAGE_SIZE = 32
-
-# Global constants describing the CIFAR-10 data set.
-NUM_CLASSES = 10
-NUM_EXAMPLES_TRAIN = 50000
-NUM_EXAMPLES_TEST = 10000
-
-def load_mnist():
-    mnist = read_data_sets('MNIST_data')
-    return (mnist.train.images, mnist.train.labels), (mnist.test.images,
-                                                      mnist.test.labels)
-
-def load_cifar10():
-    """Download and extract the tarball from Alex's website."""
-    dest_directory = FLAGS.data_dir
-    if not os.path.exists(dest_directory):
-        os.makedirs(dest_directory)
-    filename = DATA_URL.split('/')[-1]
-    filepath = os.path.join(dest_directory, filename)
-    if not os.path.exists(filepath):
-        def _progress(count, block_size, total_size):
-            sys.stdout.write('\r>> Downloading %s %.1f%%' %
-                             (filename, float(count * block_size) /
-                              float(total_size) * 100.0))
-            sys.stdout.flush()
-
-        filepath, _ = urllib.request.urlretrieve(DATA_URL, filepath, _progress)
-        print()
-        statinfo = os.stat(filepath)
-        print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
-        tarfile.open(filepath, 'r:gz').extractall(dest_directory)
-
-    # Training set
-    print("Loading training data...")
-    train_images = np.zeros((NUM_EXAMPLES_TRAIN, 3 * 32 * 32), dtype=np.float32)
-    train_labels = []
-    for i, data_fn in enumerate(
-            sorted(glob.glob(FLAGS.data_dir + '/cifar-10-batches-py/data_batch*'))):
-        batch = unpickle(data_fn)
-        train_images[i * 10000:(i + 1) * 10000] = batch['data']
-        train_labels.extend(batch['labels'])
-    train_images = (train_images - 127.5) / 255.
-    train_labels = np.asarray(train_labels, dtype=np.int64)
-
-    rand_ix = np.random.permutation(NUM_EXAMPLES_TRAIN)
-    train_images = train_images[rand_ix]
-    train_labels = train_labels[rand_ix]
-
-    print("Loading test data...")
-    test = unpickle(FLAGS.data_dir + '/cifar-10-batches-py/test_batch')
-    test_images = test['data'].astype(np.float32)
-    test_images = (test_images - 127.5) / 255.
-    test_labels = np.asarray(test['labels'], dtype=np.int64)
-
-    print("Apply ZCA whitening")
-    components, mean, train_images = ZCA(train_images)
-    np.save('{}/components'.format(FLAGS.data_dir), components)
-    np.save('{}/mean'.format(FLAGS.data_dir), mean)
-    test_images = np.dot(test_images - mean, components.T)
-
-    train_images = train_images.reshape(
-        (NUM_EXAMPLES_TRAIN, 3, 32, 32)).transpose((0, 2, 3, 1)).reshape((NUM_EXAMPLES_TRAIN, -1))
-    test_images = test_images.reshape(
-        (NUM_EXAMPLES_TEST, 3, 32, 32)).transpose((0, 2, 3, 1)).reshape((NUM_EXAMPLES_TEST, -1))
-    return (train_images, train_labels), (test_images, test_labels)
+SOURCE_URL = 'http://yann.lecun.com/exdb/mnist/'
 
 
-def prepare_dataset():
-    (train_images, train_labels), (test_images, test_labels) = load_mnist()
-    dirpath = os.path.join(FLAGS.data_dir, 'seed' + str(FLAGS.dataset_seed))
-    if not os.path.exists(dirpath):
-        os.makedirs(dirpath)
-
-    rng = np.random.RandomState(FLAGS.dataset_seed)
-    rand_ix = rng.permutation(NUM_EXAMPLES_TRAIN)
-    _train_images, _train_labels = train_images[rand_ix], train_labels[rand_ix]
-
-    examples_per_class = int(FLAGS.num_labeled_examples / 10)
-    labeled_train_images = np.zeros((FLAGS.num_labeled_examples, 784),
-                                    dtype=np.float32)
-    labeled_train_labels = np.zeros((FLAGS.num_labeled_examples), dtype=np.int64)
-    for i in xrange(10):
-        ind = np.where(_train_labels == i)[0]
-        labeled_train_images[i * examples_per_class:(i + 1) * examples_per_class] \
-            = _train_images[ind[0:examples_per_class]]
-        labeled_train_labels[i * examples_per_class:(i + 1) * examples_per_class] \
-            = _train_labels[ind[0:examples_per_class]]
-        _train_images = np.delete(_train_images,
-                                     ind[0:examples_per_class], 0)
-        _train_labels = np.delete(_train_labels,
-                                     ind[0:examples_per_class])
-
-    rand_ix_labeled = rng.permutation(FLAGS.num_labeled_examples)
-    labeled_train_images, labeled_train_labels = \
-        labeled_train_images[rand_ix_labeled], labeled_train_labels[rand_ix_labeled]
-
-    convert_images_and_labels(labeled_train_images,
-                              labeled_train_labels,
-                              os.path.join(dirpath, 'labeled_train.tfrecords'))
-    convert_images_and_labels(train_images, train_labels,
-                              os.path.join(dirpath, 'unlabeled_train.tfrecords'))
-    convert_images_and_labels(test_images,
-                              test_labels,
-                              os.path.join(dirpath, 'test.tfrecords'))
-
-    # Construct dataset for validation
-    train_images_valid, train_labels_valid = \
-        labeled_train_images[FLAGS.num_valid_examples:], labeled_train_labels[FLAGS.num_valid_examples:]
-    test_images_valid, test_labels_valid = \
-        labeled_train_images[:FLAGS.num_valid_examples], labeled_train_labels[:FLAGS.num_valid_examples]
-    unlabeled_train_images_valid = np.concatenate(
-        (train_images_valid, _train_images), axis=0)
-    unlabeled_train_labels_valid = np.concatenate(
-        (train_labels_valid, _train_labels), axis=0)
-    convert_images_and_labels(train_images_valid,
-                              train_labels_valid,
-                              os.path.join(dirpath, 'labeled_train_val.tfrecords'))
-    convert_images_and_labels(unlabeled_train_images_valid,
-                              unlabeled_train_labels_valid,
-                              os.path.join(dirpath, 'unlabeled_train_val.tfrecords'))
-    convert_images_and_labels(test_images_valid,
-                              test_labels_valid,
-                              os.path.join(dirpath, 'test_val.tfrecords'))
+def maybe_download(filename, work_directory, verbose=False):
+  """Download the data from Yann's website, unless it's already here."""
+  if not os.path.exists(work_directory):
+    os.mkdir(work_directory)
+  filepath = os.path.join(work_directory, filename)
+  if not os.path.exists(filepath):
+    filepath, _ = urllib.request.urlretrieve(SOURCE_URL + filename, filepath)
+    statinfo = os.stat(filepath)
+    if verbose:
+        print(('Succesfully downloaded', filename, statinfo.st_size, 'bytes.'))
+  return filepath
 
 
-def inputs(batch_size=100,
-           train=True, validation=False,
-           shuffle=True, num_epochs=None):
-    if validation:
-        if train:
-            filenames = ['labeled_train_val.tfrecords']
-            num_examples = FLAGS.num_labeled_examples - FLAGS.num_valid_examples
-        else:
-            filenames = ['test_val.tfrecords']
-            num_examples = FLAGS.num_valid_examples
+def _read32(bytestream):
+  dt = numpy.dtype(numpy.uint32).newbyteorder('>')
+  return numpy.frombuffer(bytestream.read(4), dtype=dt)[0]
+
+
+def extract_images(filename, verbose=False):
+  """Extract the images into a 4D uint8 numpy array [index, y, x, depth]."""
+  if verbose:
+      print(('Extracting', filename))
+  with gzip.open(filename) as bytestream:
+    magic = _read32(bytestream)
+    if magic != 2051:
+      raise ValueError(
+          'Invalid magic number %d in MNIST image file: %s' %
+          (magic, filename))
+    num_images = _read32(bytestream)
+    rows = _read32(bytestream)
+    cols = _read32(bytestream)
+    buf = bytestream.read(rows * cols * num_images)
+    data = numpy.frombuffer(buf, dtype=numpy.uint8)
+    data = data.reshape(num_images, rows, cols, 1)
+    return data
+
+
+def dense_to_one_hot(labels_dense, num_classes=10):
+  """Convert class labels from scalars to one-hot vectors."""
+  num_labels = labels_dense.shape[0]
+  index_offset = numpy.arange(num_labels) * num_classes
+  labels_one_hot = numpy.zeros((num_labels, num_classes))
+  labels_one_hot.flat[index_offset + labels_dense.ravel()] = 1
+  return labels_one_hot
+
+
+def extract_labels(filename, one_hot=False, verbose=False):
+  """Extract the labels into a 1D uint8 numpy array [index]."""
+  if verbose:
+      print(('Extracting', filename))
+  with gzip.open(filename) as bytestream:
+    magic = _read32(bytestream)
+    if magic != 2049:
+      raise ValueError(
+          'Invalid magic number %d in MNIST label file: %s' %
+          (magic, filename))
+    num_items = _read32(bytestream)
+    buf = bytestream.read(num_items)
+    labels = numpy.frombuffer(buf, dtype=numpy.uint8)
+    if one_hot:
+      return dense_to_one_hot(labels)
+    return labels
+
+
+class DataSet(object):
+
+  def __init__(self, images, labels, fake_data=False):
+    if fake_data:
+      self._num_examples = 10000
     else:
-        if train:
-            filenames = ['labeled_train.tfrecords']
-            num_examples = FLAGS.num_labeled_examples
+      assert images.shape[0] == labels.shape[0], (
+          "images.shape: %s labels.shape: %s" % (images.shape,
+                                                 labels.shape))
+      self._num_examples = images.shape[0]
+
+      # Convert shape from [num examples, rows, columns, depth]
+      # to [num examples, rows*columns] (assuming depth == 1)
+      assert images.shape[3] == 1
+      images = images.reshape(images.shape[0],
+                              images.shape[1] * images.shape[2])
+      # Convert from [0, 255] -> [0.0, 1.0].
+      images = images.astype(numpy.float32)
+      images = numpy.multiply(images, 1.0 / 255.0)
+    self._images = images
+    self._labels = labels
+    self._epochs_completed = 0
+    self._index_in_epoch = 0
+
+  @property
+  def images(self):
+    return self._images
+
+  @property
+  def labels(self):
+    return self._labels
+
+  @property
+  def num_examples(self):
+    return self._num_examples
+
+  @property
+  def epochs_completed(self):
+    return self._epochs_completed
+
+  def next_batch(self, batch_size, fake_data=False):
+    """Return the next `batch_size` examples from this data set."""
+    if fake_data:
+      fake_image = [1.0 for _ in range(784)]
+      fake_label = 0
+      return [fake_image for _ in range(batch_size)], [
+          fake_label for _ in range(batch_size)]
+    start = self._index_in_epoch
+    self._index_in_epoch += batch_size
+    if self._index_in_epoch > self._num_examples:
+      # Finished epoch
+      self._epochs_completed += 1
+      # Shuffle the data
+      perm = numpy.arange(self._num_examples)
+      numpy.random.shuffle(perm)
+      self._images = self._images[perm]
+      self._labels = self._labels[perm]
+      # Start next epoch
+      start = 0
+      self._index_in_epoch = batch_size
+      assert batch_size <= self._num_examples
+    end = self._index_in_epoch
+    return self._images[start:end], self._labels[start:end]
+
+
+class SemiDataSet(object):
+    def __init__(self, images, labels, n_labeled):
+        self._n_labeled = n_labeled
+
+        l_images, l_labels, u_images, u_labels = self.sample_balanced_labeled(images, labels, num_labeled=n_labeled)
+
+        # Unlabeled DataSet
+        self._unlabeled_ds = DataSet(u_images, u_labels)
+
+        # Labeled DataSet
+        self._labeled_ds = DataSet(l_images, l_labels)
+
+    def next_batch(self, batch_size, ul_batch_size):
+        unlabeled_images, _ = self.unlabeled_ds.next_batch(ul_batch_size)
+        if batch_size > self.n_labeled:
+            labeled_images, labels = self.labeled_ds.next_batch(self.n_labeled)
         else:
-            filenames = ['test.tfrecords']
-            num_examples = NUM_EXAMPLES_TEST
+            labeled_images, labels = self.labeled_ds.next_batch(batch_size)
+        # images = numpy.vstack([labeled_images, unlabeled_images])
+        # return images, labels
+        return labeled_images, labels, unlabeled_images
 
-    filenames = [os.path.join('seed' + str(FLAGS.dataset_seed), filename) for filename in filenames]
+    def sample_balanced_labeled(self, images, labels, num_labeled):
+        n_total, n_classes = labels.shape
 
-    filename_queue = generate_filename_queue(filenames, FLAGS.data_dir, num_epochs)
-    image, label = read(filename_queue)
-    image = transform(tf.cast(image, tf.float32)) if train else image
-    return generate_batch([image, label], num_examples, batch_size, shuffle)
+        # First create a fully balanced set larger than desired
+        nl_per_class = int(ceil(num_labeled / n_classes))
+        # rng = self.rng
+        idx = []
 
+        for c in range(n_classes):
+            c_idx = numpy.where(labels[:,c]==1)[0]
+            idx.append(numpy.random.choice(c_idx, nl_per_class))
+        l_idx = numpy.concatenate(idx)
 
-def unlabeled_inputs(batch_size=100,
-                     validation=False,
-                     shuffle=True):
-    if validation:
-        filenames = ['unlabeled_train_val.tfrecords']
-        num_examples = NUM_EXAMPLES_TRAIN - FLAGS.num_valid_examples
-    else:
-        filenames = ['unlabeled_train.tfrecords']
-        num_examples = NUM_EXAMPLES_TRAIN
+        # Now sample uniformly without replacement from the larger set to get desired
+        l_idx = numpy.random.choice(l_idx, size=num_labeled, replace=False)
 
-    filenames = [os.path.join('seed' + str(FLAGS.dataset_seed), filename) for filename in filenames]
-    filename_queue = generate_filename_queue(filenames, FLAGS.data_dir)
-    image, label = read(filename_queue)
-    image = transform(tf.cast(image, tf.float32))
-    return generate_batch([image], num_examples, batch_size, shuffle)
+        u_idx = numpy.setdiff1d(numpy.arange(n_total), l_idx, assume_unique=True)
+
+        return images[l_idx], labels[l_idx], images[u_idx], labels[u_idx]
 
 
-def main(argv):
-    prepare_dataset()
+    @property
+    def n_labeled(self):
+        return self._n_labeled
+
+    @property
+    def num_examples(self):
+        return self.num_labeled + self.num_unlabeled
+
+    @property
+    def labeled_ds(self):
+        return self._labeled_ds
+
+    @property
+    def unlabeled_ds(self):
+        return self._unlabeled_ds
+
+    @property
+    def num_labeled(self):
+        return self._labeled_ds.num_examples
+
+    @property
+    def num_unlabeled(self):
+        return self._unlabeled_ds.num_examples
 
 
-if __name__ == "__main__":
-    tf.app.run()
+
+def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
+                   one_hot=False, verbose=False, validation_size=0):
+  class DataSets(object):
+    pass
+  data_sets = DataSets()
+
+  if fake_data:
+    data_sets.train = DataSet([], [], fake_data=True)
+    data_sets.validation = DataSet([], [], fake_data=True)
+    data_sets.test = DataSet([], [], fake_data=True)
+    return data_sets
+
+  TRAIN_IMAGES = 'train-images-idx3-ubyte.gz'
+  TRAIN_LABELS = 'train-labels-idx1-ubyte.gz'
+  TEST_IMAGES = 't10k-images-idx3-ubyte.gz'
+  TEST_LABELS = 't10k-labels-idx1-ubyte.gz'
+  VALIDATION_SIZE = validation_size
+
+  local_file = maybe_download(TRAIN_IMAGES, train_dir, verbose=verbose)
+  train_images = extract_images(local_file, verbose=verbose)
+
+  local_file = maybe_download(TRAIN_LABELS, train_dir, verbose=verbose)
+  train_labels = extract_labels(local_file, one_hot=one_hot, verbose=verbose)
+
+  local_file = maybe_download(TEST_IMAGES, train_dir, verbose=verbose)
+  test_images = extract_images(local_file, verbose=verbose)
+
+  local_file = maybe_download(TEST_LABELS, train_dir, verbose=verbose)
+  test_labels = extract_labels(local_file, one_hot=one_hot, verbose=verbose)
+
+  validation_images = train_images[:VALIDATION_SIZE]
+  validation_labels = train_labels[:VALIDATION_SIZE]
+  train_images = train_images[VALIDATION_SIZE:]
+  train_labels = train_labels[VALIDATION_SIZE:]
+
+  data_sets.train = SemiDataSet(train_images, train_labels, n_labeled)
+  data_sets.train_eval = DataSet(train_images, train_labels)
+  data_sets.validation = DataSet(validation_images, validation_labels)
+  data_sets.test = DataSet(test_images, test_labels)
+
+  return data_sets
