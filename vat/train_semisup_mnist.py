@@ -44,24 +44,24 @@ def build_training_graph(x, y, ul_x, lr, mom):
         trainable=False,
     )
     logit = vat.forward(x)
-    print(logit.get_shape(), y.get_shape())
+    # print(logit.get_shape(), y.get_shape())
     # IPython.embed()
     nll_loss = L.ce_loss(logit, y)
-    with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-        if params.method == 'vat':
-            ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
-            vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
-            additional_loss = vat_loss
-        elif params.method == 'vatent':
-            ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
-            vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
-            ent_loss = L.entropy_y_x(ul_logit)
-            additional_loss = vat_loss + ent_loss
-        elif params.method == 'baseline':
-            additional_loss = 0
-        else:
-            raise NotImplementedError
-        loss = nll_loss + additional_loss
+    # with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+    if params.method == 'vat':
+        ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
+        vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
+        additional_loss = vat_loss
+    elif params.method == 'vatent':
+        ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
+        vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
+        ent_loss = L.entropy_y_x(ul_logit)
+        additional_loss = vat_loss + ent_loss
+    elif params.method == 'baseline':
+        additional_loss = 0
+    else:
+        raise NotImplementedError
+    loss = nll_loss + additional_loss
 
     opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=mom)
     tvars = tf.trainable_variables()
