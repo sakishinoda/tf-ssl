@@ -24,6 +24,7 @@ parser.add_argument('--eval_freq', default=5, type=int)
 parser.add_argument('--num_epochs', default=120, type=int)
 parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
 parser.add_argument('--learning_rate', default=0.001, type=float)
+parser.add_argument('--num_labeled', default=100, type=int)
 
 
 params = parser.parse_args()
@@ -84,7 +85,8 @@ def main():
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(params.which_gpu)
 
-    mnist = read_data_sets('MNIST_data', one_hot=True, n_labeled=100)
+    mnist = read_data_sets('MNIST_data', one_hot=True,
+                           n_labeled=params.num_labeled)
 
     # Training
     training_placeholders = dict(
