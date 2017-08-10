@@ -30,17 +30,17 @@ def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=12
         return tf.get_variable('b'+str(i), shape=s,
                                initializer=tf.zeros_initializer)
 
-    h = tf.nn.relu(tf.matmul(x, weight([784, 1200], 1))+bias([1200], 1))
+    h = tf.nn.relu(tf.matmul(x, weight([784, 1200], 1)) + bias([1200], 1))
 
     h = L.bn(h, 1200, is_training=is_training,
              update_batch_stats=update_batch_stats, name='bn1')
 
-    h = tf.nn.relu(tf.matmul(h, weight([1200, 1200], 2))+bias([1200], 2))
+    h = tf.nn.relu(tf.matmul(h, weight([1200, 1200], 2)) + bias([1200], 2))
 
     h = L.bn(h, 1200, is_training=is_training,
              update_batch_stats=update_batch_stats, name='bn2')
 
-    h = tf.matmul(h, weight([1200, 10], 3), + bias([10], 3))
+    h = tf.matmul(h, weight([1200, 10], 3)) + bias([10], 3)
 
     return h
     # return cnn.logit(x, is_training=is_training,
