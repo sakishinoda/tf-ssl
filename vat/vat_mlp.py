@@ -10,7 +10,8 @@ import tensorflow.contrib.layers as tfl
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_float('epsilon', 8.0, "norm length for (virtual) adversarial training ")
+tf.app.flags.DEFINE_float('epsilon', 1.0,
+                          "norm length for (virtual) adversarial training ")
 tf.app.flags.DEFINE_integer('num_power_iterations', 1, "the number of power iterations")
 tf.app.flags.DEFINE_float('xi', 1e-6, "small constant for finite difference")
 
