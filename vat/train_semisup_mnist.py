@@ -29,13 +29,12 @@ parser.add_argument('--num_labeled', default=100, type=int)
 parser.add_argument('--epsilon', default=8.0, type=float) # 0.3 for SSL MNIST
 parser.add_argument('--num_power_iterations', default=1, type=int)
 parser.add_argument('--xi', default=1e-6, type=float)
+parser.add_argument('--epoch_decay_start', default=80, type=int)
+parser.add_argument('--mom1', default=0.9, type=float)
+parser.add_argument('--mom2', default=0.5, type=float)
 params = parser.parse_args()
 
-
-params.epoch_decay_start = 80
 params.num_iter_per_epoch = 400
-params.mom1 = 0.9
-params.mom2 = 0.5
 params.lrelu_a = 0.1
 params.top_bn = False
 
