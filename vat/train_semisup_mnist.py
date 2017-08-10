@@ -176,7 +176,8 @@ def main():
 
                     eval_acc['train'] += acc_val
 
-
+                eval_acc['train'] /= n_iter_per_epoch
+                
                 # Eval on testing data
 
                 n_iter_per_epoch = mnist.test.num_examples // \
@@ -196,6 +197,8 @@ def main():
 
                     eval_acc['test'] += acc_val
 
+                eval_acc['test'] /= n_iter_per_epoch
+                
                 with open(acc_file, 'a') as acc_log:
                     print(ep, eval_acc['train'], eval_acc['test'], file=acc_log)
 
