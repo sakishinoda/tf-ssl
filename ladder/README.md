@@ -1,12 +1,3 @@
-# Ladder network
+This is an implementation of Ladder Network in TensorFlow. Ladder network is a deep learning algorithm that combines supervised and unsupervised learning. It was introduced in the paper _Semi-Supervised Learning with Ladder Network_ by A Rasmus, H Valpola, M Honkala, M Berglund, and T Raiko.
 
-Implementation based on the original paper by [Rasmus et al. (2015)](http://arxiv.org/abs/1507.02672) and the findings by [Pezeshki et al. (2015)](http://arxiv.org/abs/1511.06430).
 
-* [ ] Decoder architecture variants
-  * [x] Gamma decoder (Rasmus)
-  * [ ] Full ladder (Rasmus)
-* [ ] Recombination function variants
-  * [ ] 'Vanilla' (Rasmus)
-  * [ ] MLP (Pezeshki)
-  * [x] AMLP (Pezeshki)
-  * [ ] (...)

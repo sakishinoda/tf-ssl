@@ -1,5 +1,5 @@
 
-import IPython
+# import IPython
 import sys, os
 sys.path.append(os.path.join(sys.path[0],'..'))
 from src import feed, utils
@@ -13,7 +13,7 @@ def test_data_balancing():
     # Test mnist data balancing z
     mnist = input_data.read_data_sets(sys.path[0]+'/../data/mnist/', one_hot=True)
     sf = feed.Balanced(mnist.validation.images, mnist.validation.labels, 100, None)
-    IPython.embed()
+    # IPython.embed()
 
 
 def get_testing_mode_params(gamma=True, num_labeled=100, seed=1):
@@ -122,16 +122,51 @@ def test_fully_supervised_with_labeled_subsets():
 
 
 def test_fully_supervised_with_all_labeled():
-    params = get_testing_mode_params(num_labeled=55000)
+    params = utils.process_cli_params(utils.get_cli_params())
+
+    # Alter from default to simplify
+    params.do_not_save = True
+    # params.decay_start_epoch = 1
+    # params.end_epoch = 2
+    params.train_flag = True
+    params.gamma_flag = False
+    params.num_labeled = 55000
     params.seed = 1
     params.rc_weights = [0 for x in params.rc_weights]
     params.use_labeled_epochs = True
+
     tf.reset_default_graph()
     params.id = "fully_sup"
     params.write_to = "tests/" + params.id
     ldr.main(params)
 
 
+
+def test_compare_loss_from_unlabeled_batch_sizes():
+    params = utils.process_cli_params(utils.get_cli_params())
+
+    # Alter from default to simplify
+    params.do_not_save = True
+    # params.decay_start_epoch = 1
+    # params.end_epoch = 2
+    params.train_flag = True
+    # params.gamma_flag = gamma
+    # params.num_labeled = num_labeled
+    # params.seed = seed
+
+    params.decay_start_epoch = 10
+    params.end_epoch = 15
+    params.seed = 1
+
+    base_id = 'unlabeled_batch_size_'
+    write_dir = 'tests/'
+
+    for unlabeled_batch_size in [100, 250]:
+        tf.reset_default_graph()
+        params.unlabeled_batch_size = unlabeled_batch_size
+        params.id = base_id + str(unlabeled_batch_size)
+        params.write_to = write_dir + params.id
+        ldr.main(params)
 
 
 
@@ -300,4 +335,5 @@ if __name__ == '__main__':
     # test_if_zero_rc_is_dummy()
     # sim = test_similarity("tests/gamma_equiv_gamma", "tests/gamma_equiv_ladder")
     # print(sum(sim) / len(sim))
-    test_fully_supervised_with_all_labeled()
+    # test_fully_supervised_with_all_labeled()
+    test_compare_loss_from_unlabeled_batch_sizes()
