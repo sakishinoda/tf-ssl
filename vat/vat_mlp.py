@@ -20,14 +20,19 @@ def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=12
     h = tfl.fully_connected(x,
                             num_outputs=1200,
                             activation_fn=tf.nn.relu,
-                            normalizer_fn=tfl.batch_norm)
+                            normalizer_fn=None)
 
+    h = L.bn(h, 1200, is_training=is_training,
+             update_batch_stats=update_batch_stats, name='bn1')
 
 
     h = tfl.fully_connected(h,
                             num_outputs=1200,
                             activation_fn=tf.nn.relu,
-                            normalizer_fn=tfl.batch_norm)
+                            normalizer_fn=None)
+
+    h = L.bn(h, 1200, is_training=is_training,
+             update_batch_stats=update_batch_stats, name='bn2')
 
     h = tfl.fully_connected(h,
                             num_outputs=10,

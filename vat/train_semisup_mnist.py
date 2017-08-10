@@ -6,12 +6,11 @@ import tensorflow as tf
 import layers as L
 import vat_mlp as vat
 
-
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('device', '/gpu:0', "device")
 
-# tf.app.flags.DEFINE_string('dataset', 'cifar10', "{cifar10, svhn}")
+tf.app.flags.DEFINE_string('dataset', 'cifar10', "{cifar10, svhn}")
 
 tf.app.flags.DEFINE_string('log_dir', "", "log_dir")
 tf.app.flags.DEFINE_integer('seed', 1, "initial random seed")
@@ -30,7 +29,7 @@ tf.app.flags.DEFINE_float('mom2', 0.5, "momentum rate after epoch_decay_start")
 
 tf.app.flags.DEFINE_string('method', 'vat', "{vat, vatent, baseline}")
 
-
+#
 #
 # if FLAGS.dataset == 'cifar10':
 #     from cifar10 import inputs, unlabeled_inputs
@@ -38,7 +37,7 @@ tf.app.flags.DEFINE_string('method', 'vat', "{vat, vatent, baseline}")
 #     from svhn import inputs, unlabeled_inputs
 # else:
 #     raise NotImplementedError
-#
+from mnist import inputs, unlabeled_inputs
 
 NUM_EVAL_EXAMPLES = 5000
 
@@ -179,9 +178,9 @@ def main(_):
                 if (ep + 1) % FLAGS.eval_freq == 0 or ep + 1 == FLAGS.num_epochs:
                     # Eval on training data
                     act_values_dict = {}
-                    for key, _ in losses_eval_train.iteritems():
+                    for key, _ in losses_eval_train.items():
                         act_values_dict[key] = 0
-                    n_iter_per_epoch = NUM_EVAL_EXAMPLES / FLAGS.eval_batch_size
+                    n_iter_per_epoch = NUM_EVAL_EXAMPLES // FLAGS.eval_batch_size
                     for i in range(n_iter_per_epoch):
                         values = losses_eval_train.values()
                         act_values = sess.run(values)
@@ -189,7 +188,7 @@ def main(_):
                             act_values_dict[key] += value
                     summary = tf.Summary()
                     current_global_step = sess.run(global_step)
-                    for key, value in act_values_dict.iteritems():
+                    for key, value in act_values_dict.items():
                         print("train-" + key, value / n_iter_per_epoch)
                         summary.value.add(tag=key, simple_value=value / n_iter_per_epoch)
                     if writer_train is not None:
@@ -197,9 +196,9 @@ def main(_):
 
                     # Eval on test data
                     act_values_dict = {}
-                    for key, _ in losses_eval_test.iteritems():
+                    for key, _ in losses_eval_test.items():
                         act_values_dict[key] = 0
-                    n_iter_per_epoch = NUM_EVAL_EXAMPLES / FLAGS.eval_batch_size
+                    n_iter_per_epoch = NUM_EVAL_EXAMPLES // FLAGS.eval_batch_size
                     for i in range(n_iter_per_epoch):
                         values = losses_eval_test.values()
                         act_values = sess.run(values)
@@ -207,7 +206,7 @@ def main(_):
                             act_values_dict[key] += value
                     summary = tf.Summary()
                     current_global_step = sess.run(global_step)
-                    for key, value in act_values_dict.iteritems():
+                    for key, value in act_values_dict.items():
                         print("test-" + key, value / n_iter_per_epoch)
                         summary.value.add(tag=key, simple_value=value / n_iter_per_epoch)
                     if writer_test is not None:
