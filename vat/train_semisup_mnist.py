@@ -4,13 +4,14 @@ import numpy
 import tensorflow as tf
 
 import layers as L
-import vat
+import vat_mlp as vat
+
 
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('device', '/gpu:0', "device")
 
-tf.app.flags.DEFINE_string('dataset', 'cifar10', "{cifar10, svhn}")
+# tf.app.flags.DEFINE_string('dataset', 'cifar10', "{cifar10, svhn}")
 
 tf.app.flags.DEFINE_string('log_dir', "", "log_dir")
 tf.app.flags.DEFINE_integer('seed', 1, "initial random seed")
@@ -30,14 +31,14 @@ tf.app.flags.DEFINE_float('mom2', 0.5, "momentum rate after epoch_decay_start")
 tf.app.flags.DEFINE_string('method', 'vat', "{vat, vatent, baseline}")
 
 
-
-if FLAGS.dataset == 'cifar10':
-    from cifar10 import inputs, unlabeled_inputs
-elif FLAGS.dataset == 'svhn':
-    from svhn import inputs, unlabeled_inputs 
-else: 
-    raise NotImplementedError
-
+#
+# if FLAGS.dataset == 'cifar10':
+#     from cifar10 import inputs, unlabeled_inputs
+# elif FLAGS.dataset == 'svhn':
+#     from svhn import inputs, unlabeled_inputs
+# else:
+#     raise NotImplementedError
+#
 
 NUM_EVAL_EXAMPLES = 5000
 
