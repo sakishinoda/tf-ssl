@@ -47,21 +47,22 @@ def build_training_graph(x, y, ul_x, lr, mom):
     # print(logit.get_shape(), y.get_shape())
     # IPython.embed()
     nll_loss = L.ce_loss(logit, y)
-    # with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-    if params.method == 'vat':
-        ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
-        vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
-        additional_loss = vat_loss
-    elif params.method == 'vatent':
-        ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
-        vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
-        ent_loss = L.entropy_y_x(ul_logit)
-        additional_loss = vat_loss + ent_loss
-    elif params.method == 'baseline':
-        additional_loss = 0
-    else:
-        raise NotImplementedError
-    loss = nll_loss + additional_loss
+    with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+        if params.method == 'vat':
+            tf.get_variable_scope().reuse_variables()
+            ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
+            vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
+            additional_loss = vat_loss
+        elif params.method == 'vatent':
+            ul_logit = vat.forward(ul_x, is_training=True, update_batch_stats=False)
+            vat_loss = vat.virtual_adversarial_loss(ul_x, ul_logit)
+            ent_loss = L.entropy_y_x(ul_logit)
+            additional_loss = vat_loss + ent_loss
+        elif params.method == 'baseline':
+            additional_loss = 0
+        else:
+            raise NotImplementedError
+        loss = nll_loss + additional_loss
 
     opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=mom)
     tvars = tf.trainable_variables()
@@ -91,7 +92,7 @@ def main():
         ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
 
     )
-    # eval_placeholders = dict(
+    # training_placeholders = dict(
     #     inputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 784)),
     #     outputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 10))
     # )
@@ -167,8 +168,8 @@ def main():
                         mnist.test.next_batch(params.eval_batch_size)
 
                     eval_feed_dict = {
-                        eval_placeholders['inputs']: test_images,
-                        eval_placeholders['outputs']: test_labels
+                        training_placeholders['inputs']: test_images,
+                        training_placeholders['outputs']: test_labels
                     }
 
                     acc_val = sess.run(acc_op, eval_feed_dict)
@@ -187,8 +188,8 @@ def main():
                         mnist.test.next_batch(params.eval_batch_size)
 
                     eval_feed_dict = {
-                        eval_placeholders['inputs']: test_images,
-                        eval_placeholders['outputs']: test_labels
+                        training_placeholders['inputs']: test_images,
+                        training_placeholders['outputs']: test_labels
                     }
 
                     acc_val = sess.run(acc_op, eval_feed_dict)
