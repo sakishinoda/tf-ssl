@@ -99,7 +99,7 @@ def main():
     lr = tf.placeholder_with_default(params.learning_rate, shape=[], name="learning_rate")
     mom = tf.placeholder_with_default(params.mom1, shape=[], name="momentum")
 
-    with tf.variable_scope("MLP") as scope:
+    with tf.variable_scope("MLP", reuse=None) as scope:
         loss, train_op, global_step = build_training_graph(
             training_placeholders['inputs'],
             training_placeholders['outputs'],
