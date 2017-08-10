@@ -86,20 +86,20 @@ def main():
 
     # Training
     training_placeholders = dict(
-        inputs = tf.placeholder(tf.float32, shape=(params.batch_size, 784)),
-        outputs = tf.placeholder(tf.float32, shape=(params.batch_size, 10)),
+        inputs = tf.placeholder(tf.float32, shape=(None, 784)),
+        outputs = tf.placeholder(tf.float32, shape=(None, 10)),
         ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
 
     )
-    eval_placeholders = dict(
-        inputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 784)),
-        outputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 10))
-    )
+    # eval_placeholders = dict(
+    #     inputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 784)),
+    #     outputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 10))
+    # )
 
     lr = tf.placeholder_with_default(params.learning_rate, shape=[], name="learning_rate")
     mom = tf.placeholder_with_default(params.mom1, shape=[], name="momentum")
 
-    with tf.variable_scope("MLP", reuse=None) as scope:
+    with tf.variable_scope('MLP', reuse=None) as scope:
         loss, train_op, global_step = build_training_graph(
             training_placeholders['inputs'],
             training_placeholders['outputs'],
@@ -108,8 +108,8 @@ def main():
 
         scope.reuse_variables()
         acc_op = accuracy(
-            eval_placeholders['inputs'],
-            eval_placeholders['outputs'])
+            training_placeholders['inputs'],
+            training_placeholders['outputs'])
 
     init_op = tf.global_variables_initializer()
 
