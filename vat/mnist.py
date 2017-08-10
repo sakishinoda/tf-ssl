@@ -154,14 +154,15 @@ class SemiDataSet(object):
         # Labeled DataSet
         self._labeled_ds = DataSet(l_images, l_labels)
 
-    def next_batch(self, batch_size):
-        unlabeled_images, _ = self.unlabeled_ds.next_batch(batch_size)
+    def next_batch(self, batch_size, ul_batch_size):
+        unlabeled_images, _ = self.unlabeled_ds.next_batch(ul_batch_size)
         if batch_size > self.n_labeled:
             labeled_images, labels = self.labeled_ds.next_batch(self.n_labeled)
         else:
             labeled_images, labels = self.labeled_ds.next_batch(batch_size)
-        images = numpy.vstack([labeled_images, unlabeled_images])
-        return images, labels
+        # images = numpy.vstack([labeled_images, unlabeled_images])
+        # return images, labels
+        return labeled_images, labels, unlabeled_images
 
     def sample_balanced_labeled(self, images, labels, num_labeled):
         n_total, n_classes = labels.shape
@@ -246,6 +247,7 @@ def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
   train_labels = train_labels[VALIDATION_SIZE:]
 
   data_sets.train = SemiDataSet(train_images, train_labels, n_labeled)
+  data_sets.train_eval = DataSet(train_images, train_labels)
   data_sets.validation = DataSet(validation_images, validation_labels)
   data_sets.test = DataSet(test_images, test_labels)
 

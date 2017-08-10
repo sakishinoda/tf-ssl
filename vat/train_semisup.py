@@ -30,6 +30,7 @@ tf.app.flags.DEFINE_float('mom2', 0.5, "momentum rate after epoch_decay_start")
 tf.app.flags.DEFINE_string('method', 'vat', "{vat, vatent, baseline}")
 
 
+
 if FLAGS.dataset == 'cifar10':
     from cifar10 import inputs, unlabeled_inputs
 elif FLAGS.dataset == 'svhn':
