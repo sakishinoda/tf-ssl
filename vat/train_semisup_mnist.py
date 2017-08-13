@@ -126,7 +126,7 @@ def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
 
 
 
-def build_training_graph(x, y, ul_x, lr, mom):
+def build_training_graph(x, y, ul_x, lr):
     global_step = tf.get_variable(
         name="global_step",
         shape=[],
@@ -180,7 +180,7 @@ def main():
 
     with tf.variable_scope('MLP', reuse=None) as scope:
         loss, train_op, global_step = build_training_graph(inputs, outputs,
-                                                           ul_inputs, lr, mom)
+                                                           ul_inputs, lr)
         scope.reuse_variables()
         acc_op = accuracy(inputs, outputs)
 
