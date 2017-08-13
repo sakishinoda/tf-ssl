@@ -1,5 +1,5 @@
 
-import IPython
+# import IPython
 import argparse
 import tensorflow as tf
 # import vat_mlp as vat
@@ -18,23 +18,23 @@ parser.add_argument('--which_gpu', default='0')
 parser.add_argument('--log_dir', default='')
 parser.add_argument('--seed', default=1, type=int)
 parser.add_argument('--validation', action='store_true')
-parser.add_argument('--batch_size', default=32, type=int)
-parser.add_argument('--ul_batch_size', default=128, type=int)
+parser.add_argument('--batch_size', default=100, type=int)
+parser.add_argument('--ul_batch_size', default=250, type=int)
 parser.add_argument('--eval_batch_size', default=100, type=int)
 parser.add_argument('--eval_freq', default=5, type=int)
 parser.add_argument('--num_epochs', default=120, type=int)
 parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
-parser.add_argument('--learning_rate', default=0.001, type=float)
+parser.add_argument('--learning_rate', default=0.002, type=float)
 parser.add_argument('--num_labeled', default=100, type=int)
-parser.add_argument('--epsilon', default=8.0, type=float) # 0.3 for SSL MNIST
+parser.add_argument('--epsilon', default=0.3, type=float) # 0.3 for SSL MNIST
 parser.add_argument('--num_power_iterations', default=1, type=int)
 parser.add_argument('--xi', default=1e-6, type=float)
 parser.add_argument('--epoch_decay_start', default=80, type=int)
 parser.add_argument('--mom1', default=0.9, type=float)
-parser.add_argument('--mom2', default=0.5, type=float)
+# parser.add_argument('--mom2', default=0.5, type=float)
 params = parser.parse_args()
 
-params.num_iter_per_epoch = 400
+params.num_iter_per_epoch = 240
 params.lrelu_a = 0.1
 params.top_bn = False
 
@@ -48,12 +48,12 @@ def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=12
         return tf.get_variable('b'+str(i), shape=s,
                                initializer=tf.zeros_initializer)
 
-    h = tf.nn.relu(tf.matmul(x, weight([784, 1200], 1)) + bias([1200], 1))
+    h = L.lrelu(tf.matmul(x, weight([784, 1200], 1)) + bias([1200], 1))
 
     h = L.bn(h, 1200, is_training=is_training,
              update_batch_stats=update_batch_stats, name='bn1')
 
-    h = tf.nn.relu(tf.matmul(h, weight([1200, 1200], 2)) + bias([1200], 2))
+    h = L.lrelu(tf.matmul(h, weight([1200, 1200], 2)) + bias([1200], 2))
 
     h = L.bn(h, 1200, is_training=is_training,
              update_batch_stats=update_batch_stats, name='bn2')
@@ -126,10 +126,6 @@ def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
 
 
 
-
-
-
-
 def build_training_graph(x, y, ul_x, lr, mom):
     global_step = tf.get_variable(
         name="global_step",
@@ -139,27 +135,15 @@ def build_training_graph(x, y, ul_x, lr, mom):
         trainable=False,
     )
     logit = forward(x)
-    # print(logit.get_shape(), y.get_shape())
-    # IPython.embed()
+
     nll_loss = L.ce_loss(logit, y)
     with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-        if params.method == 'vat':
-            ul_logit = forward(ul_x, is_training=True,
-                                   update_batch_stats=False)
-            vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
-            additional_loss = vat_loss
-        elif params.method == 'vatent':
-            ul_logit = forward(ul_x, is_training=True, update_batch_stats=False)
-            vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
-            ent_loss = L.entropy_y_x(ul_logit)
-            additional_loss = vat_loss + ent_loss
-        elif params.method == 'baseline':
-            additional_loss = 0
-        else:
-            raise NotImplementedError
-        loss = nll_loss + additional_loss
+        ul_logit = forward(ul_x, is_training=True,
+                           update_batch_stats=False)
+        vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
+        loss = nll_loss + vat_loss
 
-    opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=mom)
+    opt = tf.train.AdamOptimizer(learning_rate=lr)
     tvars = tf.trainable_variables()
     grads_and_vars = opt.compute_gradients(loss, tvars)
     train_op = opt.apply_gradients(grads_and_vars, global_step=global_step)
@@ -168,7 +152,9 @@ def build_training_graph(x, y, ul_x, lr, mom):
 
 def accuracy(x, y):
     logit = forward(x, is_training=False, update_batch_stats=False)
-    return L.accuracy(logit, y)
+    pred = tf.argmax(logit, 1)
+    true = tf.argmax(y, 1)
+    return tf.reduce_mean(tf.to_float(tf.equal(pred, true)))
 
 
 def main():
@@ -179,34 +165,24 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = str(params.which_gpu)
 
     mnist = read_data_sets('MNIST_data', one_hot=True,
-                           n_labeled=params.num_labeled)
+                           n_labeled=params.num_labeled,
+                           disjoint=False)
 
     # Training
-    training_placeholders = dict(
-        inputs = tf.placeholder(tf.float32, shape=(None, 784)),
-        outputs = tf.placeholder(tf.float32, shape=(None, 10)),
-        ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
-
-    )
-    # training_placeholders = dict(
-    #     inputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 784)),
-    #     outputs=tf.placeholder(tf.float32, shape=(params.eval_batch_size, 10))
-    # )
+    inputs = tf.placeholder(tf.float32, shape=(None, 784))
+    outputs = tf.placeholder(tf.float32, shape=(None, 10))
+    ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
 
     lr = tf.placeholder_with_default(params.learning_rate, shape=[], name="learning_rate")
-    mom = tf.placeholder_with_default(params.mom1, shape=[], name="momentum")
+    # mom = tf.placeholder_with_default(params.mom1, shape=[], name="momentum")
+    # train_flag = tf.placeholder(tf.bool)
+
 
     with tf.variable_scope('MLP', reuse=None) as scope:
-        loss, train_op, global_step = build_training_graph(
-            training_placeholders['inputs'],
-            training_placeholders['outputs'],
-            training_placeholders['ul_inputs'],
-            lr, mom)
-
+        loss, train_op, global_step = build_training_graph(inputs, outputs,
+                                                           ul_inputs, lr, mom)
         scope.reuse_variables()
-        acc_op = accuracy(
-            training_placeholders['inputs'],
-            training_placeholders['outputs'])
+        acc_op = accuracy(inputs, outputs)
 
     init_op = tf.global_variables_initializer()
 
@@ -223,11 +199,13 @@ def main():
         sess.run(init_op)
         for ep in range(params.num_epochs):
             if ep < params.epoch_decay_start:
-                feed_dict = {lr: params.learning_rate, mom: params.mom1}
+                # feed_dict = {lr: params.learning_rate, mom: params.mom1}
+                feed_dict = {lr: params.learning_rate}
             else:
                 decayed_lr = ((params.num_epochs - ep) / float(
                     params.num_epochs - params.epoch_decay_start)) * params.learning_rate
-                feed_dict = {lr: decayed_lr, mom: params.mom2}
+                # feed_dict = {lr: decayed_lr, mom: params.mom2}
+                feed_dict = {lr: decayed_lr}
 
             sum_loss = 0
             start = time.time()
@@ -235,9 +213,9 @@ def main():
             # TRAINING
             for i in range(params.num_iter_per_epoch):
                 images, labels, ul_images = mnist.train.next_batch(params.batch_size, params.ul_batch_size)
-                feed_dict[training_placeholders['inputs']] = images
-                feed_dict[training_placeholders['outputs']] = labels
-                feed_dict[training_placeholders['ul_inputs']] = ul_images
+                feed_dict[inputs] = images
+                feed_dict[outputs] = labels
+                feed_dict[ul_inputs] = ul_images
                 _, batch_loss, _ = sess.run([train_op, loss, global_step],
                                             feed_dict=feed_dict)
                 sum_loss += batch_loss
@@ -264,8 +242,8 @@ def main():
                         mnist.test.next_batch(params.eval_batch_size)
 
                     eval_feed_dict = {
-                        training_placeholders['inputs']: test_images,
-                        training_placeholders['outputs']: test_labels
+                        inputs: test_images,
+                        outputs: test_labels
                     }
 
                     acc_val = sess.run(acc_op, eval_feed_dict)
@@ -285,8 +263,8 @@ def main():
                         mnist.test.next_batch(params.eval_batch_size)
 
                     eval_feed_dict = {
-                        training_placeholders['inputs']: test_images,
-                        training_placeholders['outputs']: test_labels
+                        inputs: test_images,
+                        outputs: test_labels
                     }
 
                     acc_val = sess.run(acc_op, eval_feed_dict)
