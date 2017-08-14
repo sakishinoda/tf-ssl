@@ -10,33 +10,43 @@ from mnist import read_data_sets
 import time
 import math
 
+def parse_params():
+    parser = argparse.ArgumentParser()
 
-parser = argparse.ArgumentParser()
+    parser.add_argument('--id', default='VAT')
+    parser.add_argument('--which_gpu', default='0')
+    parser.add_argument('--log_dir', default='')
+    parser.add_argument('--seed', default=1, type=int)
+    parser.add_argument('--validation', action='store_true')
+    parser.add_argument('--batch_size', default=100, type=int)
+    parser.add_argument('--ul_batch_size', default=250, type=int)
+    parser.add_argument('--eval_batch_size', default=100, type=int)
+    parser.add_argument('--eval_freq', default=5, type=int)
+    parser.add_argument('--num_epochs', default=120, type=int)
+    parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
+    parser.add_argument('--learning_rate', default=0.002, type=float)
+    parser.add_argument('--num_labeled', default=100, type=int)
+    parser.add_argument('--epsilon', default=0.3, type=float) # 0.3 for SSL MNIST
+    parser.add_argument('--num_power_iterations', default=1, type=int)
+    parser.add_argument('--xi', default=1e-6, type=float)
+    parser.add_argument('--epoch_decay_start', default=80, type=int)
+    parser.add_argument('--mom1', default=0.9, type=float)
+    # parser.add_argument('--mom2', default=0.5, type=float)
+    params = parser.parse_args()
 
-parser.add_argument('--id', default='VAT')
-parser.add_argument('--which_gpu', default='0')
-parser.add_argument('--log_dir', default='')
-parser.add_argument('--seed', default=1, type=int)
-parser.add_argument('--validation', action='store_true')
-parser.add_argument('--batch_size', default=100, type=int)
-parser.add_argument('--ul_batch_size', default=250, type=int)
-parser.add_argument('--eval_batch_size', default=100, type=int)
-parser.add_argument('--eval_freq', default=5, type=int)
-parser.add_argument('--num_epochs', default=120, type=int)
-parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
-parser.add_argument('--learning_rate', default=0.002, type=float)
-parser.add_argument('--num_labeled', default=100, type=int)
-parser.add_argument('--epsilon', default=0.3, type=float) # 0.3 for SSL MNIST
-parser.add_argument('--num_power_iterations', default=1, type=int)
-parser.add_argument('--xi', default=1e-6, type=float)
-parser.add_argument('--epoch_decay_start', default=80, type=int)
-parser.add_argument('--mom1', default=0.9, type=float)
-# parser.add_argument('--mom2', default=0.5, type=float)
-params = parser.parse_args()
+    params.num_iter_per_epoch = 240
+    params.lrelu_a = 0.1
+    params.top_bn = False
 
-params.num_iter_per_epoch = 240
-params.lrelu_a = 0.1
-params.top_bn = False
+    return params
+
+def order_param_settings(params):
+    param_dict = vars(params)
+    param_list = []
+    for k in sorted(param_dict.keys()):
+        param_list.append(str(k) + ": " + str(param_dict[k]))
+
+    return param_list
 
 def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
 
@@ -61,10 +71,7 @@ def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=12
     h = tf.matmul(h, weight([1200, 10], 3)) + bias([10], 3)
 
     return h
-    # return cnn.logit(x, is_training=is_training,
-    #                  update_batch_stats=update_batch_stats,
-    #                  stochastic=stochastic,
-    #                  seed=seed)
+
 
 
 def forward(x, is_training=True, update_batch_stats=True, seed=1234):
@@ -125,7 +132,6 @@ def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
     return loss
 
 
-
 def build_training_graph(x, y, ul_x, lr):
     global_step = tf.get_variable(
         name="global_step",
@@ -158,6 +164,9 @@ def accuracy(x, y):
 
 
 def main():
+    params = parse_params()
+
+
     np.random.seed(params.seed)
     tf.set_random_seed(params.seed)
 
@@ -174,9 +183,6 @@ def main():
     ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
 
     lr = tf.placeholder_with_default(params.learning_rate, shape=[], name="learning_rate")
-    # mom = tf.placeholder_with_default(params.mom1, shape=[], name="momentum")
-    # train_flag = tf.placeholder(tf.bool)
-
 
     with tf.variable_scope('MLP', reuse=None) as scope:
         loss, train_op, global_step = build_training_graph(inputs, outputs,
@@ -193,7 +199,9 @@ def main():
         os.makedirs(log_dir)
     log_file = log_dir + "/" + "train_log"
     acc_file = log_dir + "/" + "acc_log"
-
+    desc_file = log_dir + "/" + "description"
+    with open(desc_file, 'a') as f:
+        print(*order_param_settings(params), sep='\n', file=f, flush=True)
 
     with tf.Session() as sess:
         sess.run(init_op)
@@ -273,7 +281,8 @@ def main():
                 eval_acc['test'] /= n_iter_per_epoch
                 
                 with open(acc_file, 'a') as acc_log:
-                    print(ep, eval_acc['train'], eval_acc['test'], file=acc_log)
+                    print(ep, eval_acc['train'], eval_acc['test'],
+                          file=acc_log, sep=',')
 
 
 if __name__ == "__main__" :
