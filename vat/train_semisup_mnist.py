@@ -11,6 +11,10 @@ import time
 import math
 
 
+def parse_argstring(argstring, dtype=float, sep='-'):
+    return list(map(dtype, argstring.split(sep)))
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--id', default='VAT')
@@ -18,11 +22,11 @@ parser.add_argument('--which_gpu', default='0')
 parser.add_argument('--log_dir', default='')
 parser.add_argument('--seed', default=1, type=int)
 parser.add_argument('--validation', action='store_true')
-parser.add_argument('--batch_size', default=100, type=int)
-parser.add_argument('--ul_batch_size', default=250, type=int)
+parser.add_argument('--batch_size', default=64, type=int)
+parser.add_argument('--ul_batch_size', default=256, type=int)
 parser.add_argument('--eval_batch_size', default=100, type=int)
-parser.add_argument('--eval_freq', default=5, type=int)
-parser.add_argument('--num_epochs', default=120, type=int)
+parser.add_argument('--eval_freq', default=1, type=int)
+parser.add_argument('--num_epochs', default=100, type=int)
 parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
 parser.add_argument('--learning_rate', default=0.002, type=float)
 parser.add_argument('--num_labeled', default=100, type=int)
@@ -31,13 +35,15 @@ parser.add_argument('--num_power_iterations', default=1, type=int)
 parser.add_argument('--xi', default=1e-6, type=float)
 parser.add_argument('--epoch_decay_start', default=80, type=int)
 parser.add_argument('--mom1', default=0.9, type=float)
+parser.add_argument('--mlp_layers', default='784-1200-600-300-150-10')
 # parser.add_argument('--mom2', default=0.5, type=float)
 params = parser.parse_args()
 
+# params.layer_spec = [784, 1200, 600, 300, 150, 10]
+params.layer_spec = parse_argstring(params.mlp_layers, int)
 params.num_iter_per_epoch = 240
 params.lrelu_a = 0.1
 params.top_bn = False
-
 
 
 def order_param_settings(params):
@@ -48,7 +54,32 @@ def order_param_settings(params):
 
     return param_list
 
-def logit(x, is_training=True, update_batch_stats=True, stochastic=True, seed=1234):
+def logit(x, is_training=True, update_batch_stats=True, stochastic=True,
+           seed=1234):
+
+    def weight(s, i):
+        return tf.get_variable('w'+str(i), shape=s,
+                               initializer=tf.random_normal_initializer(stddev=(
+                               1/math.sqrt(sum(s)))))
+    def bias(s, i):
+        return tf.get_variable('b'+str(i), shape=s,
+                               initializer=tf.zeros_initializer)
+
+    ls = list(zip(params.layer_spec[:-1], params.layer_spec[1:]))
+
+    h = x
+    for i, l in enumerate(ls):
+        h = L.lrelu(tf.matmul(h, weight(l, i)) + bias(l[-1], i))
+        if i < len(ls)-1:
+            h = L.bn(h, l[-1], is_training=is_training,
+                     update_batch_stats=update_batch_stats, name='bn'+str(i))
+            if is_training: # for stabilisation
+                h += tf.random_normal(tf.shape(h), stddev=0.5)
+
+    return h
+
+def logit_old(x, is_training=True, update_batch_stats=True, stochastic=True,
+           seed=1234):
 
     def weight(s, i):
         return tf.get_variable('w'+str(i), shape=s,
@@ -192,7 +223,7 @@ def main():
 
     # -----------------------------
     # Write logs to appropriate directory
-    log_dir = "logs/" + params.id
+    log_dir = "logs/DeepMlpVat/" + params.id
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     log_file = log_dir + "/" + "train_log"
