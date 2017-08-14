@@ -198,7 +198,7 @@ def main():
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     log_file = log_dir + "/" + "train_log"
-    acc_file = log_dir + "/" + "acc_log"
+    acc_file = log_dir + "/" + "acc_log.csv"
     desc_file = log_dir + "/" + "description"
     with open(desc_file, 'a') as f:
         print(*order_param_settings(params), sep='\n', file=f, flush=True)
