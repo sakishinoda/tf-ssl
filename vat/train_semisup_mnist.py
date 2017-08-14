@@ -10,35 +10,35 @@ from mnist import read_data_sets
 import time
 import math
 
-def parse_params():
-    parser = argparse.ArgumentParser()
 
-    parser.add_argument('--id', default='VAT')
-    parser.add_argument('--which_gpu', default='0')
-    parser.add_argument('--log_dir', default='')
-    parser.add_argument('--seed', default=1, type=int)
-    parser.add_argument('--validation', action='store_true')
-    parser.add_argument('--batch_size', default=100, type=int)
-    parser.add_argument('--ul_batch_size', default=250, type=int)
-    parser.add_argument('--eval_batch_size', default=100, type=int)
-    parser.add_argument('--eval_freq', default=5, type=int)
-    parser.add_argument('--num_epochs', default=120, type=int)
-    parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
-    parser.add_argument('--learning_rate', default=0.002, type=float)
-    parser.add_argument('--num_labeled', default=100, type=int)
-    parser.add_argument('--epsilon', default=0.3, type=float) # 0.3 for SSL MNIST
-    parser.add_argument('--num_power_iterations', default=1, type=int)
-    parser.add_argument('--xi', default=1e-6, type=float)
-    parser.add_argument('--epoch_decay_start', default=80, type=int)
-    parser.add_argument('--mom1', default=0.9, type=float)
-    # parser.add_argument('--mom2', default=0.5, type=float)
-    params = parser.parse_args()
+parser = argparse.ArgumentParser()
 
-    params.num_iter_per_epoch = 240
-    params.lrelu_a = 0.1
-    params.top_bn = False
+parser.add_argument('--id', default='VAT')
+parser.add_argument('--which_gpu', default='0')
+parser.add_argument('--log_dir', default='')
+parser.add_argument('--seed', default=1, type=int)
+parser.add_argument('--validation', action='store_true')
+parser.add_argument('--batch_size', default=100, type=int)
+parser.add_argument('--ul_batch_size', default=250, type=int)
+parser.add_argument('--eval_batch_size', default=100, type=int)
+parser.add_argument('--eval_freq', default=5, type=int)
+parser.add_argument('--num_epochs', default=120, type=int)
+parser.add_argument('--method', default='vat') # 'vat', 'vatent', 'baseline'
+parser.add_argument('--learning_rate', default=0.002, type=float)
+parser.add_argument('--num_labeled', default=100, type=int)
+parser.add_argument('--epsilon', default=0.3, type=float) # 0.3 for SSL MNIST
+parser.add_argument('--num_power_iterations', default=1, type=int)
+parser.add_argument('--xi', default=1e-6, type=float)
+parser.add_argument('--epoch_decay_start', default=80, type=int)
+parser.add_argument('--mom1', default=0.9, type=float)
+# parser.add_argument('--mom2', default=0.5, type=float)
+params = parser.parse_args()
 
-    return params
+params.num_iter_per_epoch = 240
+params.lrelu_a = 0.1
+params.top_bn = False
+
+
 
 def order_param_settings(params):
     param_dict = vars(params)
@@ -164,8 +164,6 @@ def accuracy(x, y):
 
 
 def main():
-    params = parse_params()
-
 
     np.random.seed(params.seed)
     tf.set_random_seed(params.seed)
