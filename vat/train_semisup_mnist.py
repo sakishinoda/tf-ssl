@@ -235,11 +235,10 @@ def main():
                 n_iter_per_epoch = mnist.train_eval.num_examples // \
                                    params.eval_batch_size
 
-
                 for i in range(n_iter_per_epoch):
 
                     test_images, test_labels = \
-                        mnist.test.next_batch(params.eval_batch_size)
+                        mnist.train.next_batch(params.eval_batch_size)
 
                     eval_feed_dict = {
                         inputs: test_images,
