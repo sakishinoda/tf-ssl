@@ -15,85 +15,86 @@ def parse_argstring(argstring, dtype=float, sep='-'):
 
 def get_cli_params():
     parser = argparse.ArgumentParser()
+    add = parser.add_argument
+
     # -------------------------
     # TRAINING
     # -------------------------
-    parser.add_argument('--id', default='ladder')
-    parser.add_argument('--decay_start_epoch', default=100, type=int)
-    parser.add_argument('--end_epoch', default=150, type=int)
-    parser.add_argument('--test_frequency_in_epochs', default=1, type=int)
-    parser.add_argument('--num_labeled', default=100, type=int)
-    parser.add_argument('--batch_size', default=100, type=int)
-    parser.add_argument('--initial_learning_rate', default=0.002, type=float)
-    parser.add_argument('--which_gpu', default=0, type=int)
-    parser.add_argument('--write_to', default=None)
-    parser.add_argument('--seed', default=1, type=int)
+    add('--id', default='ladder')
+    add('--decay_start_epoch', default=100, type=int)
+    add('--end_epoch', default=150, type=int)
+    add('--test_frequency_in_epochs', default=1, type=int)
+    add('--num_labeled', default=100, type=int)
+    add('--batch_size', default=100, type=int)
+    add('--initial_learning_rate', default=0.002, type=float)
+    add('--which_gpu', default=0, type=int)
+    add('--logdir', default='logs/')
+    add('--write_to', default=None)
+    add('--seed', default=1, type=int)
 
     # description to print
-    parser.add_argument('--description', default=None)
+    add('--description', default=None)
 
     # only used if train_flag is false
-    parser.add_argument('--train_step', default=None, type=int)
-    parser.add_argument('--verbose', action='store_true')  # for testing
+    add('--train_step', default=None, type=int)
+    add('--verbose', action='store_true')  # for testing
 
     # option to not save the model at all
-    parser.add_argument('--do_not_save', action='store_true')
+    add('--do_not_save', action='store_true')
 
     # -------------------------
     # LADDER STRUCTURE
     # -------------------------
     # Specify encoder layers
-    parser.add_argument('--encoder_layers',
+    add('--encoder_layers',
                         default='784-1000-500-250-250-250-10')
 
     # Standard deviation of the Gaussian noise to inject at each level
-    parser.add_argument('--encoder_noise_sd', default=0.3, type=float)
+    add('--encoder_noise_sd', default=0.3, type=float)
 
     # Default RC cost corresponds to the gamma network
-    parser.add_argument('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
+    add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
     # -------------------------
     # COMBINATOR STRUCTURE
     # -------------------------
     # Specify form of combinator (A)MLP
-    # parser.add_argument('--combinator_layers', default='4-1')
-    parser.add_argument('--combinator_sd', default=0.025, type=float)
+    # add('--combinator_layers', default='4-1')
+    add('--combinator_sd', default=0.025, type=float)
 
     # by default use the unlabeled batch epochs
-    # parser.add_argument('--use_labeled_epochs', action='store_true')
+    # add('--use_labeled_epochs', action='store_true')
 
     # -------------------------
     # VAT SETTINGS
     # -------------------------
     # vat params
-    parser.add_argument('--epsilon', default = 8.0, type=float)
-    parser.add_argument('--num_power_iterations', default=1, type=int)
-    parser.add_argument('--xi', default=1e-6, type=float)
+    add('--epsilon', default = 8.0, type=float)
+    add('--num_power_iterations', default=1, type=int)
+    add('--xi', default=1e-6, type=float)
 
     # weight of vat cost
-    parser.add_argument('--vat_weight', default=0, type=float)
+    add('--vat_weight', default=0, type=float)
 
     # use VAT RC cost at each layer
-    parser.add_argument('--vat_rc', action='store_true')
+    add('--vat_rc', action='store_true')
 
     # corruption mode
-    parser.add_argument('--corrupt', default='gauss', choices=['gauss',
-                                                               'vatgauss',
-                                                               'vat'])
+    add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
     # weight of entropy minimisation cost
-    parser.add_argument('--ent_weight', default=0, type=float)
+    add('--ent_weight', default=0, type=float)
 
-    parser.add_argument('--keep_prob_hidden', default=0.5, type=float)
-    parser.add_argument('--lrelu_a', default=0.1, type=float)
-    parser.add_argument('--top_bn', action='store_true')
-    parser.add_argument('--bn_stats_decay_factor', default=0.99, type=float)
+    add('--keep_prob_hidden', default=0.5, type=float)
+    add('--lrelu_a', default=0.1, type=float)
+    add('--top_bn', action='store_true')
+    add('--bn_stats_decay_factor', default=0.99, type=float)
 
     # -------------------------
     # CNN LADDER
     # -------------------------
-    parser.add_argument('--cnn', action='store_true')
+    add('--cnn', action='store_true')
     # arguments for the cnn encoder/decoder
-    parser.add_argument('--cnn_init_size', default=32, type=int)
+    add('--cnn_init_size', default=32, type=int)
 
     params = parser.parse_args()
 

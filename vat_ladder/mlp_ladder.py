@@ -366,7 +366,6 @@ def gauss_combinator(z_c, u, size):
 def main():
     params = process_cli_params(get_cli_params())
 
-
     # Set GPU device to use
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(params.which_gpu)
@@ -478,7 +477,7 @@ def main():
 
     # -----------------------------
     # Write logs to appropriate directory
-    log_dir = "logs/" + params.id
+    log_dir = params.logdir + params.id
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
