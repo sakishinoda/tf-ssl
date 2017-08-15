@@ -37,11 +37,12 @@ parser.add_argument('--epoch_decay_start', default=80, type=int)
 parser.add_argument('--mom1', default=0.9, type=float)
 parser.add_argument('--mlp_layers', default='784-1200-600-300-150-10')
 # parser.add_argument('--mom2', default=0.5, type=float)
+parser.add_argument('--num_iter_per_epoch', default=240, type=int)
 params = parser.parse_args()
 
 # params.layer_spec = [784, 1200, 600, 300, 150, 10]
 params.layer_spec = parse_argstring(params.mlp_layers, int)
-params.num_iter_per_epoch = 240
+
 params.lrelu_a = 0.1
 params.top_bn = False
 
@@ -205,6 +206,7 @@ def main():
     mnist = read_data_sets('MNIST_data', one_hot=True,
                            n_labeled=params.num_labeled,
                            disjoint=False)
+
 
     # Training
     inputs = tf.placeholder(tf.float32, shape=(None, 784))

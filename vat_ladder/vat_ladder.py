@@ -416,6 +416,8 @@ def amlp_combinator(z_c, u, size):
     x = tf.stack([z_c, u, uz], axis=-1)
     print(size)
     # print(z_c.get_shape, u.get_shape, uz.get_shape)
+    shape = uz.get_shape().as_list()
+    x = tf.reshape(x, shape[:-1] + [-1])
 
     h = fclayer(x, size_out=4, wts_init=tf.random_normal_initializer(
         stddev=params.combinator_sd), reuse=None) #, scope='combinator_hidden')
