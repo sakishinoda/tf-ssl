@@ -8,7 +8,7 @@ from tqdm import tqdm
 from src import get_cli_params, process_cli_params, order_param_settings, count_trainable_params
 import numpy as np
 import math
-# import IPython
+import IPython
 
 def get_batch_ops(batch_size):
     join = lambda l, u: tf.concat([l, u], 0)
@@ -381,6 +381,7 @@ def main():
                                       disjoint=False)
     num_examples = mnist.train.num_examples
 
+
     starter_learning_rate = params.initial_learning_rate
 
     # epoch after which to begin learning rate decay
@@ -512,11 +513,6 @@ def main():
         # for i in range(i_iter, num_iter):
         images, labels = mnist.train.next_batch(batch_size)
 
-        _ = sess.run(
-            [train_step],
-            feed_dict={inputs_placeholder: images, outputs: labels,
-                       train_flag: True})
-
         if (i > 1) and ((i + 1) % (params.test_frequency_in_epochs * (
                     num_iter // params.end_epoch)) == 0):
             now = time.time() - start
@@ -532,27 +528,42 @@ def main():
             if not params.do_not_save:
                 saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
 
+            # Compute error on testing set (10k examples)
+            num_test_iters = mnist.test.num_examples // batch_size
+            test_cost = 0
+            for _ in range(num_test_iters):
+                test_images, test_labels = mnist.test.next_batch(batch_size)
+                test_cost += sess.run(cost,
+                                      feed_dict={
+                                          inputs_placeholder: test_images,
+                                          outputs: test_labels,
+                                          train_flag: False
+                                      })
+            test_cost /= num_test_iters
+
+            # Create log of:
+            # time, epoch number, test accuracy, test cross entropy,
+            # train accuracy, train loss, train cross entropy,
+            # train reconstruction loss
+
+            log_i = [now, epoch_n] + sess.run(
+                [accuracy],
+                feed_dict={inputs_placeholder: mnist.test.images,
+                           outputs: mnist.test.labels,
+                           train_flag: False}
+            ) + [test_cost] + sess.run(
+                [accuracy],
+                feed_dict={inputs_placeholder:
+                               mnist.train.labeled_ds.images,
+                           outputs: mnist.train.labeled_ds.labels,
+                           train_flag: False}
+            ) + sess.run(
+                [loss, cost, u_cost],
+                feed_dict={inputs_placeholder: images,
+                           outputs: labels,
+                           train_flag: False})
+
             with open(log_file, 'a') as train_log:
-                # write test accuracy to file "train_log"
-                # train_log_w = csv.writer(train_log)
-
-                log_i = [now, epoch_n] + sess.run(
-                    [accuracy, cost],
-                    feed_dict={inputs_placeholder: mnist.test.images,
-                               outputs: mnist.test.labels,
-                               train_flag: False}
-                ) + sess.run(
-                    [accuracy],
-                    feed_dict={inputs_placeholder:
-                                   mnist.train.labeled_ds.images,
-                               outputs: mnist.train.labeled_ds.labels,
-                               train_flag: False}
-                ) + sess.run(
-                    [loss, cost, u_cost],
-                    feed_dict={inputs_placeholder: images,
-                               outputs: labels,
-                               train_flag: False})
-
                 print(*log_i, sep=',', flush=True, file=train_log)
 
     print("Final Accuracy: ", sess.run(accuracy, feed_dict={
