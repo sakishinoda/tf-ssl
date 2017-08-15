@@ -111,7 +111,8 @@ class Encoder(object):
             # if training:
             def training_batch_norm():
                 # Training batch normalization
-                # batch normalization for labeled and unlabeled examples is performed separately
+                # batch normalization for labeled and unlabeled examples is
+                # performed separately
                 # if noise_sd > 0:
                 if self.noise_sd > 0:
                     # Corrupted encoder
@@ -122,7 +123,8 @@ class Encoder(object):
                     z += noise
                 else:
                     # Clean encoder
-                    # batch normalization + update the average mean and variance using batch mean and variance of labeled examples
+                    # batch normalization + update the average mean and variance
+                    # using batch mean and variance of labeled examples
                     bn_l = bn.update_batch_normalization(z_pre_l, l) if \
                         update_batch_stats else bn.batch_normalization(z_pre_l)
                     bn_u = bn.batch_normalization(z_pre_u, m, v)
@@ -492,58 +494,71 @@ def main():
 
     # -----------------------------
     print("=== Training ===")
-    init_feed = {inputs_placeholder: mnist.train.labeled_ds.images,
-                 outputs: mnist.train.labeled_ds.labels,
-                 train_flag: False}
+
+    def evaluate_metric(dataset, sess, op):
+        metric = 0
+        num_eval_iters = dataset.num_examples // batch_size
+        for _ in range(num_eval_iters):
+            images, labels = dataset.next_batch(batch_size)
+            init_feed = {inputs_placeholder: images,
+                         outputs: labels,
+                         train_flag: False}
+            metric += sess.run(op, init_feed)
+        metric /= num_eval_iters
+        return metric
+
+    init_feed = {
+        inputs_placeholder: mnist.train.labeled_ds.images,
+        outputs: mnist.train.labeled_ds.labels,
+        train_flag: False}
 
     init_acc = sess.run(accuracy, init_feed)
-    init_losses = sess.run([loss, cost, u_cost], init_feed)
+    init_losses = [evaluate_metric(mnist.train.labeled_ds, sess, op)
+                   for op in [loss, cost, u_cost]]
     print("Initial Train Accuracy: ", init_acc, "%")
     print("Initial Train Losses: ", *init_losses)
 
     [init_acc] = sess.run([accuracy], feed_dict={
-        inputs_placeholder: mnist.test.images, outputs: mnist.test.labels, train_flag:
-            False})
-    print("Initial Test Accuracy: ", init_acc, "%")
-    # print("Initial Test Loss: ", init_loss)
+        inputs_placeholder: mnist.test.images,
+        outputs: mnist.test.labels,
+        train_flag: False})
 
+    print("Initial Test Accuracy: ", init_acc, "%")
+    print("Initial Test Loss: ", evaluate_metric(mnist.test, sess, cost))
 
     start = time.time()
     for i in tqdm(range(i_iter, num_iter)):
-        # for i in range(i_iter, num_iter):
+
         images, labels = mnist.train.next_batch(batch_size)
 
         _ = sess.run(
             [train_step],
-            feed_dict={inputs_placeholder: images, outputs: labels, train_flag: True})
+            feed_dict={inputs_placeholder: images,
+                       outputs: labels,
+                       train_flag: True})
 
         if (i > 1) and ((i + 1) % (params.test_frequency_in_epochs * (
                     num_iter // params.end_epoch)) == 0):
             now = time.time() - start
             epoch_n = i // (num_examples // batch_size)
+
             if (epoch_n + 1) >= decay_after:
-                # decay learning rate
-                # learning_rate = starter_learning_rate * ((num_epochs - epoch_n) / (num_epochs - decay_after))
-                ratio = 1.0 * (params.end_epoch - (
-                epoch_n + 1))  # epoch_n + 1 because learning rate is set for next epoch
+                # epoch_n + 1 because learning rate is set for next epoch
+                ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
                 ratio = max(0., ratio / (params.end_epoch - decay_after))
                 sess.run(learning_rate.assign(starter_learning_rate * ratio))
 
             if not params.do_not_save:
                 saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
 
+            # ---------------------------------------------
             # Compute error on testing set (10k examples)
-            num_test_iters = mnist.test.num_examples // batch_size
-            test_cost = 0
-            for _ in range(num_test_iters):
-                test_images, test_labels = mnist.test.next_batch(batch_size)
-                test_cost += sess.run(cost,
-                                      feed_dict={
-                                          inputs_placeholder: test_images,
-                                          outputs: test_labels,
-                                          train_flag: False
-                                      })
-            test_cost /= num_test_iters
+            test_cost = evaluate_metric(mnist.test, sess, cost)
+
+            # ---------------------------------------------
+            # Compute error on training set (10k examples)
+            train_losses = [evaluate_metric(mnist.train, sess, op)
+                           for op in [loss, cost, u_cost]]
 
             # Create log of:
             # time, epoch number, test accuracy, test cross entropy,
@@ -561,11 +576,7 @@ def main():
                                mnist.train.labeled_ds.images,
                            outputs: mnist.train.labeled_ds.labels,
                            train_flag: False}
-            ) + sess.run(
-                [loss, cost, u_cost],
-                feed_dict={inputs_placeholder: images,
-                           outputs: labels,
-                           train_flag: False})
+            ) + train_losses
 
             with open(log_file, 'a') as train_log:
                 print(*log_i, sep=',', flush=True, file=train_log)
