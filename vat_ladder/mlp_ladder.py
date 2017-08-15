@@ -513,6 +513,10 @@ def main():
         # for i in range(i_iter, num_iter):
         images, labels = mnist.train.next_batch(batch_size)
 
+        _ = sess.run(
+            [train_step],
+            feed_dict={inputs_placeholder: images, outputs: labels, train_flag: True})
+
         if (i > 1) and ((i + 1) % (params.test_frequency_in_epochs * (
                     num_iter // params.end_epoch)) == 0):
             now = time.time() - start
