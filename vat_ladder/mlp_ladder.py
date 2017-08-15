@@ -435,7 +435,6 @@ def main():
     cost = tf.reduce_mean(ce)
 
     loss = cost + u_cost
-    loss_list = [loss, cost, u_cost]
 
     # no of correct predictions
     correct_prediction = tf.equal(tf.argmax(clean.logits, 1), tf.argmax(outputs, 1))
@@ -498,7 +497,7 @@ def main():
                  train_flag: False}
 
     init_acc = sess.run(accuracy, init_feed)
-    init_losses = sess.run(loss_list, init_feed)
+    init_losses = sess.run([loss, cost, u_cost], init_feed)
     print("Initial Train Accuracy: ", init_acc, "%")
     print("Initial Train Losses: ", *init_losses)
 
@@ -537,16 +536,24 @@ def main():
             with open(log_file, 'a') as train_log:
                 # write test accuracy to file "train_log"
                 # train_log_w = csv.writer(train_log)
+
                 log_i = [now, epoch_n] + sess.run(
-                    [accuracy],
+                    [accuracy, cost],
                     feed_dict={inputs_placeholder: mnist.test.images,
-                               outputs: mnist.test.labels, train_flag: False}
+                               outputs: mnist.test.labels,
+                               train_flag: False}
                 ) + sess.run(
-                    loss_list,
-                    feed_dict={inputs_placeholder: images, outputs: labels,
-                               train_flag:
-                        True})
-                # train_log_w.writerow(log_i)
+                    [accuracy],
+                    feed_dict={inputs_placeholder:
+                                   mnist.train.labeled_ds.images,
+                               outputs: mnist.train.labeled_ds.labels,
+                               train_flag: False}
+                ) + sess.run(
+                    [loss, cost, u_cost],
+                    feed_dict={inputs_placeholder: images,
+                               outputs: labels,
+                               train_flag: False})
+
                 print(*log_i, sep=',', flush=True, file=train_log)
 
     print("Final Accuracy: ", sess.run(accuracy, feed_dict={
