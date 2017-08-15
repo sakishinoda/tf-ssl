@@ -144,6 +144,7 @@ class DataSet(object):
 
 class SemiDataSet(object):
     def __init__(self, images, labels, n_labeled, disjoint=False):
+        self.disjoint = disjoint
         self._n_labeled = n_labeled
 
         l_images, l_labels, u_images, u_labels = self.sample_balanced_labeled(images, labels, num_labeled=n_labeled)
@@ -194,7 +195,10 @@ class SemiDataSet(object):
 
     @property
     def num_examples(self):
-        return self.num_labeled + self.num_unlabeled
+        if self.disjoint:
+            return self.num_labeled + self.num_unlabeled
+        else:
+            return self.num_unlabeled
 
     @property
     def labeled_ds(self):
