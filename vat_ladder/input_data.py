@@ -143,13 +143,16 @@ class DataSet(object):
 
 
 class SemiDataSet(object):
-    def __init__(self, images, labels, n_labeled):
+    def __init__(self, images, labels, n_labeled, disjoint=False):
         self._n_labeled = n_labeled
-
+        self.disjoint = disjoint
         l_images, l_labels, u_images, u_labels = self.sample_balanced_labeled(images, labels, num_labeled=n_labeled)
 
         # Unlabeled DataSet
-        self._unlabeled_ds = DataSet(u_images, u_labels)
+        if disjoint:
+            self._unlabeled_ds = DataSet(u_images, u_labels)
+        else:
+            self._unlabeled_ds = DataSet(images, labels)
 
         # Labeled DataSet
         self._labeled_ds = DataSet(l_images, l_labels)
@@ -190,7 +193,10 @@ class SemiDataSet(object):
 
     @property
     def num_examples(self):
-        return self.num_labeled + self.num_unlabeled
+        if self.disjoint:
+            return self.num_labeled + self.num_unlabeled
+        else:
+            return self.num_unlabeled
 
     @property
     def labeled_ds(self):
@@ -211,7 +217,8 @@ class SemiDataSet(object):
 
 
 def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
-                   one_hot=False, verbose=False, validation_size=0):
+                   one_hot=False, verbose=False, validation_size=0,
+                   disjoint=False):
   class DataSets(object):
     pass
   data_sets = DataSets()
@@ -245,7 +252,8 @@ def read_data_sets(train_dir, n_labeled = 100, fake_data=False,
   train_images = train_images[VALIDATION_SIZE:]
   train_labels = train_labels[VALIDATION_SIZE:]
 
-  data_sets.train = SemiDataSet(train_images, train_labels, n_labeled)
+  data_sets.train = SemiDataSet(train_images, train_labels, n_labeled,
+                                disjoint=disjoint)
   data_sets.validation = DataSet(validation_images, validation_labels)
   data_sets.test = DataSet(test_images, test_labels)
 

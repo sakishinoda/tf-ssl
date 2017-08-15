@@ -5,8 +5,10 @@ import os
 import input_data
 import time
 from tqdm import tqdm
-from src import *
-import IPython
+from src import get_cli_params, process_cli_params, order_param_settings, count_trainable_params
+import numpy as np
+import math
+# import IPython
 
 def get_batch_ops(batch_size):
     join = lambda l, u: tf.concat([l, u], 0)
@@ -315,30 +317,26 @@ class BatchNormLayers(object):
         # bn_axes = list(range(len(batch.get_shape().as_list())-1))
         bn_axes = [0]
         mean, var = tf.nn.moments(batch, axes=bn_axes)
-
-        # print(l, mean.get_shape().as_list(),
-              # self.running_mean[l-1].get_shape().as_list(),
-              # batch.get_shape().as_list())
-
         assign_mean = self.running_mean[l-1].assign(mean)
         assign_var = self.running_var[l-1].assign(var)
         self.bn_assigns.append(
             self.ema.apply([self.running_mean[l-1], self.running_var[l-1]]))
 
         with tf.control_dependencies([assign_mean, assign_var]):
-            return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
-
+            return tf.nn.batch_normalization(batch, mean, var, offset=None,
+                                             scale=None, variance_epsilon=1e-10)
 
     def batch_normalization(self, batch, mean=None, var=None):
         # bn_axes = [0, 1, 2] if self.params.cnn else [0]
         # bn_axes = list(range(len(batch.get_shape().as_list())-1))
         bn_axes = [0]
-        # print(*[x.get_shape().as_list() if x is not None else None for x in [
-        #     batch, mean, var]])
+
         if mean is None or var is None:
             mean, var = tf.nn.moments(batch, axes=bn_axes)
 
-        return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
+        # return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
+        return tf.nn.batch_normalization(batch, mean, var, offset=None,
+                                         scale=None, variance_epsilon=1e-10)
 
 # -----------------------------
 # COMBINATOR
@@ -380,7 +378,8 @@ def main():
     print("===  Loading Data ===")
     mnist = input_data.read_data_sets("MNIST_data",
                                       n_labeled=params.num_labeled,
-                                      one_hot=True)
+                                      one_hot=True,
+                                      disjoint=False)
     num_examples = mnist.train.num_examples
 
     starter_learning_rate = params.initial_learning_rate
@@ -389,7 +388,9 @@ def main():
     decay_after = params.decay_start_epoch
     batch_size = params.batch_size
     # number of loop iterations
-    num_iter = (num_examples // batch_size) * params.end_epoch
+    params.iter_per_epoch = (num_examples // batch_size)
+    num_iter = params.iter_per_epoch * params.end_epoch
+    params.num_iter = num_iter
 
     join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
 
@@ -532,7 +533,6 @@ def main():
 
             if not params.do_not_save:
                 saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
-
 
             with open(log_file, 'a') as train_log:
                 # write test accuracy to file "train_log"
