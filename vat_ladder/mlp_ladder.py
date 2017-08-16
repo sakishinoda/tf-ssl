@@ -507,24 +507,44 @@ def main():
         metric /= num_eval_iters
         return metric
 
-    init_feed = {
-        inputs_placeholder: mnist.train.labeled_ds.images,
-        outputs: mnist.train.labeled_ds.labels,
-        train_flag: False}
+    def evaluate_metric_list(dataset, sess, ops):
+        metrics = [0.0 for _ in ops]
+        num_eval_iters = dataset.num_examples // batch_size
+        for _ in range(num_eval_iters):
+            images, labels = dataset.next_batch(batch_size)
+            init_feed = {inputs_placeholder: images,
+                         outputs: labels,
+                         train_flag: False}
+            op_eval = sess.run(ops, init_feed)
 
-    init_acc = sess.run(accuracy, init_feed)
-    init_losses = [evaluate_metric(mnist.train.labeled_ds, sess, op)
-                   for op in [loss, cost, u_cost]]
-    print("Initial Train Accuracy: ", init_acc, "%")
-    print("Initial Train Losses: ", *init_losses)
+            for i, op in enumerate(op_eval):
+                metrics[i] += op
 
-    [init_acc] = sess.run([accuracy], feed_dict={
-        inputs_placeholder: mnist.test.images,
-        outputs: mnist.test.labels,
-        train_flag: False})
+        metrics = [metric/num_eval_iters for metric in metrics]
+        return metrics
 
-    print("Initial Test Accuracy: ", init_acc, "%")
-    print("Initial Test Loss: ", evaluate_metric(mnist.test, sess, cost))
+    # -----------------------------
+    # Evaluate initial training accuracy and cross-entropy loss
+    init_loss = evaluate_metric(
+        mnist.train.labeled_ds, sess, cost)
+    print("Initial Train Accuracy: ",
+          sess.run(accuracy, feed_dict={
+              inputs_placeholder: mnist.train.labeled_ds.images,
+              outputs: mnist.train.labeled_ds.labels,
+              train_flag: False}),
+          "%")
+    print("Initial Train Losses: ", init_loss)
+
+    # -----------------------------
+    # Evaluate initial testing accuracy and cross-entropy loss
+    print("Initial Test Accuracy: ",
+          sess.run([accuracy], feed_dict={
+              inputs_placeholder: mnist.test.images,
+              outputs: mnist.test.labels,
+              train_flag: False}),
+          "%")
+    print("Initial Test Cross Entropy: ",
+          evaluate_metric(mnist.test, sess, cost))
 
     start = time.time()
     for i in tqdm(range(i_iter, num_iter)):
@@ -555,11 +575,6 @@ def main():
             # Compute error on testing set (10k examples)
             test_cost = evaluate_metric(mnist.test, sess, cost)
 
-            # ---------------------------------------------
-            # Compute error on training set (10k examples)
-            train_losses = [evaluate_metric(mnist.train, sess, op)
-                           for op in [loss, cost, u_cost]]
-
             # Create log of:
             # time, epoch number, test accuracy, test cross entropy,
             # train accuracy, train loss, train cross entropy,
@@ -576,7 +591,11 @@ def main():
                                mnist.train.labeled_ds.images,
                            outputs: mnist.train.labeled_ds.labels,
                            train_flag: False}
-            ) + train_losses
+            ) + sess.run(
+                [loss, cost, u_cost],
+                feed_dict={inputs_placeholder: images,
+                           outputs: labels,
+                           train_flag: False})
 
             with open(log_file, 'a') as train_log:
                 print(*log_i, sep=',', flush=True, file=train_log)
