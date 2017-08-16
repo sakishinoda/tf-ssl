@@ -350,9 +350,9 @@ class BatchNormLayers(object):
 
 class Combinator(object):
     """Combinator function factory, augmented MLP combinator by default"""
-    def __init__(self, layers=(3,4,1), init_sd=0.025):
+    def __init__(self, layers=(4,1), init_sd=0.025):
         print(self.init_statement)
-
+        layers = [self.input_size] + layers
         self.shapes = list(zip(layers[:-1], layers[1:]))
 
         self.w = lambda n_in, n_out, name: tf.get_variable(
@@ -389,6 +389,10 @@ class Combinator(object):
     def init_statement(self):
         return "=== AMLP Combinator ==="
 
+    @property
+    def input_size(self):
+        return 3
+
 class MLPCombinator(Combinator):
     def preprocess(self, z_c, u):
         return tf.concat([tf.reshape(z, [-1, 1]) for z in [z_c, u]],
@@ -396,6 +400,10 @@ class MLPCombinator(Combinator):
     @property
     def init_statement(self):
         return "=== MLP Combinator ==="
+
+    @property
+    def input_size(self):
+        return 2
 
 class GaussCombinator(Combinator):
     @property
