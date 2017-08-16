@@ -8,8 +8,11 @@ from tqdm import tqdm
 from src import get_cli_params, process_cli_params, order_param_settings, count_trainable_params
 import numpy as np
 import math
-import sys
-import IPython
+
+# import IPython
+
+def lrelu(x, alpha=0.1):
+    return tf.maximum(x, alpha*x)
 
 def get_batch_ops(batch_size):
     join = lambda l, u: tf.concat([l, u], 0)
@@ -241,7 +244,7 @@ class Decoder(object):
 
             u = bn.batch_normalization(u)
 
-            z_est[l] = combinator(z_c, u, ls[l])
+            z_est[l] = combinator(z_c, u, ls[l], l)
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
@@ -344,7 +347,38 @@ class BatchNormLayers(object):
 # -----------------------------
 # COMBINATOR
 # -----------------------------
-def gauss_combinator(z_c, u, size):
+
+def amlp_combinator(z_c, u, size, l):
+    uz = tf.multiply(z_c, u)
+    h = tf.stack([tf.reshape(z, [-1, 1]) for z in [z_c, u, uz]], axis=-1)
+    target_shape = z_c.get_shape().as_list()
+
+    def wt(nin, nout):
+        return tf.get_variable(
+            'w'+str(l),
+             shape=[nin, nout],
+             initializer=tf.random_normal_initializer(
+                 stddev=1/math.sqrt(nin+nout)
+             )
+        )
+
+    def b(nout):
+        return tf.get_variable(
+            'b'+str(l),
+            shape=[nout],
+            initializer=tf.zeros_initializer)
+
+    spec = [3, 4, 1]
+    shapes = list(zip(spec[:-1], spec[1:]))
+    with tf.variable_scope('combinator', reuse=None):
+        for shape in shapes:
+            h = lrelu(tf.nn.xw_plus_b(h,
+                                      weights=wt(*shape),
+                                      biases=b(shape[1])))
+
+    return tf.reshape(h, target_shape)
+
+def gauss_combinator(z_c, u, size, l):
     "gaussian denoising function proposed in the original paper"
     wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
     a1 = wi(0., 'a1')
@@ -440,7 +474,7 @@ def main():
     print("=== Decoder ===")
     # with tf.variable_scope('dec', reuse=None):
     dec = Decoder(clean=clean, corr=corr, bn=bn,
-                      combinator=gauss_combinator,
+                      combinator=amlp_combinator,
                       encoder_layers=ls,
                       denoising_cost=params.rc_weights,
                       batch_size=params.batch_size,
