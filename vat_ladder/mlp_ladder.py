@@ -530,31 +530,25 @@ def main():
     # init_loss = evaluate_metric(
         # mnist.train.labeled_ds, sess, cost)
     with open(desc_file, 'a') as f:
-        def printf(args):
-            print(*args, file=f, flush=True)
-
-        printf(['================================'])
-        printf(["Initial Train Accuracy: ",
+        print('================================', file=f, flush=True)
+        print("Initial Train Accuracy: ",
               sess.run(accuracy, feed_dict={
                   inputs_placeholder: mnist.train.labeled_ds.images,
                   outputs: mnist.train.labeled_ds.labels,
                   train_flag: False}),
-              "%"])
-        printf(
-            ["Initial Train Losses: ",
-             evaluate_metric_list(mnist.train, sess, [loss, cost, u_cost])])
+              "%", file=f, flush=True)
+        print("Initial Train Losses: ", *evaluate_metric_list(mnist.train, sess, [loss, cost, u_cost]), file=f, flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
-        printf(["Initial Test Accuracy: ",
+        print("Initial Test Accuracy: ",
               sess.run([accuracy], feed_dict={
                   inputs_placeholder: mnist.test.images,
                   outputs: mnist.test.labels,
                   train_flag: False}),
-              "%"])
-        printf(["Initial Test Cross Entropy: ",
-              evaluate_metric(mnist.test, sess, cost)])
-
+              "%", file=f, flush=True)
+        print("Initial Test Cross Entropy: ",
+              evaluate_metric(mnist.test, sess, cost), file=f, flush=True)
 
     start = time.time()
     for i in tqdm(range(i_iter, num_iter)):
