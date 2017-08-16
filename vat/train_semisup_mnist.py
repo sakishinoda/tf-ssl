@@ -36,7 +36,7 @@ parser.add_argument('--xi', default=1e-6, type=float)
 parser.add_argument('--epoch_decay_start', default=80, type=int)
 parser.add_argument('--mom1', default=0.9, type=float)
 parser.add_argument('--mlp_layers', default='784-1200-600-300-150-10')
-# parser.add_argument('--mom2', default=0.5, type=float)
+parser.add_argument('--mom2', default=0.5, type=float)
 parser.add_argument('--num_iter_per_epoch', default=240, type=int)
 params = parser.parse_args()
 
@@ -155,7 +155,7 @@ def build_training_graph(x, y, ul_x, lr):
         vat_loss = virtual_adversarial_loss(ul_x, ul_logit)
         loss = nll_loss + vat_loss
 
-    opt = tf.train.AdamOptimizer(learning_rate=lr)
+    opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=0.5)
     tvars = tf.trainable_variables()
     grads_and_vars = opt.compute_gradients(loss, tvars)
     train_op = opt.apply_gradients(grads_and_vars, global_step=global_step)
