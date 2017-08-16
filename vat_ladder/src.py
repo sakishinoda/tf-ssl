@@ -60,7 +60,7 @@ def get_cli_params():
     # -------------------------
     # Specify form of combinator (A)MLP
     add('--combinator', default='gauss', choices=['gauss', 'amlp', 'mlp'])
-    add('--combinator_layers', default='3-4-1')
+    add('--combinator_layers', default='4-1')
     add('--combinator_sd', default=0.006, type=float)
     # AMLP
     # ----
