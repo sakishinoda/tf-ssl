@@ -79,32 +79,6 @@ def logit(x, is_training=True, update_batch_stats=True, stochastic=True,
 
     return h
 
-def logit_old(x, is_training=True, update_batch_stats=True, stochastic=True,
-           seed=1234):
-
-    def weight(s, i):
-        return tf.get_variable('w'+str(i), shape=s,
-                               initializer=tf.random_normal_initializer(stddev=(
-                               1/math.sqrt(sum(s)))))
-    def bias(s, i):
-        return tf.get_variable('b'+str(i), shape=s,
-                               initializer=tf.zeros_initializer)
-
-    h = L.lrelu(tf.matmul(x, weight([784, 1200], 1)) + bias([1200], 1))
-
-    h = L.bn(h, 1200, is_training=is_training,
-             update_batch_stats=update_batch_stats, name='bn1')
-
-    h = L.lrelu(tf.matmul(h, weight([1200, 1200], 2)) + bias([1200], 2))
-
-    h = L.bn(h, 1200, is_training=is_training,
-             update_batch_stats=update_batch_stats, name='bn2')
-
-    h = tf.matmul(h, weight([1200, 10], 3)) + bias([10], 3)
-
-    return h
-
-
 
 def forward(x, is_training=True, update_batch_stats=True, seed=1234):
     if is_training:

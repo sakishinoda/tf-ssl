@@ -8,8 +8,11 @@ from tqdm import tqdm
 from src import get_cli_params, process_cli_params, order_param_settings, count_trainable_params
 import numpy as np
 import math
-import sys
+
 import IPython
+
+def lrelu(x, alpha=0.1):
+    return tf.maximum(x, alpha*x)
 
 def get_batch_ops(batch_size):
     join = lambda l, u: tf.concat([l, u], 0)
@@ -240,8 +243,8 @@ class Decoder(object):
                     )
 
             u = bn.batch_normalization(u)
-
-            z_est[l] = combinator(z_c, u, ls[l])
+            with tf.variable_scope('cmb' + str(l), reuse=None):
+                z_est[l] = combinator.combine(z_c, u, ls[l], l)
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
@@ -344,26 +347,86 @@ class BatchNormLayers(object):
 # -----------------------------
 # COMBINATOR
 # -----------------------------
-def gauss_combinator(z_c, u, size):
-    "gaussian denoising function proposed in the original paper"
-    wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
-    a1 = wi(0., 'a1')
-    a2 = wi(1., 'a2')
-    a3 = wi(0., 'a3')
-    a4 = wi(0., 'a4')
-    a5 = wi(0., 'a5')
 
-    a6 = wi(0., 'a6')
-    a7 = wi(1., 'a7')
-    a8 = wi(0., 'a8')
-    a9 = wi(0., 'a9')
-    a10 = wi(0., 'a10')
+class Combinator(object):
+    """Combinator function factory, augmented MLP combinator by default"""
+    def __init__(self, layers=(3,4,1), init_sd=0.025):
+        print(self.init_statement)
 
-    mu = a1 * tf.sigmoid(a2 * u + a3) + a4 * u + a5
-    v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
+        self.shapes = list(zip(layers[:-1], layers[1:]))
 
-    z_est = (z_c - mu) * v + mu
-    return z_est
+        self.w = lambda n_in, n_out, name: tf.get_variable(
+                'w'+name,
+                 shape=[n_in, n_out],
+                 initializer=tf.random_normal_initializer(
+                     stddev=init_sd
+                 )
+            )
+
+        self.b = lambda n_out, name: tf.get_variable(
+                'b'+name,
+                shape=[n_out],
+                initializer=tf.zeros_initializer(dtype="float"))
+
+    def preprocess(self, z_c, u):
+        uz = tf.multiply(z_c, u)
+        return tf.concat([tf.reshape(z, [-1, 1]) for z in [z_c, u, uz]],
+                         axis=-1)
+
+    def combine(self, z_c, u, size, l):
+        print("Combining at layer", l)
+        h = self.preprocess(z_c, u)
+        target_shape = [x if x is not None else -1 for x in z_c.get_shape().as_list()]
+
+        for i, shape in enumerate(self.shapes):
+            h = lrelu(tf.nn.xw_plus_b(h,
+                                      weights=self.w(*shape, name=str(i)),
+                                      biases=self.b(shape[1], name=str(i))))
+
+        return tf.reshape(h, target_shape)
+
+    @property
+    def init_statement(self):
+        return "=== AMLP Combinator ==="
+
+class MLPCombinator(Combinator):
+    def preprocess(self, z_c, u):
+        return tf.concat([tf.reshape(z, [-1, 1]) for z in [z_c, u]],
+                         axis=-1)
+    @property
+    def init_statement(self):
+        return "=== MLP Combinator ==="
+
+class GaussCombinator(Combinator):
+    @property
+    def init_statement(self):
+        return "=== Gauss (Vanilla) Combinator ==="
+
+    def combine(self, z_c, u, size, l):
+        "gaussian denoising function proposed in the original paper"
+
+        wi = lambda inits, name: tf.get_variable(
+            name,
+            initializer=tf.ones_initializer(dtype="float"),
+            shape=[size])
+
+        a1 = wi(0., 'a1')
+        a2 = wi(1., 'a2')
+        a3 = wi(0., 'a3')
+        a4 = wi(0., 'a4')
+        a5 = wi(0., 'a5')
+
+        a6 = wi(0., 'a6')
+        a7 = wi(1., 'a7')
+        a8 = wi(0., 'a8')
+        a9 = wi(0., 'a9')
+        a10 = wi(0., 'a10')
+
+        mu = a1 * tf.sigmoid(a2 * u + a3) + a4 * u + a5
+        v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
+
+        z_est = (z_c - mu) * v + mu
+        return z_est
 
 
 def main():
@@ -438,9 +501,17 @@ def main():
                         scope='enc', reuse=True)
 
     print("=== Decoder ===")
-    # with tf.variable_scope('dec', reuse=None):
+    if params.combinator == 'amlp':
+        Cmb = Combinator
+    elif params.combinator == 'mlp':
+        Cmb = MLPCombinator
+    else:
+        Cmb = GaussCombinator
+
     dec = Decoder(clean=clean, corr=corr, bn=bn,
-                      combinator=gauss_combinator,
+                      combinator=Cmb(
+                          params.combinator_layers,
+                          params.combinator_sd),
                       encoder_layers=ls,
                       denoising_cost=params.rc_weights,
                       batch_size=params.batch_size,
