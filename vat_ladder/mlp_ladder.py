@@ -154,7 +154,8 @@ class Encoder(object):
                 h = tf.nn.softmax(self.logits)
             else:
                 # use ReLU activation in hidden layers
-                h = tf.nn.relu(z + bn.beta[l - 1])
+                # h = tf.nn.relu(z + bn.beta[l - 1])
+                h = lrelu(z + bn.beta[l-1])
 
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l], self.unlabeled.v[l] = m, v
@@ -411,7 +412,7 @@ class GaussCombinator(Combinator):
         return "=== Gauss (Vanilla) Combinator ==="
 
     def combine(self, z_c, u, size, l):
-        "gaussian denoising function proposed in the original paper"
+        """ Gaussian assumption on z: (z - mu) * v + mu"""
 
         wi = lambda inits, name: tf.get_variable(
             name,
@@ -434,6 +435,7 @@ class GaussCombinator(Combinator):
         v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
 
         z_est = (z_c - mu) * v + mu
+
         return z_est
 
 
