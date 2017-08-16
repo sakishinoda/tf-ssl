@@ -8,6 +8,7 @@ from tqdm import tqdm
 from src import get_cli_params, process_cli_params, order_param_settings, count_trainable_params
 import numpy as np
 import math
+import sys
 import IPython
 
 def get_batch_ops(batch_size):
@@ -366,8 +367,24 @@ def gauss_combinator(z_c, u, size):
 
 
 def main():
+
     params = process_cli_params(get_cli_params())
 
+    # -----------------------------
+    # Write logs to appropriate directory
+    log_dir = params.logdir + params.id
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    desc_file = log_dir + "/" + "description"
+    with open(desc_file, 'a') as f:
+        print(*order_param_settings(params), sep='\n', file=f, flush=True)
+        print("Trainable parameters:", count_trainable_params(), file=f,
+              flush=True)
+
+    log_file = log_dir + "/" + "train_log"
+
+    # -----------------------------
     # Set GPU device to use
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(params.which_gpu)
@@ -457,9 +474,7 @@ def main():
     # -----------------------------
     print("===  Starting Session ===")
     sess = tf.Session()
-
     i_iter = 0
-
     # -----------------------------
     # Resume from checkpoint
     ckpt_dir = "checkpoints/" + params.id + "/"
@@ -478,19 +493,6 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init)
 
-    # -----------------------------
-    # Write logs to appropriate directory
-    log_dir = params.logdir + params.id
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    desc_file = log_dir + "/" + "description"
-    with open(desc_file, 'a') as f:
-        print(*order_param_settings(params), sep='\n', file=f, flush=True)
-        print("Trainable parameters:", count_trainable_params(), file=f,
-              flush=True)
-
-    log_file = log_dir + "/" + "train_log"
 
     # -----------------------------
     print("=== Training ===")
@@ -527,25 +529,32 @@ def main():
     # Evaluate initial training accuracy and losses
     # init_loss = evaluate_metric(
         # mnist.train.labeled_ds, sess, cost)
-    print("Initial Train Accuracy: ",
-          sess.run(accuracy, feed_dict={
-              inputs_placeholder: mnist.train.labeled_ds.images,
-              outputs: mnist.train.labeled_ds.labels,
-              train_flag: False}),
-          "%")
-    init_losses = evaluate_metric_list(mnist.train, sess, [loss, cost, u_cost])
-    print("Initial Train Losses: ", *init_losses)
+    with open(desc_file, 'a') as f:
+        def printf(args):
+            print(*args, file=f, flush=True)
 
-    # -----------------------------
-    # Evaluate initial testing accuracy and cross-entropy loss
-    print("Initial Test Accuracy: ",
-          sess.run([accuracy], feed_dict={
-              inputs_placeholder: mnist.test.images,
-              outputs: mnist.test.labels,
-              train_flag: False}),
-          "%")
-    print("Initial Test Cross Entropy: ",
-          evaluate_metric(mnist.test, sess, cost))
+        printf(['================================'])
+        printf(["Initial Train Accuracy: ",
+              sess.run(accuracy, feed_dict={
+                  inputs_placeholder: mnist.train.labeled_ds.images,
+                  outputs: mnist.train.labeled_ds.labels,
+                  train_flag: False}),
+              "%"])
+        printf(
+            ["Initial Train Losses: ",
+             evaluate_metric_list(mnist.train, sess, [loss, cost, u_cost])])
+
+        # -----------------------------
+        # Evaluate initial testing accuracy and cross-entropy loss
+        printf(["Initial Test Accuracy: ",
+              sess.run([accuracy], feed_dict={
+                  inputs_placeholder: mnist.test.images,
+                  outputs: mnist.test.labels,
+                  train_flag: False}),
+              "%"])
+        printf(["Initial Test Cross Entropy: ",
+              evaluate_metric(mnist.test, sess, cost)])
+
 
     start = time.time()
     for i in tqdm(range(i_iter, num_iter)):
@@ -601,10 +610,11 @@ def main():
             with open(log_file, 'a') as train_log:
                 print(*log_i, sep=',', flush=True, file=train_log)
 
-    print("Final Accuracy: ", sess.run(accuracy, feed_dict={
-        inputs_placeholder: mnist.test.images, outputs: mnist.test.labels,
-        train_flag: False}),
-          "%")
+    with open(desc_file, 'a') as f:
+        print("Final Accuracy: ", sess.run(accuracy, feed_dict={
+            inputs_placeholder: mnist.test.images, outputs: mnist.test.labels,
+            train_flag: False}),
+              "%", file=f, flush=True)
 
 
     sess.close()
