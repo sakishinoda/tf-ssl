@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-python train_semisup_mnist.py --id "MlpVat_lr-0.001_seed-1" --seed 1 --which_gpu 0 --batch_size 100 --ul_batch_size 250 --num_epochs 100 --learning_rate 0.001 --epsilon 0.3 --mom2 0.9 --epoch_decay_start 1
 
-python train_semisup_mnist.py --id "MlpVat_lr-0.001_seed-100" --seed 100 --which_gpu 0 --batch_size 100 --ul_batch_size 250 --num_epochs 100 --learning_rate 0.001 --epsilon 0.3 --mom2 0.9 --epoch_decay_start 1
-python train_semisup_mnist.py --id "MlpVat_lr-0.001_seed-11" --seed 11 --which_gpu 0 --batch_size 100 --ul_batch_size 250 --num_epochs 100 --learning_rate 0.001 --epsilon 0.3 --mom2 0.9 --epoch_decay_start 1
-python train_semisup_mnist.py --id "MlpVat_lr-0.001_seed-111" --seed 111 --which_gpu 0 --batch_size 100 --ul_batch_size 250 --num_epochs 100 --learning_rate 0.001 --epsilon 0.3 --mom2 0.9 --epoch_decay_start 1
-python train_semisup_mnist.py --id "MlpVat_lr-0.001_seed-1111" --seed 1111 --which_gpu 0 --batch_size 100 --ul_batch_size 250 --num_epochs 100 --learning_rate 0.001 --epsilon 0.3 --mom2 0.9 --epoch_decay_start 1
+python train_semisup_mnist.py --id "DeepMlpVat_beta1-0.5_epsilon-5.0_epochs-400_decay-200_seed-8340" --seed 8340 --epsilon 5.0 --which_gpu 2 --num_epochs 400 --epoch_decay_start 200
+python train_semisup_mnist.py --id "DeepMlpVat_beta1-0.5_epsilon-5.0_epochs-400_decay-200_seed-8794" --seed 8794 --epsilon 5.0 --which_gpu 2 --num_epochs 400 --epoch_decay_start 200
+python train_semisup_mnist.py --id "DeepMlpVat_beta1-0.5_epsilon-5.0_epochs-400_decay-200_seed-2773" --seed 2773 --epsilon 5.0 --which_gpu 2 --num_epochs 400 --epoch_decay_start 200
+python train_semisup_mnist.py --id "DeepMlpVat_beta1-0.5_epsilon-5.0_epochs-400_decay-200_seed-967" --seed 967 --epsilon 5.0 --which_gpu 2 --num_epochs 400 --epoch_decay_start 200
+python train_semisup_mnist.py --id "DeepMlpVat_beta1-0.5_epsilon-5.0_epochs-400_decay-200_seed-2368" --seed 2368 --epsilon 5.0 --which_gpu 2 --num_epochs 400 --epoch_decay_start 200
