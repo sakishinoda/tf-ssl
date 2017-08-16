@@ -59,11 +59,15 @@ def get_cli_params():
     # COMBINATOR STRUCTURE
     # -------------------------
     # Specify form of combinator (A)MLP
-    # add('--combinator_layers', default='4-1')
-    add('--combinator_sd', default=0.025, type=float)
+    add('--combinator', default='gauss', choices=['gauss', 'amlp', 'mlp'])
+    add('--combinator_layers', default='3-4-1')
+    add('--combinator_sd', default=0.006, type=float)
+    # AMLP
+    # ----
+    # Labels    Layers      SD          AER
+    # 100       3-4-1       0.006       1.072 +/- 0.015
+    # 1000      3-4-1       0.025       0.974 +/- 0.021
 
-    # by default use the unlabeled batch epochs
-    # add('--use_labeled_epochs', action='store_true')
 
     # -------------------------
     # VAT SETTINGS
@@ -106,8 +110,11 @@ def process_cli_params(params):
     encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
     rc_weights = parse_argstring(params.rc_weights, dtype=float)
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
+    combinator_layers = parse_argstring(params.combinator_layers, dtype=int)
+
     params.encoder_layers = encoder_layers
     params.rc_weights = rc_weights
+    params.combinator_layers = combinator_layers
 
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
