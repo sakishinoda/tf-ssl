@@ -524,16 +524,17 @@ def main():
         return metrics
 
     # -----------------------------
-    # Evaluate initial training accuracy and cross-entropy loss
-    init_loss = evaluate_metric(
-        mnist.train.labeled_ds, sess, cost)
+    # Evaluate initial training accuracy and losses
+    # init_loss = evaluate_metric(
+        # mnist.train.labeled_ds, sess, cost)
     print("Initial Train Accuracy: ",
           sess.run(accuracy, feed_dict={
               inputs_placeholder: mnist.train.labeled_ds.images,
               outputs: mnist.train.labeled_ds.labels,
               train_flag: False}),
           "%")
-    print("Initial Train Losses: ", init_loss)
+    init_losses = evaluate_metric_list(mnist.train, sess, [loss, cost, u_cost])
+    print("Initial Train Losses: ", *init_losses)
 
     # -----------------------------
     # Evaluate initial testing accuracy and cross-entropy loss
