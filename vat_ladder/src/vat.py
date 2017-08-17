@@ -1,5 +1,6 @@
 
 import tensorflow as tf
+from src.ladder import Encoder, get_batch_ops
 
 # -----------------------------
 # VAT FUNCTIONS
@@ -30,7 +31,7 @@ def get_normalized_vector(d):
     return d
 
 def virtual_adversarial_loss(x, logit, is_training, name="vat_loss",
-                             start_layer=1):
+                             start_layer=0):
     print("=== VAT Pass: Generating VAT perturbation ===")
     r_vadv = generate_virtual_adversarial_perturbation(
         x, logit, is_training=is_training, start_layer=start_layer)
@@ -42,36 +43,48 @@ def virtual_adversarial_loss(x, logit, is_training, name="vat_loss",
     loss = kl_divergence_with_logit(logit_p, logit_m)
     return tf.identity(loss, name=name)
 
-class Adversary(object):
-    def __init__(self, encoder):
-        self.encoder = encoder
 
-    def forward(self, x, is_training,
-                update_batch_stats=False,
-                start_layer=0):
-        """
+def generate_virtual_adversarial_perturbation(x, logit, is_training,
+                                              start_layer=0):
+    d = tf.random_normal(shape=tf.shape(x))
+    for k in range(params.num_power_iterations):
+        d = params.xi * get_normalized_vector(d)
+        logit_p = logit
+        print("=== Power Iteration: {} ===".format(k))
+        logit_m = forward(x + d, update_batch_stats=False,
+                          is_training=is_training, start_layer=start_layer)
+        dist = kl_divergence_with_logit(logit_p, logit_m)
+        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+        d = tf.stop_gradient(grad)
+    return params.epsilon * get_normalized_vector(d)
 
-        :param x: input at start_layer
-        :param is_training: tensorflow bool
-        :param update_batch_stats: python bool
-        :param start_layer:
-        :return:
-        """
-        def training_logit():
-            print("=== VAT Clean Pass === ")
-            logit, _ = encoder(x, 0.0, bn,
-                               is_training=is_training,
-                               update_batch_stats=update_batch_stats,
-                               start_layer=start_layer)
-            return logit
 
-        def testing_logit():
-            print("=== VAT Corrupted Pass ===")
-            logit, _ = encoder(x, params.encoder_noise_sd, bn,
-                               is_training=is_training,
-                               update_batch_stats=update_batch_stats,
-                               start_layer=start_layer)
-            return logit
+def forward(x, is_training, update_batch_stats=False,
+            start_layer=0):
 
-        # return tf.cond(is_training, training_logit, testing_logit)
-        return training_logit()
+    vatfw = Encoder(inputs=x,
+                    encoder_layers=params.encoder_layers,
+                    bn=ladder.bn,
+                    is_training=is_training,
+                    noise_sd=0.5,  # not used if not training
+                    start_layer=start_layer,
+                    batch_size=params.batch_size,
+                    update_batch_stats=update_batch_stats,
+                    scope='enc', reuse=True)
+
+    return vatfw.logits  # logits by default includes both labeled/unlabeled
+
+
+
+def generate_adversarial_perturbation(x, loss):
+    grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+    grad = tf.stop_gradient(grad)
+    return FLAGS.epsilon * get_normalized_vector(grad)
+
+
+def adversarial_loss(x, y, loss, is_training=True):
+    r_adv = generate_adversarial_perturbation(x, loss)
+    logit = forward(x + r_adv, is_training=is_training, update_batch_stats=False)
+    loss = L.ce_loss(logit, y)
+    return loss
+

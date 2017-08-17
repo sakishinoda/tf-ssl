@@ -358,9 +358,18 @@ def gauss_combinator(z_c, u, size):
 
 
 class Ladder(object):
+    """"""
     def __init__(self, inputs, outputs, train_flag, params):
+        """
 
-        join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
+        :param inputs: tensor or placeholder
+        :param outputs:
+        :param train_flag:
+        :param params:
+        """
+
+        # join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
+        labeled = lambda x: x[:params.batch_size] if x is not None else x
 
         print("=== Batch Norm === ")
         if params.bn_decay == 'dynamic':
@@ -370,7 +379,6 @@ class Ladder(object):
         bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
 
         print("=== Corrupted Encoder === ")
-        # with tf.variable_scope('enc', reuse=None) as scope:
         corr = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
                        is_training=train_flag,
                        noise_sd=params.encoder_noise_sd, start_layer=0,
@@ -378,14 +386,12 @@ class Ladder(object):
                        scope='enc', reuse=None)
 
         print("=== Clean Encoder ===")
-        # with tf.variable_scope('enc', reuse=True) as scope:
         clean = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
                         is_training=train_flag, noise_sd=0.0, start_layer=0,
                         batch_size=params.batch_size, update_batch_stats=True,
                         scope='enc', reuse=True)
 
         print("=== Decoder ===")
-        # with tf.variable_scope('dec', reuse=None):
         dec = Decoder(clean=clean, corr=corr, bn=bn,
                       combinator=gauss_combinator,
                       encoder_layers=params.encoder_layers,
