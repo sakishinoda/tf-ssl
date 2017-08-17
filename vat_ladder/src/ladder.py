@@ -1,13 +1,7 @@
-from tensorflow.contrib import layers as layers
 import tensorflow as tf
+import tensorflow.contrib.layers as layers
 import math
 
-# -----------------------------
-# MODEL BUILDING
-# -----------------------------
-
-def lrelu(x, alpha=0.1):
-    return tf.maximum(x, alpha*x)
 
 def get_batch_ops(batch_size):
     join = lambda l, u: tf.concat([l, u], 0)
@@ -112,7 +106,7 @@ class Encoder(object):
                 # Training batch normalization
                 # batch normalization for labeled and unlabeled examples is
                 # performed separately
-
+                # if noise_sd > 0:
                 if self.noise_sd > 0:
                     # Corrupted encoder
                     # batch normalization + noise
@@ -134,8 +128,8 @@ class Encoder(object):
             def eval_batch_norm():
                 # Evaluation batch normalization
                 # obtain average mean and variance and use it to normalize the batch
-                mean = bn.ma.average(bn.running_mean[l - 1])
-                var = bn.ma.average(bn.running_var[l - 1])
+                mean = bn.ema.average(bn.running_mean[l-1])
+                var = bn.ema.average(bn.running_var[l-1])
                 z = bn.batch_normalization(z_pre, mean, var)
 
                 return z
@@ -150,7 +144,6 @@ class Encoder(object):
             else:
                 # use ReLU activation in hidden layers
                 h = tf.nn.relu(z + bn.beta[l - 1])
-                # h = lrelu(z + bn.beta[l-1])
 
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l], self.unlabeled.v[l] = m, v
@@ -239,8 +232,8 @@ class Decoder(object):
                     )
 
             u = bn.batch_normalization(u)
-            with tf.variable_scope('cmb' + str(l), reuse=None):
-                z_est[l] = combinator(z_c, u, ls[l])
+
+            z_est[l] = combinator(z_c, u, ls[l])
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
@@ -268,7 +261,7 @@ class BatchNormLayers(object):
     Attributes
     ----------
         bn_assigns: list of TF ops
-        ma: TF op
+        ema: TF op
         running_var: list of tensors
         running_mean: list of tensors
         beta: list of tensors
@@ -276,12 +269,12 @@ class BatchNormLayers(object):
 
 
     """
-    def __init__(self, ls, bn_decay, scope='bn'):
+    def __init__(self, ls, decay=0.99):
 
         # store updates to be made to average mean, variance
         self.bn_assigns = []
         # calculate the moving averages of mean and variance
-        self.ma = tf.train.ExponentialMovingAverage(decay=bn_decay)
+        self.ema = tf.train.ExponentialMovingAverage(decay=decay)
 
         # average mean and variance of all layers
         # shift & scale
@@ -322,7 +315,7 @@ class BatchNormLayers(object):
         assign_mean = self.running_mean[l-1].assign(mean)
         assign_var = self.running_var[l-1].assign(var)
         self.bn_assigns.append(
-            self.ma.apply([self.running_mean[l - 1], self.running_var[l - 1]]))
+            self.ema.apply([self.running_mean[l-1], self.running_var[l-1]]))
 
         with tf.control_dependencies([assign_mean, assign_var]):
             return tf.nn.batch_normalization(batch, mean, var, offset=None,
@@ -343,104 +336,11 @@ class BatchNormLayers(object):
 # -----------------------------
 # COMBINATOR
 # -----------------------------
-
-class Combinator(object):
-    """Combinator function factory, augmented MLP combinator by default"""
-    def __init__(self, layers=(4,1), init_sd=0.025):
-        print(self.init_statement)
-        layers = [self.input_size] + layers
-        self.shapes = list(zip(layers[:-1], layers[1:]))
-
-        self.w = lambda n_in, n_out, name: tf.get_variable(
-                'w'+name,
-                 shape=[n_in, n_out],
-                 initializer=tf.random_normal_initializer(
-                     stddev=init_sd
-                 )
-            )
-
-        self.b = lambda n_out, name: tf.get_variable(
-                'b'+name,
-                shape=[n_out],
-                initializer=tf.zeros_initializer(dtype="float"))
-
-    def preprocess(self, z_c, u):
-        uz = tf.multiply(z_c, u)
-        return tf.concat([tf.reshape(z, [-1, 1]) for z in [z_c, u, uz]],
-                         axis=-1)
-
-    def combine(self, z_c, u, size, l):
-        print("Combining at layer", l)
-        h = self.preprocess(z_c, u)
-        target_shape = [x if x is not None else -1 for x in z_c.get_shape().as_list()]
-
-        for i, shape in enumerate(self.shapes):
-            h = lrelu(tf.nn.xw_plus_b(h,
-                                      weights=self.w(*shape, name=str(i)),
-                                      biases=self.b(shape[1], name=str(i))))
-
-        return tf.reshape(h, target_shape)
-
-    @property
-    def init_statement(self):
-        return "=== AMLP Combinator ==="
-
-    @property
-    def input_size(self):
-        return 3
-
-class MLPCombinator(Combinator):
-    def preprocess(self, z_c, u):
-        return tf.concat([tf.reshape(z, [-1, 1]) for z in [z_c, u]],
-                         axis=-1)
-    @property
-    def init_statement(self):
-        return "=== MLP Combinator ==="
-
-    @property
-    def input_size(self):
-        return 2
-
-class GaussCombinator(Combinator):
-    @property
-    def init_statement(self):
-        return "=== Gauss (Vanilla) Combinator ==="
-
-    def combine(self, z_c, u, size, l):
-        """ Gaussian assumption on z: (z - mu) * v + mu"""
-
-        wi = lambda inits, name: tf.get_variable(
-            name,
-            initializer=tf.ones_initializer(dtype="float"),
-            shape=[size])
-
-        a1 = wi(0., 'a1')
-        a2 = wi(1., 'a2')
-        a3 = wi(0., 'a3')
-        a4 = wi(0., 'a4')
-        a5 = wi(0., 'a5')
-
-        a6 = wi(0., 'a6')
-        a7 = wi(1., 'a7')
-        a8 = wi(0., 'a8')
-        a9 = wi(0., 'a9')
-        a10 = wi(0., 'a10')
-
-        mu = a1 * tf.sigmoid(a2 * u + a3) + a4 * u + a5
-        v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
-
-        z_est = (z_c - mu) * v + mu
-
-        return z_est
-
 def gauss_combinator(z_c, u, size):
-    """ Gaussian assumption on z: (z - mu) * v + mu"""
-
-    wi = lambda inits, name: tf.get_variable(
-        name,
-        initializer=tf.ones_initializer(dtype="float"),
-        shape=[size])
-
+    "gaussian denoising function proposed in the original paper"
+    # wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
+    wi = lambda inits, name: tf.get_variable(name, shape=[size],
+                                             initializer=inits)
     a1 = wi(0., 'a1')
     a2 = wi(1., 'a2')
     a3 = wi(0., 'a3')
@@ -457,5 +357,4 @@ def gauss_combinator(z_c, u, size):
     v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
 
     z_est = (z_c - mu) * v + mu
-
     return z_est
