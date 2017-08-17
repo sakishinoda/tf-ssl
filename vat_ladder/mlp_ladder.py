@@ -5,7 +5,8 @@ import os
 import input_data
 import time
 from tqdm import tqdm
-from src import get_cli_params, process_cli_params, order_param_settings, count_trainable_params
+from src.utils import get_cli_params, process_cli_params, \
+    order_param_settings, count_trainable_params
 import numpy as np
 import math
 import sys

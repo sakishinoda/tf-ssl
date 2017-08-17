@@ -1,11 +1,11 @@
 # -----------------------------
 # IMPORTS
 # -----------------------------
-from tensorflow.contrib import layers as layers
+
 import argparse
 import numpy as np
 import tensorflow as tf
-import math
+
 # -----------------------------
 # PARAMETER PARSING
 # -----------------------------
@@ -140,43 +140,4 @@ def order_param_settings(params):
         param_list.append(str(k) + ": " + str(param_dict[k]))
 
     return param_list
-
-
-# -----------------------------
-# MODEL BUILDING
-# -----------------------------
-
-def fclayer(input,
-            size_out,
-            wts_init=layers.xavier_initializer(),
-            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
-            reuse=None,
-            scope=None,
-            activation=None):
-    return layers.fully_connected(
-        inputs=input,
-        num_outputs=size_out,
-        activation_fn=activation,
-        normalizer_fn=None,
-        normalizer_params=None,
-        weights_initializer=wts_init,
-        weights_regularizer=None,
-        biases_initializer=bias_init,
-        biases_regularizer=None,
-        reuse=reuse,
-        variables_collections=None,
-        outputs_collections=None,
-        trainable=True,
-        scope=scope
-    )
-
-
-def bias_init(inits, size, name):
-    return tf.Variable(inits * tf.ones([size]), name=name)
-
-def wts_init(shape, name):
-    # effectively a Xavier initializer
-    return tf.Variable(tf.random_normal(shape), name=name) / \
-           math.sqrt(shape[0])
-
 
