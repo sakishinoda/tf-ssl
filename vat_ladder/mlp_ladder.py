@@ -277,12 +277,12 @@ class BatchNormLayers(object):
 
 
     """
-    def __init__(self, ls, scope='bn'):
+    def __init__(self, ls, decay=0.99):
 
         # store updates to be made to average mean, variance
         self.bn_assigns = []
         # calculate the moving averages of mean and variance
-        self.ema = tf.train.ExponentialMovingAverage(decay=0.99)
+        self.ema = tf.train.ExponentialMovingAverage(decay=decay)
 
         # average mean and variance of all layers
         # shift & scale
@@ -419,7 +419,11 @@ def main():
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
 
-    bn = BatchNormLayers(ls)
+    if params.bn_decay == 'dynamic':
+        bn_decay = tf.Variable(1e-10, trainable=False)
+    else:
+        bn_decay = 0.99
+    bn = BatchNormLayers(ls, decay=bn_decay)
 
 
     print("=== Corrupted Encoder === ")
@@ -561,10 +565,17 @@ def main():
                        outputs: labels,
                        train_flag: True})
 
+        # ---------------------------------------------
         # Epoch completed?
         if (i > 1) and ((i+1) % params.iter_per_epoch == 0):
             epoch_n = i // (num_examples // batch_size)
 
+            # ---------------------------------------------
+            # Update batch norm decay constant
+            if params.bn_decay == 'dynamic':
+                bn_decay.assign(1.0 - (1.0 / (epoch_n + 1)))
+
+            # ---------------------------------------------
             # Update learning rate every epoch
             if (epoch_n + 1) >= decay_after:
                 # epoch_n + 1 because learning rate is set for next epoch
@@ -572,6 +583,7 @@ def main():
                 ratio = max(0., ratio / (params.end_epoch - decay_after))
                 sess.run(learning_rate.assign(starter_learning_rate * ratio))
 
+            # ---------------------------------------------
             # Evaluate every test_frequency_in_epochs
             if ((i + 1) % (params.test_frequency_in_epochs *
                                params.iter_per_epoch) == 0):

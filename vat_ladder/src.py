@@ -55,15 +55,15 @@ def get_cli_params():
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
+    # Batch norm decay weight mode
+    add('--bn_decay', default='constant', choices=['dynamic', 'constant'])
+
     # -------------------------
     # COMBINATOR STRUCTURE
     # -------------------------
     # Specify form of combinator (A)MLP
     # add('--combinator_layers', default='4-1')
     add('--combinator_sd', default=0.025, type=float)
-
-    # by default use the unlabeled batch epochs
-    # add('--use_labeled_epochs', action='store_true')
 
     # -------------------------
     # VAT SETTINGS
