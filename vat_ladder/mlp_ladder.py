@@ -154,8 +154,8 @@ class Encoder(object):
                 h = tf.nn.softmax(self.logits)
             else:
                 # use ReLU activation in hidden layers
-                # h = tf.nn.relu(z + bn.beta[l - 1])
-                h = lrelu(z + bn.beta[l-1])
+                h = tf.nn.relu(z + bn.beta[l - 1])
+                # h = lrelu(z + bn.beta[l-1])
 
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l], self.unlabeled.v[l] = m, v
@@ -481,8 +481,11 @@ def main():
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
-    bn_decay = tf.Variable(1e-10, trainable=False)
-    # bn_decay = tf.placeholder_with_default(0.99, shape=(1))
+
+    if params.bn_decay == 'dynamic':
+        bn_decay = tf.Variable(1e-10, trainable=False)
+    else:
+        bn_decay = 0.99
 
     bn = BatchNormLayers(ls, bn_decay=bn_decay)
 
@@ -657,7 +660,8 @@ def main():
 
             # ---------------------------------------------
             # Update batch norm decay
-            sess.run(bn_decay.assign(1.0 - (1.0/epoch_n)))
+            if params.bn_decay == 'dynamic':
+                sess.run(bn_decay.assign(1.0 - (1.0/epoch_n)))
 
             # ---------------------------------------------
             # Decay learning rate

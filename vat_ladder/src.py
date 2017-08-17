@@ -55,6 +55,8 @@ def get_cli_params():
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
+    add('--bn_decay', default='constant', choices=['constant', 'dynamic'])
+
     # -------------------------
     # COMBINATOR STRUCTURE
     # -------------------------
