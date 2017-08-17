@@ -7,6 +7,8 @@ import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings, count_trainable_params
+from src.ladder import Encoder, Decoder, BatchNormLayers, gauss_combinator, \
+    get_batch_ops, preprocess
 import numpy as np
 import math
 import sys
@@ -16,20 +18,6 @@ import IPython
 def main():
 
     params = process_cli_params(get_cli_params())
-
-    # -----------------------------
-    # Write logs to appropriate directory
-    log_dir = params.logdir + params.id
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    desc_file = log_dir + "/" + "description"
-    with open(desc_file, 'a') as f:
-        print(*order_param_settings(params), sep='\n', file=f, flush=True)
-        print("Trainable parameters:", count_trainable_params(), file=f,
-              flush=True)
-
-    log_file = log_dir + "/" + "train_log"
 
     # -----------------------------
     # Set GPU device to use
@@ -121,6 +109,21 @@ def main():
         train_step = tf.group(bn_updates)
 
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5, max_to_keep=5)
+
+    # -----------------------------
+    # Create logs after full graph created to count trainable parameters
+    # Write logs to appropriate directory
+    log_dir = params.logdir + params.id
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    desc_file = log_dir + "/" + "description"
+    with open(desc_file, 'a') as f:
+        print(*order_param_settings(params), sep='\n', file=f, flush=True)
+        print("Trainable parameters:", count_trainable_params(), file=f,
+              flush=True)
+
+    log_file = log_dir + "/" + "train_log"
 
     # -----------------------------
     print("===  Starting Session ===")
