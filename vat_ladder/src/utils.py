@@ -63,7 +63,7 @@ def get_cli_params():
     # -------------------------
     # Specify form of combinator (A)MLP
     # add('--combinator_layers', default='4-1')
-    add('--combinator_sd', default=0.025, type=float)
+    # add('--combinator_sd', default=0.025, type=float)
 
     # -------------------------
     # VAT SETTINGS
@@ -73,21 +73,24 @@ def get_cli_params():
     add('--num_power_iterations', default=1, type=int)
     add('--xi', default=1e-6, type=float)
 
-    # weight of vat cost
+    # weight of VAT cost
     add('--vat_weight', default=0, type=float)
 
+    # weight of AT cost
+    add('--at_weight', default=0, type=float)
+
     # use VAT RC cost at each layer
-    add('--vat_rc', action='store_true')
+    # add('--vat_rc', action='store_true')
 
     # corruption mode
-    add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
+    # add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
     # weight of entropy minimisation cost
-    add('--ent_weight', default=0, type=float)
+    # add('--ent_weight', default=0, type=float)
 
-    add('--keep_prob_hidden', default=0.5, type=float)
-    add('--lrelu_a', default=0.1, type=float)
-    add('--top_bn', action='store_true')
-    add('--bn_stats_decay_factor', default=0.99, type=float)
+    # add('--keep_prob_hidden', default=0.5, type=float)
+    # add('--lrelu_a', default=0.1, type=float)
+    # add('--top_bn', action='store_true')
+    # add('--bn_stats_decay_factor', default=0.99, type=float)
 
     # -------------------------
     # CNN LADDER
