@@ -52,6 +52,7 @@ class Ladder(object):
         self.corr = corr
         self.clean = clean
         self.dec = dec
+        self.bn_decay = bn_decay
 
         # Calculate total unsupervised cost
         self.u_cost = tf.add_n(self.dec.d_cost)
@@ -215,7 +216,8 @@ def main():
                   train_flag: False}),
               "%", file=f, flush=True)
         print("Initial Test Cross Entropy: ",
-              evaluate_metric(mnist.test, sess, cost), file=f, flush=True)
+              evaluate_metric(mnist.test, sess, ladder.cost), file=f,
+              flush=True)
 
     start = time.time()
     for i in tqdm(range(i_iter, params.num_iter)):
@@ -236,7 +238,7 @@ def main():
             # ---------------------------------------------
             # Update batch norm decay constant
             if params.bn_decay == 'dynamic':
-                bn_decay.assign(1.0 - (1.0 / (epoch_n + 1)))
+                ladder.bn_decay.assign(1.0 - (1.0 / (epoch_n + 1)))
 
             # ---------------------------------------------
             # Update learning rate every epoch
@@ -258,7 +260,7 @@ def main():
 
                 # ---------------------------------------------
                 # Compute error on testing set (10k examples)
-                test_cost = evaluate_metric(mnist.test, sess, cost)
+                test_cost = evaluate_metric(mnist.test, sess, ladder.cost)
 
                 # Create log of:
                 # time, epoch number, test accuracy, test cross entropy,
@@ -277,7 +279,7 @@ def main():
                                outputs: mnist.train.labeled_ds.labels,
                                train_flag: False}
                 ) + sess.run(
-                    [loss, cost, u_cost],
+                    [loss, ladder.cost, ladder.u_cost],
                     feed_dict={inputs_placeholder: images,
                                outputs: labels,
                                train_flag: False})
