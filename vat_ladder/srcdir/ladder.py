@@ -112,7 +112,7 @@ class Encoder(object):
                 # Training batch normalization
                 # batch normalization for labeled and unlabeled examples is
                 # performed separately
-                # if noise_sd > 0:
+
                 if self.noise_sd > 0:
                     # Corrupted encoder
                     # batch normalization + noise
@@ -240,7 +240,7 @@ class Decoder(object):
 
             u = bn.batch_normalization(u)
             with tf.variable_scope('cmb' + str(l), reuse=None):
-                z_est[l] = combinator.combine(z_c, u, ls[l], l)
+                z_est[l] = combinator(z_c, u, ls[l])
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
@@ -432,3 +432,30 @@ class GaussCombinator(Combinator):
         z_est = (z_c - mu) * v + mu
 
         return z_est
+
+def gauss_combinator(z_c, u, size):
+    """ Gaussian assumption on z: (z - mu) * v + mu"""
+
+    wi = lambda inits, name: tf.get_variable(
+        name,
+        initializer=tf.ones_initializer(dtype="float"),
+        shape=[size])
+
+    a1 = wi(0., 'a1')
+    a2 = wi(1., 'a2')
+    a3 = wi(0., 'a3')
+    a4 = wi(0., 'a4')
+    a5 = wi(0., 'a5')
+
+    a6 = wi(0., 'a6')
+    a7 = wi(1., 'a7')
+    a8 = wi(0., 'a8')
+    a9 = wi(0., 'a9')
+    a10 = wi(0., 'a10')
+
+    mu = a1 * tf.sigmoid(a2 * u + a3) + a4 * u + a5
+    v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
+
+    z_est = (z_c - mu) * v + mu
+
+    return z_est

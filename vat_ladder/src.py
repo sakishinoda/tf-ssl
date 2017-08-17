@@ -1,11 +1,11 @@
 # -----------------------------
 # IMPORTS
 # -----------------------------
-
+from tensorflow.contrib import layers as layers
 import argparse
 import numpy as np
 import tensorflow as tf
-
+import math
 # -----------------------------
 # PARAMETER PARSING
 # -----------------------------
@@ -55,21 +55,15 @@ def get_cli_params():
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
-    add('--bn_decay', default='constant', choices=['constant', 'dynamic'])
+    # Batch norm decay weight mode
+    add('--bn_decay', default='constant', choices=['dynamic', 'constant'])
 
     # -------------------------
     # COMBINATOR STRUCTURE
     # -------------------------
     # Specify form of combinator (A)MLP
-    add('--combinator', default='gauss', choices=['gauss', 'amlp', 'mlp'])
-    add('--combinator_layers', default='4-1')
-    add('--combinator_sd', default=0.006, type=float)
-    # AMLP
-    # ----
-    # Labels    Layers      SD          AER
-    # 100       3-4-1       0.006       1.072 +/- 0.015
-    # 1000      3-4-1       0.025       0.974 +/- 0.021
-
+    # add('--combinator_layers', default='4-1')
+    add('--combinator_sd', default=0.025, type=float)
 
     # -------------------------
     # VAT SETTINGS
@@ -112,11 +106,8 @@ def process_cli_params(params):
     encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
     rc_weights = parse_argstring(params.rc_weights, dtype=float)
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
-    combinator_layers = parse_argstring(params.combinator_layers, dtype=int)
-
     params.encoder_layers = encoder_layers
     params.rc_weights = rc_weights
-    params.combinator_layers = combinator_layers
 
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
@@ -149,3 +140,43 @@ def order_param_settings(params):
         param_list.append(str(k) + ": " + str(param_dict[k]))
 
     return param_list
+
+
+# -----------------------------
+# MODEL BUILDING
+# -----------------------------
+
+def fclayer(input,
+            size_out,
+            wts_init=layers.xavier_initializer(),
+            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
+            reuse=None,
+            scope=None,
+            activation=None):
+    return layers.fully_connected(
+        inputs=input,
+        num_outputs=size_out,
+        activation_fn=activation,
+        normalizer_fn=None,
+        normalizer_params=None,
+        weights_initializer=wts_init,
+        weights_regularizer=None,
+        biases_initializer=bias_init,
+        biases_regularizer=None,
+        reuse=reuse,
+        variables_collections=None,
+        outputs_collections=None,
+        trainable=True,
+        scope=scope
+    )
+
+
+def bias_init(inits, size, name):
+    return tf.Variable(inits * tf.ones([size]), name=name)
+
+def wts_init(shape, name):
+    # effectively a Xavier initializer
+    return tf.Variable(tf.random_normal(shape), name=name) / \
+           math.sqrt(shape[0])
+
+
