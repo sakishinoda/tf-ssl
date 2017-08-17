@@ -660,8 +660,9 @@ def main():
 
             # ---------------------------------------------
             # Update batch norm decay
+
             if params.bn_decay == 'dynamic':
-                sess.run(bn_decay.assign(1.0 - (1.0/epoch_n)))
+                sess.run(bn_decay.assign(1.0 - (1.0/(epoch_n + 1))))
 
             # ---------------------------------------------
             # Decay learning rate
