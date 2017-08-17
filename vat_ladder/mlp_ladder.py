@@ -1,7 +1,6 @@
 
 import tensorflow as tf
 import os
-import input_data
 import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
