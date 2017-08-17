@@ -154,8 +154,8 @@ class Encoder(object):
                 h = tf.nn.softmax(self.logits)
             else:
                 # use ReLU activation in hidden layers
-                # h = tf.nn.relu(z + bn.beta[l - 1])
-                h = lrelu(z + bn.beta[l-1])
+                h = tf.nn.relu(z + bn.beta[l - 1])
+                # h = lrelu(z + bn.beta[l-1])
 
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l], self.unlabeled.v[l] = m, v
@@ -380,7 +380,7 @@ class Combinator(object):
         target_shape = [x if x is not None else -1 for x in z_c.get_shape().as_list()]
 
         for i, shape in enumerate(self.shapes):
-            h = lrelu(tf.nn.xw_plus_b(h,
+            h = tf.nn.relu(tf.nn.xw_plus_b(h,
                                       weights=self.w(*shape, name=str(i)),
                                       biases=self.b(shape[1], name=str(i))))
 
