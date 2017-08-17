@@ -92,7 +92,7 @@ def main():
     # -----------------------------
     dec = Decoder(clean=clean, corr=corr, bn=bn,
                       combinator=gauss_combinator,
-                      encoder_layers=encoder_layers,
+                      encoder_layers=params.encoder_layers,
                       denoising_cost=params.rc_weights,
                       batch_size=params.batch_size,
                       scope='dec', reuse=None)
