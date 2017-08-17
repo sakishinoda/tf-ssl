@@ -50,14 +50,74 @@ def main():
 
     # -----------------------------
     # Add top-level VAT/AT cost
-    from src.vat import adversarial_loss, virtual_adversarial_loss
-    from src.ladder import get_batch_ops
+    from src.vat import kl_divergence_with_logit, ce_loss, get_normalized_vector
+    from src.ladder import get_batch_ops, Encoder
     join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
+
+    def forward(x, is_training, update_batch_stats=False,
+                start_layer=0):
+
+        vatfw = Encoder(inputs=x,
+                        encoder_layers=params.encoder_layers,
+                        bn=ladder.bn,
+                        is_training=is_training,
+                        noise_sd=0.5,  # not used if not training
+                        start_layer=start_layer,
+                        batch_size=params.batch_size,
+                        update_batch_stats=update_batch_stats,
+                        scope='enc', reuse=True)
+
+        return vatfw.logits  # logits by default includes both labeled/unlabeled
+
+    def generate_virtual_adversarial_perturbation(x, logit, is_training,
+                                                  start_layer=0):
+        d = tf.random_normal(shape=tf.shape(x))
+        for k in range(params.num_power_iterations):
+            d = params.xi * get_normalized_vector(d)
+            logit_p = logit
+            print("=== Power Iteration: {} ===".format(k))
+            logit_m = forward(x + d, update_batch_stats=False,
+                              is_training=is_training, start_layer=start_layer)
+            dist = kl_divergence_with_logit(logit_p, logit_m)
+            grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+            d = tf.stop_gradient(grad)
+        return params.epsilon * get_normalized_vector(d)
+
+    def generate_adversarial_perturbation(x, loss):
+        grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+        grad = tf.stop_gradient(grad)
+        return params.epsilon * get_normalized_vector(grad)
+
+    def adversarial_loss(x, y, loss, is_training,
+                         start_layer=0,
+                         name="at_loss"):
+        r_adv = generate_adversarial_perturbation(x, loss)
+        logit = forward(x + r_adv, is_training=is_training,
+                        update_batch_stats=False,
+                        start_layer=start_layer)
+        loss = ce_loss(logit, y)
+        return tf.identity(loss, name=name)
+
+    def virtual_adversarial_loss(x, logit, is_training,
+                                 start_layer=0,
+                                 name="vat_loss"):
+        r_vadv = generate_virtual_adversarial_perturbation(
+            x, logit, is_training=is_training)
+        logit = tf.stop_gradient(logit)
+        logit_p = logit
+        logit_m = forward(x + r_vadv, update_batch_stats=False,
+                          is_training=is_training,
+                          start_layer=start_layer)
+        loss = kl_divergence_with_logit(logit_p, logit_m)
+        return tf.identity(loss, name=name)
+
 
     # AT on labeled only
     at_cost = adversarial_loss(x=labeled(inputs),
                                y=outputs,
-                               loss=ladder.cost) * params.at_weight
+                               loss=ladder.cost,
+                               is_training=train_flag
+                               ) * params.at_weight
 
     # VAT on unlabeled only
     vat_cost = virtual_adversarial_loss(x=unlabeled(inputs),
