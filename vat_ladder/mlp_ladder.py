@@ -562,7 +562,7 @@ def main():
                        train_flag: True})
 
         # Epoch completed?
-        if (i > 1) and ((i+1) % params.num_iter_per_epoch == 0):
+        if (i > 1) and ((i+1) % params.iter_per_epoch == 0):
             epoch_n = i // (num_examples // batch_size)
 
             # Update learning rate every epoch
@@ -574,7 +574,7 @@ def main():
 
             # Evaluate every test_frequency_in_epochs
             if ((i + 1) % (params.test_frequency_in_epochs *
-                               params.num_iter_per_epoch) == 0):
+                               params.iter_per_epoch) == 0):
                 now = time.time() - start
 
                 if not params.do_not_save:
