@@ -118,6 +118,8 @@ def process_cli_params(params):
     params.rc_weights = rc_weights
     params.combinator_layers = combinator_layers
 
+
+
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
                                 'c', 'c',

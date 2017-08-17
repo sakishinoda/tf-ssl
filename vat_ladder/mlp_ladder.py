@@ -38,23 +38,16 @@ def main():
     # -----------------------------
     num_examples = mnist.train.num_examples
 
-    starter_learning_rate = params.initial_learning_rate
-
-    # epoch after which to begin learning rate decay
-    decay_after = params.decay_start_epoch
-    batch_size = params.batch_size
-
     # number of loop iterations
-    params.iter_per_epoch = (num_examples // batch_size)
-    num_iter = params.iter_per_epoch * params.end_epoch
-    params.num_iter = num_iter
-    ls = params.cnn_fan if params.cnn else params.encoder_layers
+    params.iter_per_epoch = (num_examples // params.batch_size)
+    params.num_iter = params.iter_per_epoch * params.end_epoch
+    encoder_layers = params.cnn_fan if params.cnn else params.encoder_layers
 
-    join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
+    join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
 
     # -----------------------------
     # Placeholders
-    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, ls[0]))
+    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, encoder_layers[0]))
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
@@ -65,11 +58,11 @@ def main():
         bn_decay = tf.Variable(1e-10, trainable=False)
     else:
         bn_decay = 0.99
-    bn = BatchNormLayers(ls, bn_decay=bn_decay)
+    bn = BatchNormLayers(encoder_layers, bn_decay=bn_decay)
 
     # -----------------------------
     print("=== Corrupted Encoder === ")
-    corr = Encoder(inputs=inputs, encoder_layers=ls, bn=bn,
+    corr = Encoder(inputs=inputs, encoder_layers=encoder_layers, bn=bn,
                         is_training=train_flag,
                         noise_sd=params.encoder_noise_sd, start_layer=0,
                         batch_size=params.batch_size, update_batch_stats=False,
@@ -77,7 +70,7 @@ def main():
 
     # -----------------------------
     print("=== Clean Encoder ===")
-    clean = Encoder(inputs=inputs, encoder_layers=ls, bn=bn,
+    clean = Encoder(inputs=inputs, encoder_layers=encoder_layers, bn=bn,
                         is_training=train_flag, noise_sd=0.0, start_layer=0,
                         batch_size=params.batch_size, update_batch_stats=True,
                         scope='enc', reuse=True)
@@ -94,7 +87,7 @@ def main():
                       combinator=Cmb(
                           params.combinator_layers,
                           params.combinator_sd),
-                      encoder_layers=ls,
+                      encoder_layers=encoder_layers,
                       denoising_cost=params.rc_weights,
                       batch_size=params.batch_size,
                       scope='dec', reuse=None)
@@ -119,7 +112,7 @@ def main():
     # -----------------------------
     # Training operations
     # -----------------------------
-    learning_rate = tf.Variable(starter_learning_rate, trainable=False)
+    learning_rate = tf.Variable(params.initial_learning_rate, trainable=False)
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
     # add the updates of batch normalization statistics to train_step
@@ -158,7 +151,7 @@ def main():
         # if checkpoint exists, restore the parameters and set epoch_n and i_iter
         saver.restore(sess, ckpt.model_checkpoint_path)
         epoch_n = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
-        i_iter = (epoch_n + 1) * (num_examples // batch_size)
+        i_iter = (epoch_n + 1) * (num_examples // params.batch_size)
         print("Restored Epoch ", epoch_n)
     else:
         # no checkpoint exists. create checkpoints directory if it does not exist.
@@ -173,9 +166,9 @@ def main():
 
     def evaluate_metric(dataset, sess, op):
         metric = 0
-        num_eval_iters = dataset.num_examples // batch_size
+        num_eval_iters = dataset.num_examples // params.batch_size
         for _ in range(num_eval_iters):
-            images, labels = dataset.next_batch(batch_size)
+            images, labels = dataset.next_batch(params.batch_size)
             init_feed = {inputs_placeholder: images,
                          outputs: labels,
                          train_flag: False}
@@ -185,9 +178,9 @@ def main():
 
     def evaluate_metric_list(dataset, sess, ops):
         metrics = [0.0 for _ in ops]
-        num_eval_iters = dataset.num_examples // batch_size
+        num_eval_iters = dataset.num_examples // params.batch_size
         for _ in range(num_eval_iters):
-            images, labels = dataset.next_batch(batch_size)
+            images, labels = dataset.next_batch(params.batch_size)
             init_feed = {inputs_placeholder: images,
                          outputs: labels,
                          train_flag: False}
@@ -225,9 +218,9 @@ def main():
               evaluate_metric(mnist.test, sess, cost), file=f, flush=True)
 
     start = time.time()
-    for i in tqdm(range(i_iter, num_iter)):
+    for i in tqdm(range(i_iter, params.num_iter)):
 
-        images, labels = mnist.train.next_batch(batch_size)
+        images, labels = mnist.train.next_batch(params.batch_size)
 
         _ = sess.run(
             [train_step],
@@ -238,7 +231,7 @@ def main():
         if (i > 1):
 
             # Compute epoch number
-            epoch_n = i // (num_examples // batch_size)
+            epoch_n = i // (num_examples // params.batch_size)
 
             # Do every complete epoch
             if ((i+1) % params.iter_per_epoch == 0):
@@ -250,11 +243,11 @@ def main():
 
                 # ---------------------------------------------
                 # Decay learning rate
-                if (epoch_n + 1) >= decay_after:
+                if (epoch_n + 1) >= params.decay_start_epoch:
                     # epoch_n + 1 because learning rate is set for next epoch
                     ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
-                    ratio = max(0., ratio / (params.end_epoch - decay_after))
-                    sess.run(learning_rate.assign(starter_learning_rate * ratio))
+                    ratio = max(0., ratio / (params.end_epoch - params.decay_start_epoch))
+                    sess.run(learning_rate.assign(params.initial_learning_rate * ratio))
 
             # ---------------------------------------------
             # Calculate metrics

@@ -112,7 +112,7 @@ class Encoder(object):
                 # Training batch normalization
                 # batch normalization for labeled and unlabeled examples is
                 # performed separately
-                # if noise_sd > 0:
+
                 if self.noise_sd > 0:
                     # Corrupted encoder
                     # batch normalization + noise
