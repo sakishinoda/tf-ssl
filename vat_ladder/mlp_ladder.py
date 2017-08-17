@@ -2,13 +2,13 @@
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import os
-import input_data
 import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings, count_trainable_params
 from src.ladder import Encoder, Decoder, BatchNormLayers, gauss_combinator, \
     get_batch_ops, preprocess
+from src import input_data
 import numpy as np
 import math
 import sys
