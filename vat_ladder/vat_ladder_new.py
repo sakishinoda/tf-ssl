@@ -38,8 +38,8 @@ def main():
 
     # -----------------------------
     # Placeholder setup
-    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, params.encoder_layers[
-        0]))
+    inputs_placeholder = tf.placeholder(
+        tf.float32, shape=(None, params.encoder_layers[0]))
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
@@ -116,7 +116,8 @@ def main():
     at_cost = adversarial_loss(x=labeled(inputs),
                                y=outputs,
                                loss=ladder.cost,
-                               is_training=train_flag
+                               is_training=train_flag,
+                               start_layer=0
                                ) * params.at_weight
 
     # VAT on unlabeled only
@@ -128,6 +129,8 @@ def main():
     # -----------------------------
     # Loss, accuracy and training steps
     loss = ladder.cost + ladder.u_cost + at_cost + vat_cost
+    train_losses = [loss, ladder.cost, ladder.u_cost, at_cost, vat_cost]
+    test_losses = [ladder.cost, at_cost]
 
     accuracy = tf.reduce_mean(
         tf.cast(
@@ -226,7 +229,7 @@ def main():
                   train_flag: False}),
               "%", file=f, flush=True)
         print("Initial Train Losses: ", *evaluate_metric_list(
-            mnist.train, sess, [loss, ladder.cost, ladder.u_cost]), file=f,
+            mnist.train, sess, train_losses), file=f,
               flush=True)
 
         # -----------------------------
@@ -237,8 +240,9 @@ def main():
                   outputs: mnist.test.labels,
                   train_flag: False}),
               "%", file=f, flush=True)
-        print("Initial Test Cross Entropy: ",
-              evaluate_metric(mnist.test, sess, ladder.cost), file=f,
+        print("Initial Test CE, AT Costs: ",
+              *evaluate_metric_list(
+                  mnist.test, sess, test_losses), file=f,
               flush=True)
 
     start = time.time()
@@ -282,7 +286,7 @@ def main():
 
                 # ---------------------------------------------
                 # Compute error on testing set (10k examples)
-                test_cost = evaluate_metric(mnist.test, sess, ladder.cost)
+                test_cost = evaluate_metric_list(mnist.test, sess, test_losses)
 
                 # Create log of:
                 # time, epoch number, test accuracy, test cross entropy,
@@ -294,14 +298,14 @@ def main():
                     feed_dict={inputs_placeholder: mnist.test.images,
                                outputs: mnist.test.labels,
                                train_flag: False}
-                ) + [test_cost] + sess.run(
+                ) + test_cost + sess.run(
                     [accuracy],
                     feed_dict={inputs_placeholder:
                                    mnist.train.labeled_ds.images,
                                outputs: mnist.train.labeled_ds.labels,
                                train_flag: False}
                 ) + sess.run(
-                    [loss, ladder.cost, ladder.u_cost],
+                    train_losses,
                     feed_dict={inputs_placeholder: images,
                                outputs: labels,
                                train_flag: False})
