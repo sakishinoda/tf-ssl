@@ -141,3 +141,7 @@ def order_param_settings(params):
 
     return param_list
 
+def preprocess(placeholder, params):
+    return tf.reshape(placeholder, shape=[
+        -1, params.cnn_init_size, params.cnn_init_size, params.cnn_fan[0]
+    ]) if params.cnn else placeholder

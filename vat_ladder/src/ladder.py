@@ -10,11 +10,6 @@ def get_batch_ops(batch_size):
     unlabeled = lambda x: x[batch_size:] if x is not None else x
     return join, split_lu, labeled, unlabeled
 
-def preprocess(placeholder, params):
-    return tf.reshape(placeholder, shape=[
-        -1, params.cnn_init_size, params.cnn_init_size, params.cnn_fan[0]
-    ]) if params.cnn else placeholder
-
 
 class Activations(object):
     """Store statistics for each layer in the encoder/decoder structures
@@ -358,3 +353,61 @@ def gauss_combinator(z_c, u, size):
 
     z_est = (z_c - mu) * v + mu
     return z_est
+
+
+
+
+class Ladder(object):
+    def __init__(self, inputs, outputs, train_flag, params):
+
+        join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
+
+        print("=== Batch Norm === ")
+        if params.bn_decay == 'dynamic':
+            bn_decay = tf.Variable(1e-10, trainable=False)
+        else:
+            bn_decay = 0.99
+        bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
+
+        print("=== Corrupted Encoder === ")
+        # with tf.variable_scope('enc', reuse=None) as scope:
+        corr = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
+                       is_training=train_flag,
+                       noise_sd=params.encoder_noise_sd, start_layer=0,
+                       batch_size=params.batch_size, update_batch_stats=False,
+                       scope='enc', reuse=None)
+
+        print("=== Clean Encoder ===")
+        # with tf.variable_scope('enc', reuse=True) as scope:
+        clean = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
+                        is_training=train_flag, noise_sd=0.0, start_layer=0,
+                        batch_size=params.batch_size, update_batch_stats=True,
+                        scope='enc', reuse=True)
+
+        print("=== Decoder ===")
+        # with tf.variable_scope('dec', reuse=None):
+        dec = Decoder(clean=clean, corr=corr, bn=bn,
+                      combinator=gauss_combinator,
+                      encoder_layers=params.encoder_layers,
+                      denoising_cost=params.rc_weights,
+                      batch_size=params.batch_size,
+                      scope='dec', reuse=None)
+
+
+        self.bn = bn
+        self.corr = corr
+        self.clean = clean
+        self.dec = dec
+        self.bn_decay = bn_decay
+
+        # Calculate total unsupervised cost
+        self.u_cost = tf.add_n(self.dec.d_cost)
+
+        # Calculate supervised cross entropy cost
+        ce = tf.nn.softmax_cross_entropy_with_logits(
+            labels=outputs, logits=labeled(corr.logits))
+        self.cost = tf.reduce_mean(ce)
+
+        # Compute predictions
+        self.predict = tf.argmax(clean.logits, 1)
+
