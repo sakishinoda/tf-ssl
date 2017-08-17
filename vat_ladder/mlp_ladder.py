@@ -139,8 +139,8 @@ class Encoder(object):
             def eval_batch_norm():
                 # Evaluation batch normalization
                 # obtain average mean and variance and use it to normalize the batch
-                mean = bn.ema.average(bn.running_mean[l-1])
-                var = bn.ema.average(bn.running_var[l-1])
+                mean = bn.ma.average(bn.running_mean[l - 1])
+                var = bn.ma.average(bn.running_var[l - 1])
                 z = bn.batch_normalization(z_pre, mean, var)
 
                 return z
@@ -262,6 +262,8 @@ class Decoder(object):
 # -----------------------------
 # BATCH NORMALIZATION
 # -----------------------------
+
+
 class BatchNormLayers(object):
     """Batch norm class
 
@@ -273,7 +275,7 @@ class BatchNormLayers(object):
     Attributes
     ----------
         bn_assigns: list of TF ops
-        ema: TF op
+        ma: TF op
         running_var: list of tensors
         running_mean: list of tensors
         beta: list of tensors
@@ -281,12 +283,12 @@ class BatchNormLayers(object):
 
 
     """
-    def __init__(self, ls, scope='bn'):
+    def __init__(self, ls, bn_decay, scope='bn'):
 
         # store updates to be made to average mean, variance
         self.bn_assigns = []
         # calculate the moving averages of mean and variance
-        self.ema = tf.train.ExponentialMovingAverage(decay=0.99)
+        self.ma = tf.train.ExponentialMovingAverage(decay=bn_decay)
 
         # average mean and variance of all layers
         # shift & scale
@@ -327,7 +329,7 @@ class BatchNormLayers(object):
         assign_mean = self.running_mean[l-1].assign(mean)
         assign_var = self.running_var[l-1].assign(var)
         self.bn_assigns.append(
-            self.ema.apply([self.running_mean[l-1], self.running_var[l-1]]))
+            self.ma.apply([self.running_mean[l - 1], self.running_var[l - 1]]))
 
         with tf.control_dependencies([assign_mean, assign_var]):
             return tf.nn.batch_normalization(batch, mean, var, offset=None,
@@ -344,6 +346,8 @@ class BatchNormLayers(object):
         # return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
         return tf.nn.batch_normalization(batch, mean, var, offset=None,
                                          scale=None, variance_epsilon=1e-10)
+
+
 
 # -----------------------------
 # COMBINATOR
@@ -477,9 +481,10 @@ def main():
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
+    bn_decay = tf.Variable(1e-10, trainable=False)
+    # bn_decay = tf.placeholder_with_default(0.99, shape=(1))
 
-    bn = BatchNormLayers(ls)
-
+    bn = BatchNormLayers(ls, bn_decay=bn_decay)
 
     print("=== Corrupted Encoder === ")
     # with tf.variable_scope('enc', reuse=None) as scope:
@@ -645,48 +650,60 @@ def main():
                        outputs: labels,
                        train_flag: True})
 
-        if (i > 1) and ((i + 1) % (params.test_frequency_in_epochs * (
-                    num_iter // params.end_epoch)) == 0):
-            now = time.time() - start
+        if (i > 1):
+
+            # Compute epoch number
             epoch_n = i // (num_examples // batch_size)
 
+            # ---------------------------------------------
+            # Update batch norm decay
+            sess.run(bn_decay.assign(1.0 - (1.0/epoch_n)))
+
+            # ---------------------------------------------
+            # Decay learning rate
             if (epoch_n + 1) >= decay_after:
                 # epoch_n + 1 because learning rate is set for next epoch
                 ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
                 ratio = max(0., ratio / (params.end_epoch - decay_after))
                 sess.run(learning_rate.assign(starter_learning_rate * ratio))
 
-            if not params.do_not_save:
-                saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
-
             # ---------------------------------------------
-            # Compute error on testing set (10k examples)
-            test_cost = evaluate_metric(mnist.test, sess, cost)
+            # Calculate metrics
+            if ((i + 1) % (params.test_frequency_in_epochs *
+                              params.iter_per_epoch) == 0):
+                now = time.time() - start
 
-            # Create log of:
-            # time, epoch number, test accuracy, test cross entropy,
-            # train accuracy, train loss, train cross entropy,
-            # train reconstruction loss
+                if not params.do_not_save:
+                    saver.save(sess, ckpt_dir + 'model.ckpt', epoch_n)
 
-            log_i = [now, epoch_n] + sess.run(
-                [accuracy],
-                feed_dict={inputs_placeholder: mnist.test.images,
-                           outputs: mnist.test.labels,
-                           train_flag: False}
-            ) + [test_cost] + sess.run(
-                [accuracy],
-                feed_dict={inputs_placeholder:
-                               mnist.train.labeled_ds.images,
-                           outputs: mnist.train.labeled_ds.labels,
-                           train_flag: False}
-            ) + sess.run(
-                [loss, cost, u_cost],
-                feed_dict={inputs_placeholder: images,
-                           outputs: labels,
-                           train_flag: False})
+                # ---------------------------------------------
+                # Compute error on testing set (10k examples)
+                test_cost = evaluate_metric(mnist.test, sess, cost)
 
-            with open(log_file, 'a') as train_log:
-                print(*log_i, sep=',', flush=True, file=train_log)
+                # Create log of:
+                # time, epoch number, test accuracy, test cross entropy,
+                # train accuracy, train loss, train cross entropy,
+                # train reconstruction loss
+
+                log_i = [now, epoch_n] + sess.run(
+                    [accuracy],
+                    feed_dict={inputs_placeholder: mnist.test.images,
+                               outputs: mnist.test.labels,
+                               train_flag: False}
+                ) + [test_cost] + sess.run(
+                    [accuracy],
+                    feed_dict={inputs_placeholder:
+                                   mnist.train.labeled_ds.images,
+                               outputs: mnist.train.labeled_ds.labels,
+                               train_flag: False}
+                ) + sess.run(
+                    [loss, cost, u_cost],
+                    feed_dict={inputs_placeholder: images,
+                               outputs: labels,
+                               train_flag: False})
+
+                with open(log_file, 'a') as train_log:
+                    print(*log_i, sep=',', flush=True, file=train_log)
 
     with open(desc_file, 'a') as f:
         print("Final Accuracy: ", sess.run(accuracy, feed_dict={
