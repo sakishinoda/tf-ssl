@@ -6,7 +6,7 @@ from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings, count_trainable_params
 from src.ladder import get_batch_ops, preprocess, BatchNormLayers, Encoder, \
-    Decoder, Combinator, MLPCombinator, GaussCombinator
+    Decoder, gauss_combinator
 from src import input_data
 import numpy as np
 import IPython
@@ -83,18 +83,16 @@ def main():
                         scope='enc', reuse=True)
     # -----------------------------
     print("=== Decoder ===")
-    if params.combinator == 'amlp':
-        Cmb = Combinator
-    elif params.combinator == 'mlp':
-        Cmb = MLPCombinator
-    else:
-        Cmb = GaussCombinator
+    # if params.combinator == 'amlp':
+    #     Cmb = Combinator
+    # elif params.combinator == 'mlp':
+    #     Cmb = MLPCombinator
+    # else:
+    #     Cmb = GaussCombinator
     # -----------------------------
     dec = Decoder(clean=clean, corr=corr, bn=bn,
-                      combinator=Cmb(
-                          params.combinator_layers,
-                          params.combinator_sd),
-                      encoder_layers=ls,
+                      combinator=gauss_combinator,
+                      encoder_layers=encoder_layers,
                       denoising_cost=params.rc_weights,
                       batch_size=params.batch_size,
                       scope='dec', reuse=None)
