@@ -1,6 +1,5 @@
 
 import tensorflow as tf
-import tensorflow.contrib.layers as layers
 import os
 import time
 from tqdm import tqdm
@@ -10,9 +9,61 @@ from src.ladder import Encoder, Decoder, BatchNormLayers, gauss_combinator, \
     get_batch_ops, preprocess
 from src import input_data
 import numpy as np
-import math
-import sys
-import IPython
+
+
+class Ladder(object):
+    def __init__(self, inputs, outputs, train_flag, params):
+
+        join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
+
+        print("=== Batch Norm === ")
+        if params.bn_decay == 'dynamic':
+            bn_decay = tf.Variable(1e-10, trainable=False)
+        else:
+            bn_decay = 0.99
+        bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
+
+        print("=== Corrupted Encoder === ")
+        # with tf.variable_scope('enc', reuse=None) as scope:
+        corr = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
+                       is_training=train_flag,
+                       noise_sd=params.encoder_noise_sd, start_layer=0,
+                       batch_size=params.batch_size, update_batch_stats=False,
+                       scope='enc', reuse=None)
+
+        print("=== Clean Encoder ===")
+        # with tf.variable_scope('enc', reuse=True) as scope:
+        clean = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
+                        is_training=train_flag, noise_sd=0.0, start_layer=0,
+                        batch_size=params.batch_size, update_batch_stats=True,
+                        scope='enc', reuse=True)
+
+        print("=== Decoder ===")
+        # with tf.variable_scope('dec', reuse=None):
+        dec = Decoder(clean=clean, corr=corr, bn=bn,
+                      combinator=gauss_combinator,
+                      encoder_layers=params.encoder_layers,
+                      denoising_cost=params.rc_weights,
+                      batch_size=params.batch_size,
+                      scope='dec', reuse=None)
+
+
+        self.bn = bn
+        self.corr = corr
+        self.clean = clean
+        self.dec = dec
+
+        # Calculate total unsupervised cost
+        self.u_cost = tf.add_n(self.dec.d_cost)
+
+        # Calculate supervised cross entropy cost
+        ce = tf.nn.softmax_cross_entropy_with_logits(
+            labels=outputs, logits=labeled(corr.logits))
+        self.cost = tf.reduce_mean(ce)
+
+        # Compute predictions
+        self.predict = tf.argmax(clean.logits, 1)
+
 
 
 def main():
@@ -34,70 +85,39 @@ def main():
                                       one_hot=True,
                                       disjoint=False)
     num_examples = mnist.train.num_examples
-
-    # number of loop iterations
+    # -----------------------------
+    # Parameter setup
     params.iter_per_epoch = (num_examples // params.batch_size)
     params.num_iter = params.iter_per_epoch * params.end_epoch
+    params.encoder_layers = params.cnn_fan if params.cnn else \
+        params.encoder_layers
 
-    join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
-
-    ls = params.cnn_fan if params.cnn else params.encoder_layers
-    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, ls[0]))
+    # -----------------------------
+    # Placeholder setup
+    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, params.encoder_layers[
+        0]))
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
 
-    if params.bn_decay == 'dynamic':
-        bn_decay = tf.Variable(1e-10, trainable=False)
-    else:
-        bn_decay = 0.99
-    bn = BatchNormLayers(ls, decay=bn_decay)
+    # -----------------------------
+    # Ladder
+    ladder = Ladder(inputs, outputs, train_flag, params)
 
-
-    print("=== Corrupted Encoder === ")
-    # with tf.variable_scope('enc', reuse=None) as scope:
-    corr = Encoder(inputs=inputs, encoder_layers=ls, bn=bn,
-                        is_training=train_flag,
-                        noise_sd=params.encoder_noise_sd, start_layer=0,
-                        batch_size=params.batch_size, update_batch_stats=False,
-                        scope='enc', reuse=None)
-
-    print("=== Clean Encoder ===")
-    # with tf.variable_scope('enc', reuse=True) as scope:
-    clean = Encoder(inputs=inputs, encoder_layers=ls, bn=bn,
-                        is_training=train_flag, noise_sd=0.0, start_layer=0,
-                        batch_size=params.batch_size, update_batch_stats=True,
-                        scope='enc', reuse=True)
-
-    print("=== Decoder ===")
-    # with tf.variable_scope('dec', reuse=None):
-    dec = Decoder(clean=clean, corr=corr, bn=bn,
-                      combinator=gauss_combinator,
-                      encoder_layers=ls,
-                      denoising_cost=params.rc_weights,
-                      batch_size=params.batch_size,
-                      scope='dec', reuse=None)
-
-
-    # Calculate total unsupervised cost
-    u_cost = tf.add_n(dec.d_cost)
-    ce = tf.nn.softmax_cross_entropy_with_logits(
-                labels=outputs, logits=labeled(corr.logits))
-    cost = tf.reduce_mean(ce)
-
-    loss = cost + u_cost
-
-    # no of correct predictions
-    correct_prediction = tf.equal(tf.argmax(clean.logits, 1), tf.argmax(outputs, 1))
+    # -----------------------------
+    # Loss, accuracy and training steps
+    loss = ladder.cost + ladder.u_cost
 
     accuracy = tf.reduce_mean(
-        tf.cast(correct_prediction, "float")) * tf.constant(100.0)
+        tf.cast(
+            tf.equal(ladder.predict, tf.argmax(outputs, 1)),
+            "float")) * tf.constant(100.0)
 
     learning_rate = tf.Variable(params.initial_learning_rate, trainable=False)
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
     # add the updates of batch normalization statistics to train_step
-    bn_updates = tf.group(*bn.bn_assigns)
+    bn_updates = tf.group(*ladder.bn.bn_assigns)
     with tf.control_dependencies([train_step]):
         train_step = tf.group(bn_updates)
 
