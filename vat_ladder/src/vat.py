@@ -25,13 +25,24 @@ def entropy_y_x(logit):
     return -tf.reduce_mean(tf.reduce_sum(p * logsoftmax(logit), 1))
 
 def get_normalized_vector(d):
-
-    d_dims = len(d.get_shape()) - 1
-    axes = [range(1, d_dims)] if d_dims > 1 else [1]
-    d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=axes, keep_dims=True))
-    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0), axis=axes,
+    red_axes = list(range(1, len(d.get_shape())))
+    # print(d.get_shape(), red_axes)
+    d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=red_axes,
+                                            keep_dims=True))
+    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0),
+                                      axis=red_axes,
                                       keep_dims=True))
     return d
 
 
+# def get_normalized_vector(d):
+#
+#     d_dims = len(d.get_shape()) - 1
+#     axes = [range(1, d_dims)] if d_dims > 1 else [1]
+#     d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=axes, keep_dims=True))
+#     d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0), axis=axes,
+#                                       keep_dims=True))
+#     return d
+#
+#
 

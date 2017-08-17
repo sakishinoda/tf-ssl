@@ -69,6 +69,7 @@ def main():
 
         return vatfw.logits  # logits by default includes both labeled/unlabeled
 
+
     def generate_virtual_adversarial_perturbation(x, logit, is_training,
                                                   start_layer=0):
         d = tf.random_normal(shape=tf.shape(x))
@@ -101,10 +102,14 @@ def main():
     def virtual_adversarial_loss(x, logit, is_training,
                                  start_layer=0,
                                  name="vat_loss"):
+
+        print("=== VAT Pass: Generating VAT perturbation ===")
         r_vadv = generate_virtual_adversarial_perturbation(
             x, logit, is_training=is_training)
         logit = tf.stop_gradient(logit)
         logit_p = logit
+
+        print("=== VAT Pass: Computing VAT Loss (KL Divergence)")
         logit_m = forward(x + r_vadv, update_batch_stats=False,
                           is_training=is_training,
                           start_layer=start_layer)
@@ -113,12 +118,13 @@ def main():
 
 
     # AT on labeled only
-    at_cost = adversarial_loss(x=labeled(inputs),
-                               y=outputs,
-                               loss=ladder.cost,
-                               is_training=train_flag,
-                               start_layer=0
-                               ) * params.at_weight
+    # at_cost = adversarial_loss(x=labeled(inputs),
+    #                            y=outputs,
+    #                            loss=ladder.cost,
+    #                            is_training=train_flag,
+    #                            start_layer=0
+    #                            ) * params.at_weight
+    at_cost = tf.zeros(shape=tf.shape(labeled(inputs)))
 
     # VAT on unlabeled only
     vat_cost = virtual_adversarial_loss(x=unlabeled(inputs),
