@@ -346,7 +346,9 @@ class BatchNormLayers(object):
 # -----------------------------
 def gauss_combinator(z_c, u, size):
     "gaussian denoising function proposed in the original paper"
-    wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
+    # wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
+    wi = lambda inits, name: tf.get_variable(name, shape=[size],
+                                             initializer=inits)
     a1 = wi(0., 'a1')
     a2 = wi(1., 'a2')
     a3 = wi(0., 'a3')
