@@ -228,7 +228,8 @@ class Decoder(object):
 
             u = bn.batch_normalization(u)
 
-            z_est[l] = combinator(z_c, u, ls[l])
+            with tf.variable_scope('cmb'+str(l), reuse=None):
+                z_est[l] = combinator(z_c, u, ls[l])
 
             z_est_bn = (z_est[l] - m) / v
             # append the cost of this layer to d_cost
@@ -334,7 +335,7 @@ class BatchNormLayers(object):
 def gauss_combinator(z_c, u, size):
     "gaussian denoising function proposed in the original paper"
     # wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
-    wi = lambda inits, name: tf.get_variable(name, 
+    wi = lambda inits, name: tf.get_variable(name,
                                              initializer=inits*tf.ones([size]))
     a1 = wi(0., 'a1')
     a2 = wi(1., 'a2')
