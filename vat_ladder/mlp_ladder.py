@@ -205,7 +205,9 @@ def main():
                   outputs: mnist.train.labeled_ds.labels,
                   train_flag: False}),
               "%", file=f, flush=True)
-        print("Initial Train Losses: ", *evaluate_metric_list(mnist.train, sess, [loss, cost, u_cost]), file=f, flush=True)
+        print("Initial Train Losses: ", *evaluate_metric_list(
+            mnist.train, sess, [loss, ladder.cost, ladder.u_cost]), file=f,
+              flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
