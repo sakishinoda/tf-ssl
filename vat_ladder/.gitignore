@@ -1,3 +1,4 @@
 MNIST_data
 checkpoints
 logs
+/MNIST_data/
