@@ -187,7 +187,8 @@ def main():
 
             # ---------------------------------------------
             # Update learning rate every epoch
-            if (epoch_n + 1) >= params.decay_start_epoch:
+            if ((epoch_n + 1) >= params.decay_start_epoch) and ((i + 1) % (
+                    params.lr_decay_frequency * params.iter_per_epoch) == 0):
                 # epoch_n + 1 because learning rate is set for next epoch
                 ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
                 ratio = max(0., ratio / (params.end_epoch - params.decay_start_epoch))

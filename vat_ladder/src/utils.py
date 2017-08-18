@@ -23,7 +23,9 @@ def get_cli_params():
     add('--id', default='ladder')
     add('--decay_start_epoch', default=100, type=int)
     add('--end_epoch', default=150, type=int)
-    add('--test_frequency_in_epochs', default=1, type=int)
+    add('--test_frequency_in_epochs', default=5, type=int)
+    add('--lr_decay_frequency', default=5, type=int)
+
     add('--num_labeled', default=100, type=int)
     add('--batch_size', default=100, type=int)
     add('--initial_learning_rate', default=0.002, type=float)
