@@ -105,7 +105,7 @@ def main():
         # Evaluate initial testing accuracy and cross-entropy loss
         print("Initial Test Accuracy: ",
               sess.run(m['acc'], feed_dict={
-                  g['in']: mnist.test.images,
+                  g['images']: mnist.test.images,
                   g['labels']: mnist.test.labels,
                   g['train_flag']: False}),
               "%", file=f, flush=True)
