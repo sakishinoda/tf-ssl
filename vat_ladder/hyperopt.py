@@ -130,8 +130,9 @@ def main():
 
     gp_minimize(func,
                 dims,
-                n_calls=16,
+                n_calls=8,
                 x0=x0)
+
 
 
 if __name__ == '__main__':
