@@ -130,7 +130,7 @@ def main():
 
     gp_minimize(func,
                 dims,
-                n_calls=8,
+                n_calls=16,
                 x0=x0,
                 verbose=True)
 
