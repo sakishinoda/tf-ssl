@@ -4,7 +4,7 @@ from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.vat import Adversary
 from src.ladder import Ladder
 
-def build_graph(params):
+def build_top_graph(params):
 
     # -----------------------------
     # Placeholder setup
@@ -106,10 +106,9 @@ def build_lw_graph(params):
                 x=ladder.corr.unlabeled.z[l],
                 logit=unlabeled(ladder.corr.logits),
                 is_training=train_flag) *
-            params.vat_weight *
             params.rc_weights[l]
         )
-    vat_cost = tf.add_n(vat_costs)
+    vat_cost = tf.add_n(vat_costs) * (params.vat_weight/ladder.num_layers)
 
     # -----------------------------
     # Loss, accuracy and training steps

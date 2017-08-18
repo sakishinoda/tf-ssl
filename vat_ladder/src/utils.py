@@ -72,7 +72,6 @@ def get_cli_params():
     # Batch norm decay weight mode
     add('--static_bn', default=False, nargs='?', const=0.99, type=float)
 
-
     # -------------------------
     # COMBINATOR STRUCTURE
     # -------------------------
@@ -88,11 +87,16 @@ def get_cli_params():
     add('--num_power_iterations', default=1, type=int)
     add('--xi', default=1e-6, type=float)
 
+    # -------------------------
+    # VAL SETTINGS
+    # -------------------------
     # weight of VAT cost
     add('--vat_weight', default=0, type=float)
-
     # weight of AT cost
     add('--at_weight', default=0, type=float)
+
+    # layerwise VAT costs
+    add('--lw', action='store_true')
 
     # use VAT RC cost at each layer
     # add('--vat_rc', action='store_true')

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-from src.val import build_graph
+from src.val import build_top_graph, build_lw_graph
 from src.train import evaluate_metric
 from src import input_data
 import numpy as np
@@ -30,6 +30,7 @@ def get_params(x=None):
 
     # -------------------------
     # Use default values
+    add('lw', False)
     add('test_frequency_in_epochs', default=5, type=int)
     add('eval_batch_size', default=100, type=int)
     add('validation', default=1000, type=int)
@@ -90,6 +91,7 @@ def func(x=None):
     num_iter = iter_per_epoch * p.end_epoch
 
     # Build graph
+    build_graph = build_lw_graph if p.lw else build_top_graph
     g, m, trainable_parameters = build_graph(p)
 
     with tf.Session() as sess:
