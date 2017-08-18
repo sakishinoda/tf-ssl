@@ -1,11 +1,11 @@
 # -----------------------------
 # IMPORTS
 # -----------------------------
-from tensorflow.contrib import layers as layers
+
 import argparse
 import numpy as np
 import tensorflow as tf
-import math
+
 # -----------------------------
 # PARAMETER PARSING
 # -----------------------------
@@ -23,7 +23,9 @@ def get_cli_params():
     add('--id', default='ladder')
     add('--decay_start_epoch', default=100, type=int)
     add('--end_epoch', default=150, type=int)
-    add('--test_frequency_in_epochs', default=1, type=int)
+    add('--test_frequency_in_epochs', default=5, type=int)
+    add('--lr_decay_frequency', default=5, type=int)
+
     add('--num_labeled', default=100, type=int)
     add('--batch_size', default=100, type=int)
     add('--initial_learning_rate', default=0.002, type=float)
@@ -63,7 +65,7 @@ def get_cli_params():
     # -------------------------
     # Specify form of combinator (A)MLP
     # add('--combinator_layers', default='4-1')
-    add('--combinator_sd', default=0.025, type=float)
+    # add('--combinator_sd', default=0.025, type=float)
 
     # -------------------------
     # VAT SETTINGS
@@ -73,21 +75,24 @@ def get_cli_params():
     add('--num_power_iterations', default=1, type=int)
     add('--xi', default=1e-6, type=float)
 
-    # weight of vat cost
+    # weight of VAT cost
     add('--vat_weight', default=0, type=float)
 
+    # weight of AT cost
+    add('--at_weight', default=0, type=float)
+
     # use VAT RC cost at each layer
-    add('--vat_rc', action='store_true')
+    # add('--vat_rc', action='store_true')
 
     # corruption mode
-    add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
+    # add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
     # weight of entropy minimisation cost
-    add('--ent_weight', default=0, type=float)
+    # add('--ent_weight', default=0, type=float)
 
-    add('--keep_prob_hidden', default=0.5, type=float)
-    add('--lrelu_a', default=0.1, type=float)
-    add('--top_bn', action='store_true')
-    add('--bn_stats_decay_factor', default=0.99, type=float)
+    # add('--keep_prob_hidden', default=0.5, type=float)
+    # add('--lrelu_a', default=0.1, type=float)
+    # add('--top_bn', action='store_true')
+    # add('--bn_stats_decay_factor', default=0.99, type=float)
 
     # -------------------------
     # CNN LADDER
@@ -141,42 +146,7 @@ def order_param_settings(params):
 
     return param_list
 
-
-# -----------------------------
-# MODEL BUILDING
-# -----------------------------
-
-def fclayer(input,
-            size_out,
-            wts_init=layers.xavier_initializer(),
-            bias_init=tf.truncated_normal_initializer(stddev=1e-6),
-            reuse=None,
-            scope=None,
-            activation=None):
-    return layers.fully_connected(
-        inputs=input,
-        num_outputs=size_out,
-        activation_fn=activation,
-        normalizer_fn=None,
-        normalizer_params=None,
-        weights_initializer=wts_init,
-        weights_regularizer=None,
-        biases_initializer=bias_init,
-        biases_regularizer=None,
-        reuse=reuse,
-        variables_collections=None,
-        outputs_collections=None,
-        trainable=True,
-        scope=scope
-    )
-
-
-def bias_init(inits, size, name):
-    return tf.Variable(inits * tf.ones([size]), name=name)
-
-def wts_init(shape, name):
-    # effectively a Xavier initializer
-    return tf.Variable(tf.random_normal(shape), name=name) / \
-           math.sqrt(shape[0])
-
-
+def preprocess(placeholder, params):
+    return tf.reshape(placeholder, shape=[
+        -1, params.cnn_init_size, params.cnn_init_size, params.cnn_fan[0]
+    ]) if params.cnn else placeholder
