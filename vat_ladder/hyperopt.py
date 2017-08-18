@@ -115,7 +115,7 @@ def main():
         (0.001, 0.01, 'log-uniform'),   # 3: initial_learning_rate
         (0.1, 1.0),                     # 4: encoder_noise_sd
         (0.01, 10.0),                   # 5: epsilon
-        (0.05, 5.0),                    # 6: vat_weight
+        (0.05, 5.0, 'log-uniform'),     # 6: vat_weight
         # rc_weights
         (0.1, 2000, 'log-uniform'), # 0
         (0.1, 2000, 'log-uniform'), # 1
