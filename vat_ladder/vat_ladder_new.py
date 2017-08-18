@@ -38,8 +38,8 @@ def main():
 
     # -----------------------------
     # Placeholder setup
-    inputs_placeholder = tf.placeholder(tf.float32, shape=(None, params.encoder_layers[
-        0]))
+    inputs_placeholder = tf.placeholder(
+        tf.float32, shape=(None, params.encoder_layers[0]))
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
@@ -49,8 +49,94 @@ def main():
     ladder = Ladder(inputs, outputs, train_flag, params)
 
     # -----------------------------
+    # Add top-level VAT/AT cost
+    from src.vat import kl_divergence_with_logit, ce_loss, get_normalized_vector
+    from src.ladder import get_batch_ops, Encoder
+    join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
+
+    def forward(x, is_training, update_batch_stats=False,
+                start_layer=0):
+
+        vatfw = Encoder(inputs=x,
+                        encoder_layers=params.encoder_layers,
+                        bn=ladder.bn,
+                        is_training=is_training,
+                        noise_sd=0.5,  # not used if not training
+                        start_layer=start_layer,
+                        batch_size=params.batch_size,
+                        update_batch_stats=update_batch_stats,
+                        scope='enc', reuse=True)
+
+        return vatfw.logits  # logits by default includes both labeled/unlabeled
+
+
+    def generate_virtual_adversarial_perturbation(x, logit, is_training,
+                                                  start_layer=0):
+        d = tf.random_normal(shape=tf.shape(x))
+        for k in range(params.num_power_iterations):
+            d = params.xi * get_normalized_vector(d)
+            logit_p = logit
+            print("=== Power Iteration: {} ===".format(k))
+            logit_m = forward(x + d, update_batch_stats=False,
+                              is_training=is_training, start_layer=start_layer)
+            dist = kl_divergence_with_logit(logit_p, logit_m)
+            grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+            d = tf.stop_gradient(grad)
+        return params.epsilon * get_normalized_vector(d)
+
+    def generate_adversarial_perturbation(x, loss):
+        grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+        grad = tf.stop_gradient(grad)
+        return params.epsilon * get_normalized_vector(grad)
+
+    def adversarial_loss(x, y, loss, is_training,
+                         start_layer=0,
+                         name="at_loss"):
+        r_adv = generate_adversarial_perturbation(x, loss)
+        logit = forward(x + r_adv, is_training=is_training,
+                        update_batch_stats=False,
+                        start_layer=start_layer)
+        loss = ce_loss(logit, y)
+        return tf.identity(loss, name=name)
+
+    def virtual_adversarial_loss(x, logit, is_training,
+                                 start_layer=0,
+                                 name="vat_loss"):
+
+        print("=== VAT Pass: Generating VAT perturbation ===")
+        r_vadv = generate_virtual_adversarial_perturbation(
+            x, logit, is_training=is_training)
+        logit = tf.stop_gradient(logit)
+        logit_p = logit
+
+        print("=== VAT Pass: Computing VAT Loss (KL Divergence)")
+        logit_m = forward(x + r_vadv, update_batch_stats=False,
+                          is_training=is_training,
+                          start_layer=start_layer)
+        loss = kl_divergence_with_logit(logit_p, logit_m)
+        return tf.identity(loss, name=name)
+
+
+    # AT on labeled only
+    # at_cost = adversarial_loss(x=labeled(inputs),
+    #                            y=outputs,
+    #                            loss=ladder.cost,
+    #                            is_training=train_flag,
+    #                            start_layer=0
+    #                            ) * params.at_weight
+    at_cost = tf.zeros(shape=tf.shape(labeled(inputs)))
+
+    # VAT on unlabeled only
+    vat_cost = virtual_adversarial_loss(x=unlabeled(inputs),
+                                        logit=unlabeled(ladder.corr.logits),
+                                        is_training=train_flag,
+                                        start_layer=0) * params.vat_weight
+
+    # -----------------------------
     # Loss, accuracy and training steps
-    loss = ladder.cost + ladder.u_cost
+    loss = ladder.cost + ladder.u_cost + at_cost + vat_cost
+    train_losses = [loss, ladder.cost, ladder.u_cost, at_cost, vat_cost]
+    test_losses = [ladder.cost, at_cost]
 
     accuracy = tf.reduce_mean(
         tf.cast(
@@ -149,7 +235,7 @@ def main():
                   train_flag: False}),
               "%", file=f, flush=True)
         print("Initial Train Losses: ", *evaluate_metric_list(
-            mnist.train, sess, [loss, ladder.cost, ladder.u_cost]), file=f,
+            mnist.train, sess, train_losses), file=f,
               flush=True)
 
         # -----------------------------
@@ -160,8 +246,9 @@ def main():
                   outputs: mnist.test.labels,
                   train_flag: False}),
               "%", file=f, flush=True)
-        print("Initial Test Cross Entropy: ",
-              evaluate_metric(mnist.test, sess, ladder.cost), file=f,
+        print("Initial Test CE, AT Costs: ",
+              *evaluate_metric_list(
+                  mnist.test, sess, test_losses), file=f,
               flush=True)
 
     start = time.time()
@@ -187,8 +274,7 @@ def main():
 
             # ---------------------------------------------
             # Update learning rate every epoch
-            if ((epoch_n + 1) >= params.decay_start_epoch) and ((i + 1) % (
-                    params.lr_decay_frequency * params.iter_per_epoch) == 0):
+            if (epoch_n + 1) >= params.decay_start_epoch:
                 # epoch_n + 1 because learning rate is set for next epoch
                 ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
                 ratio = max(0., ratio / (params.end_epoch - params.decay_start_epoch))
@@ -206,7 +292,7 @@ def main():
 
                 # ---------------------------------------------
                 # Compute error on testing set (10k examples)
-                test_cost = evaluate_metric(mnist.test, sess, ladder.cost)
+                test_cost = evaluate_metric_list(mnist.test, sess, test_losses)
 
                 # Create log of:
                 # time, epoch number, test accuracy, test cross entropy,
@@ -218,14 +304,14 @@ def main():
                     feed_dict={inputs_placeholder: mnist.test.images,
                                outputs: mnist.test.labels,
                                train_flag: False}
-                ) + [test_cost] + sess.run(
+                ) + test_cost + sess.run(
                     [accuracy],
                     feed_dict={inputs_placeholder:
                                    mnist.train.labeled_ds.images,
                                outputs: mnist.train.labeled_ds.labels,
                                train_flag: False}
                 ) + sess.run(
-                    [loss, ladder.cost, ladder.u_cost],
+                    train_losses,
                     feed_dict={inputs_placeholder: images,
                                outputs: labels,
                                train_flag: False})
