@@ -21,6 +21,7 @@ def get_params(x=None):
     parser.add_argument('--which_gpu', default=0, type=int)
     parser.add_argument('--num_labeled', default=100, type=int)
     parser.add_argument('--static_bn', default=False, nargs='?', const=0.99, type=float)
+    parser.add_argument('--lw', action='store_true')
 
     params = parser.parse_args()
     params_dict = vars(params)
@@ -30,7 +31,6 @@ def get_params(x=None):
 
     # -------------------------
     # Use default values
-    add('lw', False)
     add('test_frequency_in_epochs', default=5, type=int)
     add('eval_batch_size', default=100, type=int)
     add('validation', default=1000, type=int)
@@ -146,7 +146,7 @@ def main():
     x0 = [150, 0.5, 0.002, 0.5, 0.3, 8.0, 1.0]
 
     res = gp_minimize(func, dims, n_calls=16, x0=x0, verbose=True)
-    dump(res, 'hyperopt_res.gz')
+    dump(res, 'hyperopt_res_0.gz')
     print(res.x, res.fun)
 
 
