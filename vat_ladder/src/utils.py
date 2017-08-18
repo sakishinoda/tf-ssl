@@ -54,6 +54,8 @@ def get_cli_params():
     add('--decay_start', default=0.67, type=float)
     add('--lr_decay_frequency', default=5, type=int)
 
+    add('--beta1', default=0.9, type=float) # first momentum coefficient
+
     # -------------------------
     # LADDER STRUCTURE
     # -------------------------
@@ -82,7 +84,7 @@ def get_cli_params():
     # VAT SETTINGS
     # -------------------------
     # vat params
-    add('--epsilon', default = 8.0, type=float)
+    add('--epsilon', default = 5.0, type=float)
     add('--num_power_iterations', default=1, type=int)
     add('--xi', default=1e-6, type=float)
 

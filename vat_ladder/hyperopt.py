@@ -48,10 +48,11 @@ def get_params(x=None):
     add('decay_start', x[1])
     add('ul_batch_size', x[2])
     add('initial_learning_rate', x[3])
-    add('encoder_noise_sd', x[4])
-    add('epsilon', x[5])
-    add('vat_weight', x[6])
-    add('rc_weights', dict(zip(range(len(x[7:])), x[7:])))
+    add('beta1', x[4])
+    add('encoder_noise_sd', x[5])
+    add('epsilon', x[6])
+    add('vat_weight', x[7])
+    add('rc_weights', dict(zip(range(len(x[8:])), x[8:])))
 
     # Postprocess
     add('decay_start_epoch', int(x[1] * x[0]))
@@ -125,9 +126,10 @@ def main():
         (0.5, 0.9),                     # 1: decay_start
         (64, 256),                      # 2: ul_batch_size
         (0.001, 0.01, 'log-uniform'),   # 3: initial_learning_rate
-        (0.1, 1.0),                     # 4: encoder_noise_sd
-        (0.01, 10.0),                   # 5: epsilon
-        (0.05, 5.0, 'log-uniform'),     # 6: vat_weight
+        (0.5, 0.9),                     # 4: adam beta1
+        (0.1, 1.0),                     # 5: encoder_noise_sd
+        (0.01, 10.0),                   # 6: epsilon
+        (0.05, 5.0, 'log-uniform'),     # 7: vat_weight
         # rc_weights
         (0.1, 2000, 'log-uniform'), # 0
         (0.1, 2000, 'log-uniform'), # 1
@@ -137,7 +139,7 @@ def main():
         (0.1, 2000, 'log-uniform'), # 5
         (0.1, 2000, 'log-uniform'), # 6
     ]
-    x0 = [50, 0.67, 100, 0.002, 0.3, 8.0, 1.0,
+    x0 = [50, 0.67, 100, 0.002, 0.5, 0.3, 8.0, 1.0,
           2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
 
     res = gp_minimize(func, dims, n_calls=16, x0=x0, verbose=True)

@@ -46,7 +46,8 @@ def build_graph(params):
             "float")) * tf.constant(100.0)
 
     learning_rate = tf.Variable(params.initial_learning_rate, trainable=False)
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+    train_step = tf.train.AdamOptimizer(learning_rate,
+                                        beta1=params.beta1).minimize(loss)
 
     # add the updates of batch normalization statistics to train_step
     bn_updates = tf.group(*ladder.bn.bn_assigns)
@@ -94,17 +95,21 @@ def build_lw_graph(params):
     ladder = Ladder(inputs, outputs, train_flag, params)
     # -----------------------------
     # Add top-level VAT/AT cost
-    adv = Adversary(ladder.bn, params)
-
-
     join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
 
-    # VAT on unlabeled only
-    vat_cost = adv.virtual_adversarial_loss(
-        x=unlabeled(inputs),
-        logit=unlabeled(ladder.corr.logits),
-        is_training=train_flag,
-        start_layer=0) * params.vat_weight
+    vat_costs = []
+    for l in range(ladder.num_layers):
+        adv = Adversary(ladder.bn, params, start_layer=l)
+        # VAT on unlabeled only
+        vat_costs.append(
+            adv.virtual_adversarial_loss(
+                x=ladder.corr.unlabeled.z[l],
+                logit=unlabeled(ladder.corr.logits),
+                is_training=train_flag) *
+            params.vat_weight *
+            params.rc_weights[l]
+        )
+    vat_cost = tf.add_n(vat_costs)
 
     # -----------------------------
     # Loss, accuracy and training steps
@@ -115,7 +120,8 @@ def build_lw_graph(params):
             "float")) * tf.constant(100.0)
 
     learning_rate = tf.Variable(params.initial_learning_rate, trainable=False)
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+    train_step = tf.train.AdamOptimizer(learning_rate,
+                                        beta1=params.beta1).minimize(loss)
 
     # add the updates of batch normalization statistics to train_step
     bn_updates = tf.group(*ladder.bn.bn_assigns)

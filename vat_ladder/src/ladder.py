@@ -398,6 +398,7 @@ class Ladder(object):
         self.clean = clean
         self.dec = dec
         self.bn_decay = bn_decay
+        self.num_layers = self.clean.num_layers
 
         # Calculate total unsupervised cost
         self.u_cost = tf.add_n(self.dec.d_cost)
