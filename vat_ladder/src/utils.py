@@ -21,14 +21,19 @@ def get_cli_params():
     # TRAINING
     # -------------------------
     add('--id', default='ladder')
-    add('--decay_start_epoch', default=100, type=int)
     add('--end_epoch', default=150, type=int)
+
     add('--test_frequency_in_epochs', default=5, type=int)
-    add('--lr_decay_frequency', default=5, type=int)
 
     add('--num_labeled', default=100, type=int)
+
     add('--batch_size', default=100, type=int)
+    add('--eval_batch_size', default=100, type=int)
+
     add('--initial_learning_rate', default=0.002, type=float)
+    add('--decay_start_epoch', default=100, type=int)
+    add('--lr_decay_frequency', default=5, type=int)
+
     add('--which_gpu', default=0, type=int)
     add('--logdir', default='logs/')
     add('--write_to', default=None)
@@ -43,6 +48,10 @@ def get_cli_params():
 
     # option to not save the model at all
     add('--do_not_save', action='store_true')
+
+    # validation
+    add('--validation', action='store_true')
+    add('--validation_size', default=0, type=int)
 
     # -------------------------
     # LADDER STRUCTURE
@@ -114,6 +123,12 @@ def process_cli_params(params):
     params.encoder_layers = encoder_layers
     params.rc_weights = rc_weights
 
+    if params.validation_size == 0 and params.validation:
+        params.validation_size = 1000
+
+    params.validation = True if params.validation_size > 0 else False
+
+
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
                                 'c', 'c',
@@ -128,6 +143,9 @@ def process_cli_params(params):
 
     else:
         params.num_layers = len(params.encoder_layers) - 1
+
+    params.encoder_layers = params.cnn_fan if params.cnn else \
+        params.encoder_layers
 
     # NUM_EPOCHS = params.end_epoch
     # NUM_LABELED = params.num_labeled
