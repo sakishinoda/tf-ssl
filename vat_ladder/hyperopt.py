@@ -65,7 +65,7 @@ def get_params(x=None):
 
 
 def func(x=None):
-
+    tf.reset_default_graph()
     p = get_params(x)
 
     # -----------------------------
