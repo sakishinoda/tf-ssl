@@ -18,31 +18,41 @@ def get_cli_params():
     add = parser.add_argument
 
     # -------------------------
-    # TRAINING
+    # LOGGING
     # -------------------------
     add('--id', default='ladder')
-    add('--decay_start_epoch', default=100, type=int)
-    add('--end_epoch', default=150, type=int)
-    add('--test_frequency_in_epochs', default=5, type=int)
-    add('--lr_decay_frequency', default=5, type=int)
-
-    add('--num_labeled', default=100, type=int)
-    add('--batch_size', default=100, type=int)
-    add('--initial_learning_rate', default=0.002, type=float)
-    add('--which_gpu', default=0, type=int)
     add('--logdir', default='logs/')
     add('--write_to', default=None)
-    add('--seed', default=1, type=int)
-
     # description to print
     add('--description', default=None)
 
-    # only used if train_flag is false
-    add('--train_step', default=None, type=int)
-    add('--verbose', action='store_true')  # for testing
-
     # option to not save the model at all
     add('--do_not_save', action='store_true')
+
+    # -------------------------
+    # EVALUATE
+    # -------------------------
+
+    add('--test_frequency_in_epochs', default=5, type=int)
+    add('--eval_batch_size', default=100, type=int)
+    # validation
+    add('--validation', default=0, nargs='?', const=1000, type=int)
+
+    # -------------------------
+    # TRAINING
+    # -------------------------
+
+    add('--which_gpu', default=0, type=int)
+    add('--seed', default=1, type=int)
+
+    add('--end_epoch', default=150, type=int)
+    add('--num_labeled', default=100, type=int)
+    add('--batch_size', default=100, type=int)
+    add('--ul_batch_size', default=100, type=int)
+
+    add('--initial_learning_rate', default=0.002, type=float)
+    add('--decay_start', default=0.67, type=float)
+    add('--lr_decay_frequency', default=5, type=int)
 
     # -------------------------
     # LADDER STRUCTURE
@@ -58,7 +68,8 @@ def get_cli_params():
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
     # Batch norm decay weight mode
-    add('--bn_decay', default='constant', choices=['dynamic', 'constant'])
+    add('--static_bn', default=False, nargs='?', const=0.99, type=float)
+
 
     # -------------------------
     # COMBINATOR STRUCTURE
@@ -103,7 +114,6 @@ def get_cli_params():
 
     params = parser.parse_args()
 
-
     return params
 
 def process_cli_params(params):
@@ -113,6 +123,8 @@ def process_cli_params(params):
     rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
     params.encoder_layers = encoder_layers
     params.rc_weights = rc_weights
+    params.decay_start_epoch = int(params.decay_start * params.end_epoch)
+
 
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
@@ -128,6 +140,9 @@ def process_cli_params(params):
 
     else:
         params.num_layers = len(params.encoder_layers) - 1
+
+    params.encoder_layers = params.cnn_fan if params.cnn else \
+        params.encoder_layers
 
     # NUM_EPOCHS = params.end_epoch
     # NUM_LABELED = params.num_labeled
@@ -150,3 +165,11 @@ def preprocess(placeholder, params):
     return tf.reshape(placeholder, shape=[
         -1, params.cnn_init_size, params.cnn_init_size, params.cnn_fan[0]
     ]) if params.cnn else placeholder
+
+
+def get_batch_ops(batch_size):
+    join = lambda l, u: tf.concat([l, u], 0)
+    split_lu = lambda x: (labeled(x), unlabeled(x))
+    labeled = lambda x: x[:batch_size] if x is not None else x
+    unlabeled = lambda x: x[batch_size:] if x is not None else x
+    return join, split_lu, labeled, unlabeled

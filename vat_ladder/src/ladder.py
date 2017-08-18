@@ -1,15 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import math
-
-
-def get_batch_ops(batch_size):
-    join = lambda l, u: tf.concat([l, u], 0)
-    split_lu = lambda x: (labeled(x), unlabeled(x))
-    labeled = lambda x: x[:batch_size] if x is not None else x
-    unlabeled = lambda x: x[batch_size:] if x is not None else x
-    return join, split_lu, labeled, unlabeled
-
+from src.utils import get_batch_ops
 
 class Activations(object):
     """Store statistics for each layer in the encoder/decoder structures
@@ -373,10 +365,10 @@ class Ladder(object):
         labeled = lambda x: x[:params.batch_size] if x is not None else x
 
         print("=== Batch Norm === ")
-        if params.bn_decay == 'dynamic':
+        if params.static_bn is False:
             bn_decay = tf.Variable(1e-10, trainable=False)
         else:
-            bn_decay = 0.99
+            bn_decay = params.static_bn
         bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
 
         print("=== Corrupted Encoder === ")
