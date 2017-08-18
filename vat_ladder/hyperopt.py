@@ -9,7 +9,7 @@ from src.utils import parse_argstring
 from skopt import gp_minimize
 
 
-def get_params(x):
+def get_params(x=None):
     if x is None:
         x = [150, 0.67, 100, 0.002, 0.3, 8.0, 1.0,
              2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
@@ -59,7 +59,7 @@ def get_params(x):
 
 
 
-def func(x):
+def func(x=None):
 
     p = get_params(x)
 
@@ -76,7 +76,7 @@ def func(x):
     print("===  Loading Data ===")
     mnist = input_data.read_data_sets("MNIST_data",
                                       n_labeled=p.num_labeled,
-                                      validation_size=p.validation_size,
+                                      validation_size=p.validation,
                                       one_hot=True,
                                       disjoint=False)
     num_examples = mnist.train.num_examples
@@ -137,4 +137,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    func()
