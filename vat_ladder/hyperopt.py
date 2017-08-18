@@ -94,6 +94,9 @@ def func(x=None):
         sess.run(init)
         print("=== Training ===")
         for i in range(num_iter):
+            if ((i+1) % iter_per_epoch == 0):
+                print("Epoch", i // iter_per_epoch)
+                
             images, labels = mnist.train.next_batch(p.batch_size,
                                                     p.ul_batch_size)
             _ = sess.run(
