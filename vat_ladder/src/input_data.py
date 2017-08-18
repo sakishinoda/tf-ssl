@@ -157,8 +157,10 @@ class SemiDataSet(object):
         # Labeled DataSet
         self._labeled_ds = DataSet(l_images, l_labels)
 
-    def next_batch(self, batch_size):
-        unlabeled_images, _ = self.unlabeled_ds.next_batch(batch_size)
+    def next_batch(self, batch_size, ul_batch_size=None):
+        if ul_batch_size is None:
+            ul_batch_size = batch_size
+        unlabeled_images, _ = self.unlabeled_ds.next_batch(ul_batch_size)
         if batch_size > self.n_labeled:
             labeled_images, labels = self.labeled_ds.next_batch(self.n_labeled)
         else:

@@ -96,11 +96,23 @@ def test_simple_dae(training=True):
 
 # def test_batch_norm():
 
+import argparse
 
+def test_nargs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--static_bn', default=False, nargs='?', const=0.99,
+                        type=float)
+    params = parser.parse_args()
+    if params.static_bn is False:
+        bn_decay = tf.Variable(1e-10, trainable=False)
+    else:
+        bn_decay = params.static_bn
 
+    print(bn_decay)
 
 if __name__ == '__main__':
-    test_simple_dae(training=False)
+    test_nargs()
+    # test_simple_dae(training=False)
     # test_cnn_ladder()
     # print(*make_layer_spec().items(), sep='\n')
     # make_layer_spec()
