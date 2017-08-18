@@ -6,7 +6,7 @@ from src import input_data
 import numpy as np
 import argparse
 from src.utils import parse_argstring
-from skopt import gp_minimize
+from skopt import gp_minimize, dump
 
 
 def get_params(x=None):
@@ -40,6 +40,7 @@ def get_params(x=None):
         default=parse_argstring('784-1000-500-250-250-250-10', dtype=int))
     add('num_power_iterations', default=1, type=int)
     add('xi', default=1e-6, type=float)
+    add('cnn', False)
 
     # -------------------------
     # Optimize
@@ -128,11 +129,9 @@ def main():
     x0 = [150, 0.67, 100, 0.002, 0.3, 8.0, 1.0,
           2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
 
-    gp_minimize(func,
-                dims,
-                n_calls=16,
-                x0=x0,
-                verbose=True)
+    res = gp_minimize(func, dims, n_calls=16, x0=x0, verbose=True)
+    dump(res, 'hyperopt_res.gz')
+    print(res.x, res.fun)
 
 
 
