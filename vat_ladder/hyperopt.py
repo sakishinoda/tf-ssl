@@ -94,13 +94,13 @@ def func(x=None):
         sess.run(init)
         print("=== Training ===")
         for i in range(num_iter):
-            if ((i+1) % iter_per_epoch == 0):
-
-                error = tf.constant(100.0) - m['acc']
-                val_err = evaluate_metric(mnist.validation, sess, error,
-                                          graph=g,
-                                          params=p)
-                print("Epoch {}: {:4.4f}".format(i // iter_per_epoch, val_err))
+            # if ((i+1) % iter_per_epoch == 0):
+            #
+            #     error = tf.constant(100.0) - m['acc']
+            #     val_err = evaluate_metric(mnist.validation, sess, error,
+            #                               graph=g,
+            #                               params=p)
+            #     print("Epoch {}: {:4.4f}".format(i // iter_per_epoch, val_err))
 
 
             images, labels = mnist.train.next_batch(p.batch_size,
