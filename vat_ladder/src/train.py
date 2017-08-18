@@ -39,6 +39,7 @@ def update_decays(sess, epoch_n, iter, graph, params):
                 params.iter_per_epoch * params.lr_decay_frequency) == 0):
         # epoch_n + 1 because learning rate is set for next epoch
         ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
-        ratio = max(0., ratio / (params.end_epoch - params.decay_start_epoch))
+        decay_epochs = params.end_epoch - params.decay_start_epoch
+        ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
         sess.run(graph['lr'].assign(params.initial_learning_rate *
                                     ratio))
