@@ -121,7 +121,7 @@ def func(x=None):
 
 def main():
     dims = [
-        (100, 400),                     # 0: end_epoch
+        (50, 100),                     # 0: end_epoch
         (0.5, 0.9),                     # 1: decay_start
         (64, 256),                      # 2: ul_batch_size
         (0.001, 0.01, 'log-uniform'),   # 3: initial_learning_rate
@@ -137,7 +137,7 @@ def main():
         (0.1, 2000, 'log-uniform'), # 5
         (0.1, 2000, 'log-uniform'), # 6
     ]
-    x0 = [150, 0.67, 100, 0.002, 0.3, 8.0, 1.0,
+    x0 = [50, 0.67, 100, 0.002, 0.3, 8.0, 1.0,
           2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
 
     res = gp_minimize(func, dims, n_calls=16, x0=x0, verbose=True)
