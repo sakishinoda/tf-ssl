@@ -246,7 +246,7 @@ def main():
                   outputs: mnist.test.labels,
                   train_flag: False}),
               "%", file=f, flush=True)
-        print("Initial Test CE, AT Costs: ",
+        print("Initial Test Losses: ",
               *evaluate_metric_list(
                   mnist.test, sess, test_losses), file=f,
               flush=True)
