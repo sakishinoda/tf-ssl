@@ -124,7 +124,7 @@ def main():
     #                            is_training=train_flag,
     #                            start_layer=0
     #                            ) * params.at_weight
-    at_cost = tf.zeros(shape=tf.shape(labeled(inputs)))
+    # at_cost = tf.zeros(shape=tf.shape(labeled(inputs)))
 
     # VAT on unlabeled only
     vat_cost = virtual_adversarial_loss(x=unlabeled(inputs),
@@ -134,9 +134,9 @@ def main():
 
     # -----------------------------
     # Loss, accuracy and training steps
-    loss = ladder.cost + ladder.u_cost + at_cost + vat_cost
-    train_losses = [loss, ladder.cost, ladder.u_cost, at_cost, vat_cost]
-    test_losses = [ladder.cost, at_cost]
+    loss = ladder.cost + ladder.u_cost + vat_cost
+    train_losses = [loss, ladder.cost, ladder.u_cost, vat_cost]
+    test_losses = [ladder.cost]
 
     accuracy = tf.reduce_mean(
         tf.cast(
@@ -246,7 +246,7 @@ def main():
                   outputs: mnist.test.labels,
                   train_flag: False}),
               "%", file=f, flush=True)
-        print("Initial Test CE, AT Costs: ",
+        print("Initial Test Losses: ",
               *evaluate_metric_list(
                   mnist.test, sess, test_losses), file=f,
               flush=True)
@@ -292,7 +292,12 @@ def main():
 
                 # ---------------------------------------------
                 # Compute error on testing set (10k examples)
-                test_cost = evaluate_metric_list(mnist.test, sess, test_losses)
+                test_costs = evaluate_metric_list(mnist.test, sess, test_losses)
+                train_costs = sess.run(
+                    train_losses,
+                    feed_dict={inputs_placeholder: images,
+                               outputs: labels,
+                               train_flag: False})
 
                 # Create log of:
                 # time, epoch number, test accuracy, test cross entropy,
@@ -304,17 +309,13 @@ def main():
                     feed_dict={inputs_placeholder: mnist.test.images,
                                outputs: mnist.test.labels,
                                train_flag: False}
-                ) + test_cost + sess.run(
+                ) + test_costs + sess.run(
                     [accuracy],
                     feed_dict={inputs_placeholder:
                                    mnist.train.labeled_ds.images,
                                outputs: mnist.train.labeled_ds.labels,
                                train_flag: False}
-                ) + sess.run(
-                    train_losses,
-                    feed_dict={inputs_placeholder: images,
-                               outputs: labels,
-                               train_flag: False})
+                ) + train_costs
 
                 with open(log_file, 'a') as train_log:
                     print(*log_i, sep=',', flush=True, file=train_log)
