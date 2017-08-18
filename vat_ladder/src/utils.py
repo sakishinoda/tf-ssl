@@ -150,3 +150,11 @@ def preprocess(placeholder, params):
     return tf.reshape(placeholder, shape=[
         -1, params.cnn_init_size, params.cnn_init_size, params.cnn_fan[0]
     ]) if params.cnn else placeholder
+
+
+def get_batch_ops(batch_size):
+    join = lambda l, u: tf.concat([l, u], 0)
+    split_lu = lambda x: (labeled(x), unlabeled(x))
+    labeled = lambda x: x[:batch_size] if x is not None else x
+    unlabeled = lambda x: x[batch_size:] if x is not None else x
+    return join, split_lu, labeled, unlabeled

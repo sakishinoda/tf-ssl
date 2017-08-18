@@ -2,15 +2,6 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import math
 
-
-def get_batch_ops(batch_size):
-    join = lambda l, u: tf.concat([l, u], 0)
-    split_lu = lambda x: (labeled(x), unlabeled(x))
-    labeled = lambda x: x[:batch_size] if x is not None else x
-    unlabeled = lambda x: x[batch_size:] if x is not None else x
-    return join, split_lu, labeled, unlabeled
-
-
 class Activations(object):
     """Store statistics for each layer in the encoder/decoder structures
 
