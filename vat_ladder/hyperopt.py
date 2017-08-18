@@ -90,6 +90,8 @@ def func(x=None):
     g, m, trainable_parameters = build_graph(p)
 
     with tf.Session() as sess:
+        init = tf.global_variables_initializer()
+        sess.run(init)
         print("=== Training ===")
         for i in range(num_iter):
             images, labels = mnist.train.next_batch(p.batch_size,
