@@ -41,18 +41,20 @@ def get_params(x=None):
     add('num_power_iterations', default=1, type=int)
     add('xi', default=1e-6, type=float)
     add('cnn', False)
+    add('ul_batch_size', 100)
+    rc_weights = [2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
+    add('rc_weights', dict(zip(range(len(rc_weights)), rc_weights)))
 
     # -------------------------
     # Optimize
     add('end_epoch', x[0])
     add('decay_start', x[1])
-    add('ul_batch_size', x[2])
-    add('initial_learning_rate', x[3])
-    add('beta1', x[4])
-    add('encoder_noise_sd', x[5])
-    add('epsilon', x[6])
-    add('vat_weight', x[7])
-    add('rc_weights', dict(zip(range(len(x[8:])), x[8:])))
+    add('initial_learning_rate', x[2])
+    add('beta1', x[3])
+    add('encoder_noise_sd', x[4])
+    add('epsilon', x[5])
+    add('vat_weight', x[6])
+    # add('rc_weights', dict(zip(range(len(x[7:])), x[7:])))
 
     # Postprocess
     add('decay_start_epoch', int(x[1] * x[0]))
@@ -122,25 +124,24 @@ def func(x=None):
 
 def main():
     dims = [
-        (50, 100),                     # 0: end_epoch
-        (0.5, 0.9),                     # 1: decay_start
-        (64, 256),                      # 2: ul_batch_size
-        (0.001, 0.01, 'log-uniform'),   # 3: initial_learning_rate
-        (0.5, 0.9),                     # 4: adam beta1
-        (0.1, 1.0),                     # 5: encoder_noise_sd
-        (0.01, 10.0),                   # 6: epsilon
-        (0.05, 5.0, 'log-uniform'),     # 7: vat_weight
-        # rc_weights
-        (0.1, 2000, 'log-uniform'), # 0
-        (0.1, 2000, 'log-uniform'), # 1
-        (0.1, 2000, 'log-uniform'), # 2
-        (0.1, 2000, 'log-uniform'), # 3
-        (0.1, 2000, 'log-uniform'), # 4
-        (0.1, 2000, 'log-uniform'), # 5
-        (0.1, 2000, 'log-uniform'), # 6
+        (100, 200),                     # 0: end_epoch
+        (0.25, 0.99),                   # 1: decay_start
+        (0.001, 0.01, 'log-uniform'),   # 2: initial_learning_rate
+        (0.5, 0.9),                     # 3: adam beta1
+        (0.1, 1.0),                     # 4: encoder_noise_sd
+        (0.01, 10.0, 'log-uniform'),    # 5: epsilon
+        (0.0, 5.0, 'log-uniform')       # 6: vat_weight
     ]
-    x0 = [50, 0.67, 100, 0.002, 0.5, 0.3, 8.0, 1.0,
-          2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
+        # # rc_weights
+        # (0.1, 2000, 'log-uniform'), # 0
+        # (0.1, 2000, 'log-uniform'), # 1
+        # (0.1, 2000, 'log-uniform'), # 2
+        # (0.1, 2000, 'log-uniform'), # 3
+        # (0.1, 2000, 'log-uniform'), # 4
+        # (0.1, 2000, 'log-uniform'), # 5
+        # (0.1, 2000, 'log-uniform'), # 6
+
+    x0 = [150, 0.5, 0.002, 0.5, 0.3, 8.0, 1.0]
 
     res = gp_minimize(func, dims, n_calls=16, x0=x0, verbose=True)
     dump(res, 'hyperopt_res.gz')
