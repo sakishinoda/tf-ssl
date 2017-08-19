@@ -160,7 +160,7 @@ def main():
     ]
     x0 = [5.0, 1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
 
-    if hyperopt.params.lw is not False:
+    if hyperopt.params.model == 'clw':
         dims += [
             (0.5, 5.0, 'log-uniform'), # 8
             (1e-3, 0.5, 'log-uniform'), # 9
