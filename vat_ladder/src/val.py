@@ -138,23 +138,23 @@ def build_graph(params, model='top'):
     train_flag = tf.placeholder(tf.bool)
 
 
-    if model == 'lw':
-        # Layer-wise VAT costs
-        ladder = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_lw_vat_cost(ladder, train_flag, params)
 
-    elif model == 'top':
+    if model == "c":
         # Add top-level VAT/AT cost
         ladder = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_top_vat_cost(ladder, train_flag, params)
 
-    elif model == 'noise':
+    elif model == "clw":
+        # Layer-wise VAT costs
+        ladder = Ladder(inputs, outputs, train_flag, params)
+        vat_cost = get_lw_vat_cost(ladder, train_flag, params)
+
+    elif model == "n":
         ladder = Ladder(inputs, outputs, train_flag, params,
                         encoder=VANEncoder)
         vat_cost = 0.0
 
-
-    elif model == 'nlw':
+    elif model == "nlw":
         # Add Virtual Adversarial Noise at each layer
         ladder = Ladder(inputs, outputs, train_flag, params,
                         encoder=VANLWEncoder)

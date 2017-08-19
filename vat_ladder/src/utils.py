@@ -87,7 +87,7 @@ def get_cli_params():
     # layerwise VAT costs
     add('--lw', default=False, nargs='?',
         const='5.0-0.5-0.05-0.05-0.05-0.05-0.05')
-    add('--model', default='top')
+    add('--model', default="c", choices=["n", "nlw", "c", "clw"])
 
     # -------------------------
     # CNN LADDER
