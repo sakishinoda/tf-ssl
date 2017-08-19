@@ -15,6 +15,8 @@ class Hyperopt(object):
         self.params = self.get_cli_params()
         self.params_dict = vars(self.params)
         self.get_default_params()
+        for k in sorted(self.params_dict.keys()):
+            print(k, self.params_dict[k])
 
 
     def get_cli_params(self):
@@ -47,8 +49,8 @@ class Hyperopt(object):
         # Use default values
         add('initial_learning_rate', 0.002)
         add('static_bn', 0.99)
-        add('end_epoch', 200)
-        add('decay_start', 0.5)
+        add('end_epoch', 1)
+        add('decay_start', 1.0)
         add('decay_start_epoch', 100)
         add('beta1', 0.9)
         add('beta1_during_decay', 0.5)
@@ -123,14 +125,6 @@ class Hyperopt(object):
             sess.run(init)
             print("=== Training ===")
             for i in range(num_iter):
-                # if ((i+1) % iter_per_epoch == 0):
-                #
-                #     error = tf.constant(100.0) - m['acc']
-                #     val_err = evaluate_metric(mnist.validation, sess, error,
-                #                               graph=g,
-                #                               params=p)
-                #     print("Epoch {}: {:4.4f}".format(i // iter_per_epoch, val_err))
-
 
                 images, labels = mnist.train.next_batch(p.batch_size,
                                                         p.ul_batch_size)
@@ -178,6 +172,7 @@ def main():
         x0 += [1.0, 0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
 
 
+    print("=== Beginning Search ===")
 
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
     dump(res, hyperopt.params.dump_path)
