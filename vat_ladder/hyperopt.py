@@ -30,11 +30,9 @@ class Hyperopt(object):
         # Specify at run time of hyperopt
         parser.add_argument('--which_gpu', default=0, type=int)
         parser.add_argument('--num_labeled', default=100, type=int)
-        # parser.add_argument('--static_bn', default=False, nargs='?', const=0.99, type=float)
         parser.add_argument('--dump_path', default='res')
-        # parser.add_argument('--lw', action='store_true')
-        # layerwise VAT costs
         parser.add_argument('--model', default='c', choices=['c', 'clw'])
+        parser.add_argument('--end_epoch', default=1, type=int)
 
         params = parser.parse_args()
         return params
@@ -48,9 +46,9 @@ class Hyperopt(object):
         # Use default values
         add('initial_learning_rate', 0.002)
         add('static_bn', 0.99)
-        add('end_epoch', 1)
         add('decay_start', 1.0)
-        add('decay_start_epoch', 100)
+        add('decay_start_epoch', self.params.end_epoch *
+            self.params.decay_start)
         add('beta1', 0.9)
         add('beta1_during_decay', 0.5)
         add('test_frequency_in_epochs', default=5, type=int)
