@@ -146,7 +146,8 @@ def process_cli_params(params):
         params.encoder_layers
 
     if params.lw is not False:
-        params.lw_eps = dict(zip(range(len(params.lw)), params.lw))
+        lw = parse_argstring(params.lw, dtype=float)
+        params.lw_eps = dict(zip(range(len(lw)), lw))
 
     # NUM_EPOCHS = params.end_epoch
     # NUM_LABELED = params.num_labeled
