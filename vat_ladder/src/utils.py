@@ -34,7 +34,7 @@ def get_cli_params():
     # -------------------------
 
     add('--test_frequency_in_epochs', default=5, type=int)
-    add('--eval_batch_size', default=100, type=int)
+    # add('--eval_batch_size', default=100, type=int)  # has to be same as lbs
     # validation
     add('--validation', default=0, nargs='?', const=1000, type=int)
 
@@ -130,7 +130,7 @@ def process_cli_params(params):
     params.encoder_layers = encoder_layers
     params.rc_weights = rc_weights
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
-
+    params.eval_batch_size = params.batch_size
 
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
