@@ -7,7 +7,7 @@ import numpy as np
 import argparse
 from src.utils import parse_argstring
 from skopt import gp_minimize, dump
-
+import sys
 
 class Hyperopt(object):
     def __init__(self):
@@ -31,7 +31,7 @@ class Hyperopt(object):
         parser.add_argument('--which_gpu', default=0, type=int)
         parser.add_argument('--num_labeled', default=100, type=int)
         # parser.add_argument('--static_bn', default=False, nargs='?', const=0.99, type=float)
-        parser.add_argument('--dump_path', default='res.gz')
+        parser.add_argument('--dump_path', default='res')
         # parser.add_argument('--lw', action='store_true')
         # layerwise VAT costs
         parser.add_argument('--lw', default=False, nargs='?',
@@ -173,10 +173,12 @@ def main():
 
 
     print("=== Beginning Search ===")
+    with open(hyperopt.params.dump_path + '.log', 'a') as sys.stdout:
+        res = gp_minimize(
+            hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
+        print(res.x, res.fun)
 
-    res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
-    dump(res, hyperopt.params.dump_path)
-    print(res.x, res.fun)
+    dump(res, hyperopt.params.dump_path + '.gz')
 
 
 
