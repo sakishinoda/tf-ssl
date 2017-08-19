@@ -98,9 +98,9 @@ def main():
                   g['labels']: mnist.train.labeled_ds.labels,
                   g['train_flag']: False}),
               "%", file=f, flush=True)
-        print("Initial Train Losses: ", *eval_metrics(
-            mnist.train, sess, train_losses), file=f,
-              flush=True)
+        # print("Initial Train Losses: ", *eval_metrics(
+        #     mnist.train, sess, train_losses), file=f,
+        #       flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
@@ -110,10 +110,10 @@ def main():
                   g['labels']: mnist.test.labels,
                   g['train_flag']: False}),
               "%", file=f, flush=True)
-        print("Initial Test Losses: ",
-              *eval_metrics(
-                  mnist.test, sess, test_losses), file=f,
-              flush=True)
+        # print("Initial Test Losses: ",
+        #       *eval_metrics(
+        #           mnist.test, sess, test_losses), file=f,
+        #       flush=True)
 
     start = time.time()
     for i in tqdm(range(i_iter, p.num_iter)):
