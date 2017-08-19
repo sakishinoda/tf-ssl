@@ -9,23 +9,28 @@ class VANLWEncoder(Encoder):
             self, inputs, encoder_layers, bn, is_training,
             noise_sd=0.0, start_layer=0, batch_size=100,
             update_batch_stats=True, scope='enc', reuse=None,
-            epsilons=None, xi=1e-6, num_power_iters=1):
+            epsilons={0: 1.0, 1: 0.1, 2: 0.01, 3: 0.01, 4: 0.01, 5: 0.01, 6: 0.01}
+, xi=1e-6,
+            num_power_iters=1):
+
+
+        self.bn = bn
+        self.encoder_layers = encoder_layers
+        self.batch_size = batch_size
+        self.eps = epsilons
+        self.is_training = is_training
+        self.xi = xi
+        self.num_power_iters = num_power_iters
+
         super(VANLWEncoder, self).__init__(
             inputs, encoder_layers, bn, is_training,
             noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
             update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
         )
-        self.bn = bn
-        self.encoder_layers = encoder_layers
-        self.batch_size = batch_size
-        self.eps = epsilons if epsilons is not None else \
-            ((None, ) * (self.num_layers + 1))
-        self.is_training = is_training
-        self.xi = xi
-        self.num_power_iters = num_power_iters
 
 
     def generate_noise(self, inputs, l):
+
         adv = Adversary(
             bn=self.bn,
             encoder_layers=self.encoder_layers,
@@ -48,23 +53,26 @@ class VANEncoder(Encoder):
             self, inputs, encoder_layers, bn, is_training,
             noise_sd=0.0, start_layer=0, batch_size=100,
             update_batch_stats=True, scope='enc', reuse=None,
-            epsilons=None, xi=1e-6, num_power_iters=1):
-        super(VANEncoder, self).__init__(
-            inputs, encoder_layers, bn, is_training,
-            noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
-            update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
-        )
+            epsilon=1.0, xi=1e-6, num_power_iters=1):
+
         self.bn = bn
         self.encoder_layers = encoder_layers
         self.batch_size = batch_size
-        self.eps = epsilons if epsilons is not None else \
-            ((None, ) * (self.num_layers + 1))
+        self.eps = epsilon
         self.is_training = is_training
         self.xi = xi
         self.num_power_iters = num_power_iters
 
 
+        super(VANEncoder, self).__init__(
+            inputs, encoder_layers, bn, is_training,
+            noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
+            update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
+        )
+
+
     def generate_noise(self, inputs, l):
+
         noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
         if l == 0:
@@ -72,7 +80,7 @@ class VANEncoder(Encoder):
                 bn=self.bn,
                 encoder_layers=self.encoder_layers,
                 batch_size=self.batch_size,
-                epsilon=self.eps[l],
+                epsilon=self.eps,
                 xi=self.xi,
                 num_power_iters=self.num_power_iters,
                 start_layer=l,

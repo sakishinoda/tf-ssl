@@ -34,8 +34,7 @@ class Hyperopt(object):
         parser.add_argument('--dump_path', default='res')
         # parser.add_argument('--lw', action='store_true')
         # layerwise VAT costs
-        parser.add_argument('--lw', default=False, nargs='?',
-            const='5.0-0.5-0.05-0.05-0.05-0.05-0.05')
+        parser.add_argument('--model', default='c', choices=['c', 'clw'])
 
         params = parser.parse_args()
         return params
@@ -49,7 +48,7 @@ class Hyperopt(object):
         # Use default values
         add('initial_learning_rate', 0.002)
         add('static_bn', 0.99)
-        add('end_epoch', 20)
+        add('end_epoch', 1)
         add('decay_start', 1.0)
         add('decay_start_epoch', 100)
         add('beta1', 0.9)
@@ -80,7 +79,7 @@ class Hyperopt(object):
         add('epsilon', x[0])
         add('rc_weights', dict(zip(range(len(x[1:8])), x[1:8])))
 
-        if self.params.lw is not False:
+        if self.params.model == "clw":
             lw_eps = x[8:]
             self.params.lw_eps = dict(zip(range(len(lw_eps)), lw_eps))
 
@@ -115,10 +114,8 @@ class Hyperopt(object):
         num_iter = iter_per_epoch * p.end_epoch
 
         # Build graph
-        if p.lw is not False:
-            g, m, trainable_parameters = build_graph(p, model='lw')
-        else:
-            g, m, trainable_parameters = build_graph(p, model='top')
+
+        g, m, trainable_parameters = build_graph(p, model=p.model)
 
         with tf.Session() as sess:
             init = tf.global_variables_initializer()
