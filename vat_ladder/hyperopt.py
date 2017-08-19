@@ -144,6 +144,8 @@ class Hyperopt(object):
 
 def main():
 
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
+
     hyperopt = Hyperopt()
 
     dims = [
@@ -173,10 +175,9 @@ def main():
 
 
     print("=== Beginning Search ===")
-    with open(hyperopt.params.dump_path + '.log', 'a') as sys.stdout:
-        res = gp_minimize(
-            hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
-        print(res.x, res.fun)
+
+    res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
+    print(res.x, res.fun)
 
     dump(res, hyperopt.params.dump_path + '.gz')
 
