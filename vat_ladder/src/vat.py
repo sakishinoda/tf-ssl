@@ -38,7 +38,8 @@ def get_normalized_vector(d):
 class Adversary(object):
     def __init__(self,
                  bn, encoder_layers, batch_size,
-                 epsilon=5.0, xi=1e-6, num_power_iters=1, start_layer=0):
+                 epsilon=5.0, xi=1e-6, num_power_iters=1, start_layer=0,
+                 encoder_class=Encoder):
         # Ladder
         self.bn = bn
         self.encoder_layers = encoder_layers
@@ -51,17 +52,20 @@ class Adversary(object):
 
         self.start_layer = start_layer
 
+        self.encoder = encoder_class
+
     def forward(self, x, is_training, update_batch_stats=False):
 
-        vatfw = Encoder(inputs=x,
-                        encoder_layers=self.encoder_layers,
-                        bn=self.bn,
-                        is_training=is_training,
-                        noise_sd=0.5,  # not used if not training
-                        start_layer=self.start_layer,
-                        batch_size=self.batch_size,
-                        update_batch_stats=update_batch_stats,
-                        scope='enc', reuse=True)
+        vatfw = self.encoder(
+            inputs=x,
+            encoder_layers=self.encoder_layers,
+            bn=self.bn,
+            is_training=is_training,
+            noise_sd=0.5,  # not used if not training
+            start_layer=self.start_layer,
+            batch_size=self.batch_size,
+            update_batch_stats=update_batch_stats,
+            scope='enc', reuse=True)
 
         return vatfw.logits  # logits by default includes both labeled/unlabeled
 

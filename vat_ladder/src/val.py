@@ -2,7 +2,46 @@
 import tensorflow as tf
 from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.vat import Adversary
-from src.ladder import Ladder
+from src.ladder import Ladder, Encoder
+
+class VANEncoder(Encoder):
+    def __init__(
+            self, inputs, encoder_layers, bn, is_training,
+            noise_sd=0.0, start_layer=0, batch_size=100,
+            update_batch_stats=True, scope='enc', reuse=None,
+            epsilons=None, xi=1e-6, num_power_iters=1):
+        super(VANEncoder, self).__init__(
+            inputs, encoder_layers, bn, is_training,
+            noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
+            update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
+        )
+        self.bn = bn
+        self.encoder_layers = encoder_layers
+        self.batch_size = batch_size
+        self.eps = epsilons if epsilons is not None else \
+            ((None, ) * (self.num_layers + 1))
+        self.is_training = is_training
+        self.xi = xi
+        self.num_power_iters = num_power_iters
+
+
+    def generate_noise(self, inputs, l):
+        adv = Adversary(
+            bn=self.bn,
+            encoder_layers=self.encoder_layers,
+            batch_size=self.batch_size,
+            epsilon=self.eps[l],
+            xi=self.xi,
+            num_power_iters=self.num_power_iters,
+            start_layer=l,
+            encoder_class=VANEncoder
+        )
+        noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
+        noise += adv.generate_virtual_adversarial_perturbation(
+            inputs, self.is_training)
+
+        return inputs + noise
+
 
 def get_lw_vat_cost(ladder, train_flag, params):
     unlabeled = lambda x: x[params.batch_size:] if x is not None else x
@@ -57,18 +96,27 @@ def build_graph(params, model='top'):
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
 
-    # -----------------------------
-    # Ladder
-    ladder = Ladder(inputs, outputs, train_flag, params)
-    # -----------------------------
-    # Add top-level VAT/AT cost
+
     if model == 'lw':
+        # Layer-wise VAT costs
+        ladder = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_lw_vat_cost(ladder, train_flag, params)
+
     elif model == 'top':
+        # Add top-level VAT/AT cost
+        ladder = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_top_vat_cost(ladder, train_flag, params)
+
+    elif model == 'noise':
+        # Add Virtual Adversarial Noise at each layer
+        ladder = Ladder(inputs, outputs, train_flag, params, encoder=VANEncoder)
+        vat_cost = 0.0
+
     else:
-        print('Help, model not defined!')
-        vat_cost = tf.zeros(tf.shape(ladder.cost))
+
+        ladder = Ladder(inputs, outputs, train_flag, params)
+        vat_cost = 0.0
+
 
     # -----------------------------
     # Loss, accuracy and training steps

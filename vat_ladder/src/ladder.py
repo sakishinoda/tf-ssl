@@ -45,17 +45,11 @@ class Encoder(object):
 
 
     """
-    def __init__(self,
-                 inputs,
-                 encoder_layers,
-                 bn,
-                 is_training,
-                 noise_sd=0.0,
-                 start_layer=0,
-                 batch_size=100,
-                 update_batch_stats=True,
-                 scope='enc',
-                 reuse=None):
+    def __init__(
+            self, inputs, encoder_layers, bn, is_training,
+            noise_sd=0.0, start_layer=0, batch_size=100,
+            update_batch_stats=True, scope='enc', reuse=None):
+
 
         self.noise_sd = noise_sd
         self.labeled = Activations()
@@ -352,7 +346,8 @@ def gauss_combinator(z_c, u, size):
 
 class Ladder(object):
     """"""
-    def __init__(self, inputs, outputs, train_flag, params):
+    def __init__(self, inputs, outputs, train_flag, params,
+                 encoder=Encoder, decoder=Decoder):
         """
 
         :param inputs: tensor or placeholder
@@ -372,20 +367,20 @@ class Ladder(object):
         bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
 
         print("=== Corrupted Encoder === ")
-        corr = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
+        corr = encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
                        is_training=train_flag,
                        noise_sd=params.encoder_noise_sd, start_layer=0,
                        batch_size=params.batch_size, update_batch_stats=False,
                        scope='enc', reuse=None)
 
         print("=== Clean Encoder ===")
-        clean = Encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
+        clean = encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
                         is_training=train_flag, noise_sd=0.0, start_layer=0,
                         batch_size=params.batch_size, update_batch_stats=True,
                         scope='enc', reuse=True)
 
         print("=== Decoder ===")
-        dec = Decoder(clean=clean, corr=corr, bn=bn,
+        dec = decoder(clean=clean, corr=corr, bn=bn,
                       combinator=gauss_combinator,
                       encoder_layers=params.encoder_layers,
                       denoising_cost=params.rc_weights,
