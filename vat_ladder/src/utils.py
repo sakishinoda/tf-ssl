@@ -83,20 +83,17 @@ def get_cli_params():
     # VAT SETTINGS
     # -------------------------
     # vat params
-    add('--epsilon', default = 5.0, type=float)
+    add('--epsilon', default=5.0, type=float)  # vary this instead of vat_weight
     add('--num_power_iterations', default=1, type=int)
     add('--xi', default=1e-6, type=float)
 
     # -------------------------
     # VAL SETTINGS
     # -------------------------
-    # weight of VAT cost
-    add('--vat_weight', default=0, type=float)
-    # weight of AT cost
-    add('--at_weight', default=0, type=float)
 
     # layerwise VAT costs
-    add('--lw', action='store_true')
+    add('--lw', default=False, nargs='?',
+        const='5.0-0.5-0.05-0.05-0.05-0.05-0.05')
 
     # use VAT RC cost at each layer
     # add('--vat_rc', action='store_true')
@@ -142,13 +139,14 @@ def process_cli_params(params):
         params.cnn_strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None)
         params.num_layers = len(params.cnn_fan) - 1
         # assert len(params.rc_weights) == len(params.cnn_fan) -1
-
-
     else:
         params.num_layers = len(params.encoder_layers) - 1
 
     params.encoder_layers = params.cnn_fan if params.cnn else \
         params.encoder_layers
+
+    if params.lw is not False:
+        params.lw_weights = dict(zip(range(len(params.lw)), params.lw))
 
     # NUM_EPOCHS = params.end_epoch
     # NUM_LABELED = params.num_labeled

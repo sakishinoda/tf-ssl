@@ -35,7 +35,7 @@ def build_top_graph(params):
     vat_cost = adv.virtual_adversarial_loss(
         x=unlabeled(inputs),
         logit=unlabeled(ladder.corr.logits),
-        is_training=train_flag) * params.vat_weight
+        is_training=train_flag)
 
     # -----------------------------
     # Loss, accuracy and training steps
@@ -106,9 +106,9 @@ def build_lw_graph(params):
                 x=ladder.corr.unlabeled.z[l],
                 logit=unlabeled(ladder.corr.logits),
                 is_training=train_flag) *
-            params.rc_weights[l]
+            params.lw_weights[l]
         )
-    vat_cost = tf.add_n(vat_costs) * (params.vat_weight/ladder.num_layers)
+    vat_cost = tf.add_n(vat_costs)
 
     # -----------------------------
     # Loss, accuracy and training steps
