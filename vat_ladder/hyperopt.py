@@ -15,8 +15,8 @@ class Hyperopt(object):
         self.params = self.get_cli_params()
         self.params_dict = vars(self.params)
         self.get_default_params()
-        for k in sorted(self.params_dict.keys()):
-            print(k, self.params_dict[k])
+        # for k in sorted(self.params_dict.keys()):
+        #     print(k, self.params_dict[k])
 
 
     def get_cli_params(self):
@@ -49,7 +49,7 @@ class Hyperopt(object):
         # Use default values
         add('initial_learning_rate', 0.002)
         add('static_bn', 0.99)
-        add('end_epoch', 1)
+        add('end_epoch', 20)
         add('decay_start', 1.0)
         add('decay_start_epoch', 100)
         add('beta1', 0.9)
@@ -134,6 +134,8 @@ class Hyperopt(object):
                                g['labels']: labels,
                                g['train_flag']: True})
 
+            print("----------------------------------------")
+            print("----------------------------------------")
             print("=== Evaluating ===")
             error = tf.constant(100.0) - m['acc']
             val_err = evaluate_metric(mnist.validation, sess, error, graph=g,
