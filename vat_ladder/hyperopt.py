@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-from src.val import build_top_graph, build_lw_graph
+from src.val import build_graph
 from src.train import evaluate_metric
 from src import input_data
 import numpy as np
@@ -106,8 +106,10 @@ class Hyperopt(object):
         num_iter = iter_per_epoch * p.end_epoch
 
         # Build graph
-        build_graph = build_lw_graph if p.lw else build_top_graph
-        g, m, trainable_parameters = build_graph(p)
+        if p.lw is not False:
+            g, m, trainable_parameters = build_graph(p, model='lw')
+        else:
+            g, m, trainable_parameters = build_graph(p, model='top')
 
         with tf.Session() as sess:
             init = tf.global_variables_initializer()

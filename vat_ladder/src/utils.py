@@ -55,6 +55,7 @@ def get_cli_params():
     add('--lr_decay_frequency', default=5, type=int)
 
     add('--beta1', default=0.9, type=float) # first momentum coefficient
+    add('--beta1_during_decay', default=0.9, type=float)
 
     # -------------------------
     # LADDER STRUCTURE
@@ -73,13 +74,6 @@ def get_cli_params():
     add('--static_bn', default=False, nargs='?', const=0.99, type=float)
 
     # -------------------------
-    # COMBINATOR STRUCTURE
-    # -------------------------
-    # Specify form of combinator (A)MLP
-    # add('--combinator_layers', default='4-1')
-    # add('--combinator_sd', default=0.025, type=float)
-
-    # -------------------------
     # VAT SETTINGS
     # -------------------------
     # vat params
@@ -90,23 +84,9 @@ def get_cli_params():
     # -------------------------
     # VAL SETTINGS
     # -------------------------
-
     # layerwise VAT costs
     add('--lw', default=False, nargs='?',
         const='5.0-0.5-0.05-0.05-0.05-0.05-0.05')
-
-    # use VAT RC cost at each layer
-    # add('--vat_rc', action='store_true')
-
-    # corruption mode
-    # add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
-    # weight of entropy minimisation cost
-    # add('--ent_weight', default=0, type=float)
-
-    # add('--keep_prob_hidden', default=0.5, type=float)
-    # add('--lrelu_a', default=0.1, type=float)
-    # add('--top_bn', action='store_true')
-    # add('--bn_stats_decay_factor', default=0.99, type=float)
 
     # -------------------------
     # CNN LADDER
