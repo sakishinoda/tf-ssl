@@ -10,7 +10,7 @@ class VANLWEncoder(Encoder):
             noise_sd=0.0, start_layer=0, batch_size=100,
             update_batch_stats=True, scope='enc', reuse=None,
             epsilons=None, xi=1e-6, num_power_iters=1):
-        super(VANEncoder, self).__init__(
+        super(VANLWEncoder, self).__init__(
             inputs, encoder_layers, bn, is_training,
             noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
             update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
@@ -149,8 +149,15 @@ def build_graph(params, model='top'):
         vat_cost = get_top_vat_cost(ladder, train_flag, params)
 
     elif model == 'noise':
+        ladder = Ladder(inputs, outputs, train_flag, params,
+                        encoder=VANEncoder)
+        vat_cost = 0.0
+
+
+    elif model == 'nlw':
         # Add Virtual Adversarial Noise at each layer
-        ladder = Ladder(inputs, outputs, train_flag, params, encoder=VANEncoder)
+        ladder = Ladder(inputs, outputs, train_flag, params,
+                        encoder=VANLWEncoder)
         vat_cost = 0.0
 
     else:

@@ -39,10 +39,8 @@ def main():
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
     # Build graph
-    if p.lw is not False:
-        g, m, trainable_parameters = build_graph(p, model='lw')
-    else:
-        g, m, trainable_parameters = build_graph(p, model='top')
+    g, m, trainable_parameters = build_graph(p, model=p.model)
+
 
     # Collect losses
     train_losses = [m['loss'], m['cost'], m['uc'], m['vc']]
