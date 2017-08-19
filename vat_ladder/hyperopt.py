@@ -31,6 +31,9 @@ class Hyperopt(object):
         # parser.add_argument('--static_bn', default=False, nargs='?', const=0.99, type=float)
         parser.add_argument('--dump_path', default='res.gz')
         # parser.add_argument('--lw', action='store_true')
+        # layerwise VAT costs
+        parser.add_argument('--lw', default=False, nargs='?',
+            const='5.0-0.5-0.05-0.05-0.05-0.05-0.05')
 
         params = parser.parse_args()
         return params
@@ -73,8 +76,11 @@ class Hyperopt(object):
         # -------------------------
         # Optimize
         add('epsilon', x[0])
-        add('rc_weights', dict(zip(range(len(x[1:])), x[1:])))
+        add('rc_weights', dict(zip(range(len(x[1:8])), x[1:8])))
 
+        if self.params.lw is not False:
+            lw_eps = x[8:]
+            self.params.lw_eps = dict(zip(range(len(lw_eps)), lw_eps))
 
         return self.params
 
@@ -157,8 +163,21 @@ def main():
         (0.01, 1.0, 'log-uniform'), # 6
         (0.01, 1.0, 'log-uniform')  # 7
     ]
-
     x0 = [5.0, 1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
+
+    if hyperopt.params.lw is not False:
+        dims += [
+            (0.5, 5.0, 'log-uniform'), # 8
+            (1e-3, 0.5, 'log-uniform'), # 9
+            (1e-5, 0.1, 'log-uniform'), # 10
+            (1e-5, 0.1, 'log-uniform'), # 11
+            (1e-5, 0.1, 'log-uniform'), # 12
+            (1e-5, 0.1, 'log-uniform'), # 13
+            (1e-5, 0.1, 'log-uniform')  # 14
+        ]
+        x0 += [1.0, 0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
+
+
 
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
     dump(res, hyperopt.params.dump_path)
