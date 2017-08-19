@@ -85,7 +85,7 @@ def get_cli_params():
     # vat params
     add('--epsilon', default=5.0, type=float)  # vary this instead of vat_weight
     add('--num_power_iterations', default=1, type=int)
-    add('--xi', default=1e-6, type=float)
+    add('--xi', default=1e-6, type=float, help="small constant for finite difference")
 
     # -------------------------
     # VAL SETTINGS
@@ -146,7 +146,7 @@ def process_cli_params(params):
         params.encoder_layers
 
     if params.lw is not False:
-        params.lw_weights = dict(zip(range(len(params.lw)), params.lw))
+        params.lw_eps = dict(zip(range(len(params.lw)), params.lw))
 
     # NUM_EPOCHS = params.end_epoch
     # NUM_LABELED = params.num_labeled

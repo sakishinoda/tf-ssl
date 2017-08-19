@@ -36,20 +36,30 @@ def get_normalized_vector(d):
 
 
 class Adversary(object):
-    def __init__(self, bn, params, start_layer=0):
-        self.params = params
+    def __init__(self,
+                 bn, encoder_layers, batch_size,
+                 epsilon=5.0, xi=1e-6, num_power_iters=1, start_layer=0):
+        # Ladder
         self.bn = bn
+        self.encoder_layers = encoder_layers
+        self.batch_size = batch_size
+
+        # VAT
+        self.epsilon = epsilon
+        self.xi = xi
+        self.num_power_iters = num_power_iters
+
         self.start_layer = start_layer
 
     def forward(self, x, is_training, update_batch_stats=False):
 
         vatfw = Encoder(inputs=x,
-                        encoder_layers=self.params.encoder_layers,
+                        encoder_layers=self.encoder_layers,
                         bn=self.bn,
                         is_training=is_training,
                         noise_sd=0.5,  # not used if not training
                         start_layer=self.start_layer,
-                        batch_size=self.params.batch_size,
+                        batch_size=self.batch_size,
                         update_batch_stats=update_batch_stats,
                         scope='enc', reuse=True)
 
@@ -57,8 +67,8 @@ class Adversary(object):
 
     def generate_virtual_adversarial_perturbation(self, x, logit, is_training):
         d = tf.random_normal(shape=tf.shape(x))
-        for k in range(self.params.num_power_iterations):
-            d = self.params.xi * get_normalized_vector(d)
+        for k in range(self.num_power_iters):
+            d = self.xi * get_normalized_vector(d)
             logit_p = logit
             print("=== Power Iteration: {} ===".format(k))
             logit_m = self.forward(x + d, update_batch_stats=False,
@@ -66,12 +76,12 @@ class Adversary(object):
             dist = kl_divergence_with_logit(logit_p, logit_m)
             grad = tf.gradients(dist, [d], aggregation_method=2)[0]
             d = tf.stop_gradient(grad)
-        return self.params.epsilon * get_normalized_vector(d)
+        return self.epsilon * get_normalized_vector(d)
 
     def generate_adversarial_perturbation(self, x, loss):
         grad = tf.gradients(loss, [x], aggregation_method=2)[0]
         grad = tf.stop_gradient(grad)
-        return self.params.epsilon * get_normalized_vector(grad)
+        return self.epsilon * get_normalized_vector(grad)
 
     def adversarial_loss(self, x, y, loss, is_training,
                          name="at_loss"):

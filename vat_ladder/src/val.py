@@ -99,14 +99,20 @@ def build_lw_graph(params):
 
     vat_costs = []
     for l in range(ladder.num_layers):
-        adv = Adversary(ladder.bn, params, start_layer=l)
+        adv = Adversary(bn=ladder.bn,
+                        encoder_layers=params.encoder_layers,
+                        batch_size=params.batch_size,
+                        epsilon=params.lw_eps[l],
+                        xi=params.xi,
+                        num_power_iters=params.num_power_iterations,
+                        start_layer=l)
+
         # VAT on unlabeled only
         vat_costs.append(
             adv.virtual_adversarial_loss(
                 x=ladder.corr.unlabeled.z[l],
                 logit=unlabeled(ladder.corr.logits),
-                is_training=train_flag) *
-            params.lw_weights[l]
+                is_training=train_flag)
         )
     vat_cost = tf.add_n(vat_costs)
 
