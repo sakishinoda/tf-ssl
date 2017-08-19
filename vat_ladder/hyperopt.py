@@ -28,9 +28,9 @@ class Hyperopt(object):
         # Specify at run time of hyperopt
         parser.add_argument('--which_gpu', default=0, type=int)
         parser.add_argument('--num_labeled', default=100, type=int)
-        parser.add_argument('--static_bn', default=False, nargs='?', const=0.99, type=float)
+        # parser.add_argument('--static_bn', default=False, nargs='?', const=0.99, type=float)
         parser.add_argument('--dump_path', default='res.gz')
-        parser.add_argument('--lw', action='store_true')
+        # parser.add_argument('--lw', action='store_true')
 
         params = parser.parse_args()
         return params
@@ -42,6 +42,13 @@ class Hyperopt(object):
         add = self.add
         # -------------------------
         # Use default values
+        add('initial_learning_rate', 0.002)
+        add('static_bn', 0.99)
+        add('end_epoch', 200)
+        add('decay_start', 0.5)
+        add('decay_start_epoch', 100)
+        add('beta1', 0.9)
+        add('beta1_during_decay', 0.5)
         add('test_frequency_in_epochs', default=5, type=int)
         add('eval_batch_size', default=100, type=int)
         add('validation', default=1000, type=int)
@@ -53,9 +60,11 @@ class Hyperopt(object):
         add('num_power_iterations', default=1, type=int)
         add('xi', default=1e-6, type=float)
         add('cnn', False)
-        add('ul_batch_size', 100)
-        rc_weights = [2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
-        add('rc_weights', dict(zip(range(len(rc_weights)), rc_weights)))
+        add('ul_batch_size', 250)
+        add('encoder_noise_sd', 0.3)
+
+        # rc_weights = [1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
+        # add('rc_weights', dict(zip(range(len(rc_weights)), rc_weights)))
 
 
     def convert_dims_to_params(self, x):
@@ -63,17 +72,9 @@ class Hyperopt(object):
         add = self.add
         # -------------------------
         # Optimize
-        add('end_epoch', x[0])
-        add('decay_start', x[1])
-        add('initial_learning_rate', x[2])
-        add('beta1', x[3])
-        add('encoder_noise_sd', x[4])
-        add('epsilon', x[5])
-        add('vat_weight', x[6])
-        # add('rc_weights', dict(zip(range(len(x[7:])), x[7:])))
+        add('epsilon', x[0])
+        add('rc_weights', dict(zip(range(len(x[1:])), x[1:])))
 
-        # Postprocess
-        add('decay_start_epoch', int(x[1] * x[0]))
 
         return self.params
 
@@ -146,24 +147,18 @@ def main():
     hyperopt = Hyperopt()
 
     dims = [
-        (100, 200),                     # 0: end_epoch
-        (0.25, 0.99),                   # 1: decay_start
-        (0.001, 0.01, 'log-uniform'),   # 2: initial_learning_rate
-        (0.5, 0.9),                     # 3: adam beta1
-        (0.1, 1.0),                     # 4: encoder_noise_sd
-        (0.01, 10.0, 'log-uniform'),    # 5: epsilon
-        (0.0, 5.0, 'log-uniform')       # 6: vat_weight
+        (0.01, 10.0, 'log-uniform'),    # 0: epsilon
+        # rc_weights
+        (500., 5000, 'log-uniform'), # 1
+        (5.00, 50., 'log-uniform'), # 2
+        (0.01, 1.0, 'log-uniform'), # 3
+        (0.01, 1.0, 'log-uniform'), # 4
+        (0.01, 1.0, 'log-uniform'), # 5
+        (0.01, 1.0, 'log-uniform'), # 6
+        (0.01, 1.0, 'log-uniform')  # 7
     ]
-        # # rc_weights
-        # (0.1, 2000, 'log-uniform'), # 0
-        # (0.1, 2000, 'log-uniform'), # 1
-        # (0.1, 2000, 'log-uniform'), # 2
-        # (0.1, 2000, 'log-uniform'), # 3
-        # (0.1, 2000, 'log-uniform'), # 4
-        # (0.1, 2000, 'log-uniform'), # 5
-        # (0.1, 2000, 'log-uniform'), # 6
 
-    x0 = [150, 0.5, 0.002, 0.5, 0.3, 8.0, 1.0]
+    x0 = [5.0, 1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
 
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
     dump(res, hyperopt.params.dump_path)
