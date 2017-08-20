@@ -124,11 +124,11 @@ def build_graph(params):
 
     elif model == "n" or model == "nlw":
         ladder = LadderWithVAN(inputs, outputs, train_flag, params)
-        vat_cost = 0.0
+        vat_cost = tf.zeros(1)
 
     else:
         ladder = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = 0.0
+        vat_cost = tf.zeros(1)
 
     # -----------------------------
     # Loss, accuracy and training steps
