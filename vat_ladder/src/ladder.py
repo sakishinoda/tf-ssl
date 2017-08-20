@@ -76,7 +76,7 @@ class Encoder(object):
         # Layer 0: inputs, size 784
         h = inputs + self.generate_noise(inputs, start_layer)
         self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
-        if start_layer > self.num_layers:
+        if start_layer +1 > self.num_layers:
             print(inputs.get_shape())
 
         for l_out in range(start_layer+1, self.num_layers+1):
