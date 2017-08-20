@@ -62,7 +62,7 @@ class Adversary(object):
             bn=self.bn,
             is_training=is_training,
             params=self.params,  # for encoder_layers, batch_size, van settings
-            noise_sd=self.params.vadv_sd, # add gaussian for stability
+            this_encoder_noise=self.params.vadv_sd, # add gaussian for stability
             start_layer=self.start_layer,
             update_batch_stats=update_batch_stats,
             scope='enc', reuse=True)
