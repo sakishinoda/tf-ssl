@@ -6,7 +6,7 @@
 
 # Test ladder benchmark
 echo ladder
-python mlp_ladder.py --logdir logs/test/ --id ladder --do_not_save --end_epoch 1 --decay_start 1.0 --which_gpu 0
+python vat_ladder.py --logdir logs/test/ --id ladder --model ladder --do_not_save --end_epoch 1 --decay_start 1.0 --which_gpu 0
 
 # Test each model
 echo lvac
