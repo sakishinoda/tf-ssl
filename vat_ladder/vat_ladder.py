@@ -48,7 +48,7 @@ def main():
 
     if p.measure_smoothness:
         s = measure_smoothness(g, p)
-        train_losses += s
+        train_losses.append(s)
 
     # Write logs to appropriate directory
     log_dir = p.logdir + p.id
