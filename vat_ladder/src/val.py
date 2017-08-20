@@ -190,7 +190,7 @@ def measure_smoothness(g, params):
         update_batch_stats=False,
         scope='enc',
         reuse=True
-    )
+    ).logits
 
     return get_spectral_radius(
         x=inputs, logit=logits, forward=forward, num_power_iters=1)
