@@ -40,14 +40,12 @@ class Adversary(object):
                  bn,
                  params,
                  layer_eps=5.0,
-                 start_layer=0,
-                 encoder_class=Encoder):
+                 start_layer=0):
 
         # Ladder (encoder parameters)
         self.bn = bn
         self.params = params
         self.start_layer = start_layer
-        self.encoder = encoder_class
 
         # VAT
         self.layer_eps = layer_eps
@@ -56,8 +54,8 @@ class Adversary(object):
 
 
     def forward(self, x, is_training, update_batch_stats=False):
-
-        vatfw = self.encoder(
+        # always use a standard Gaussian-noise encoder
+        vatfw = Encoder(
             inputs=x,
             bn=self.bn,
             is_training=is_training,

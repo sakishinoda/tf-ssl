@@ -79,7 +79,7 @@ def get_cli_params():
     add('--epsilon', default='5.0')  # vary this instead of vat_weight
     add('--num_power_iters', default=1, type=int)
     add('--xi', default=1e-6, type=float, help="small constant for finite difference")
-    add('--vadv_sd', default=0.5, type=float,
+    add('--vadv_sd', default=0.0, type=float,
         help="noise to add at each layer of forward pass for stability")
 
     # -------------------------

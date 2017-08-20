@@ -38,8 +38,7 @@ class VANEncoder(Encoder):
             bn=self.bn,
             params=self.params,
             layer_eps=self.params.epsilon[l],
-            start_layer=l,
-            encoder_class=VANEncoder
+            start_layer=l
         )
 
         x = unlabeled(inputs)
@@ -69,7 +68,7 @@ class VANEncoder(Encoder):
 def get_vat_cost(ladder, train_flag, params):
     unlabeled = lambda x: x[params.batch_size:] if x is not None else x
 
-    def get_adv_cost(l):
+    def get_layer_vat_cost(l):
 
         adv = Adversary(bn=ladder.bn,
                         params=params,
@@ -87,11 +86,11 @@ def get_vat_cost(ladder, train_flag, params):
     if params.model == "clw":
         vat_costs = []
         for l in range(ladder.num_layers):
-            vat_costs.append(get_adv_cost(l))
+            vat_costs.append(get_layer_vat_cost(l))
         vat_cost = tf.add_n(vat_costs)
 
     elif params.model == "c":
-        vat_cost = get_adv_cost(0)
+        vat_cost = get_layer_vat_cost(0)
 
     else:
         vat_cost = 0.0
