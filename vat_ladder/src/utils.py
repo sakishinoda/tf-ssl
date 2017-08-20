@@ -86,7 +86,7 @@ def get_cli_params():
 
     # VAL SETTINGS
     # -------------------------
-    add('--model', default="c", choices=["n", "nlw", "c", "clw"])
+    add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder"])
 
     # -------------------------
     # CNN LADDER
