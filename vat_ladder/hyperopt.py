@@ -64,6 +64,7 @@ class Hyperopt(object):
         add('cnn', False)
         add('ul_batch_size', 250)
         add('corrupt_sd', 0.3)
+        add('vadv_sd', 0.5)
 
 
 
