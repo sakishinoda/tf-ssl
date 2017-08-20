@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings
-from src.val import build_graph
+from src.val import build_graph, measure_smoothness
 from src.train import evaluate_metric_list, update_decays
 from src import input_data
 import numpy as np
@@ -38,13 +38,17 @@ def main():
     p.iter_per_epoch = (num_examples // p.batch_size)
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
+    # -----------------------------
     # Build graph
     g, m, trainable_parameters = build_graph(p)
-
 
     # Collect losses
     train_losses = [m['loss'], m['cost'], m['uc'], m['vc']]
     test_losses = [m['cost']]
+
+    if p.measure_smoothness:
+        s = measure_smoothness(g, p)
+        train_losses += s
 
     # Write logs to appropriate directory
     log_dir = p.logdir + p.id

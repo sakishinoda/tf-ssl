@@ -88,6 +88,8 @@ def get_cli_params():
     # -------------------------
     add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder"])
 
+    add('--measure_smoothness', action='store_true')
+
     # -------------------------
     # CNN LADDER
     # -------------------------
