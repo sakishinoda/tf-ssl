@@ -59,7 +59,7 @@ class Hyperopt(object):
         add('batch_size', default=100, type=int)
         add('encoder_layers',
             default=parse_argstring('784-1000-500-250-250-250-10', dtype=int))
-        add('num_power_iterations', default=1, type=int)
+        add('num_power_iters', default=1, type=int)
         add('xi', default=1e-6, type=float)
         add('cnn', False)
         add('ul_batch_size', 250)
