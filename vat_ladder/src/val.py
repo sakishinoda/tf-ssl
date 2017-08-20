@@ -32,14 +32,14 @@ class VANEncoder(Encoder):
             scope=scope, reuse=reuse
         )
 
-    def get_vadv_noise(self, inputs, l):
+    def get_vadv_noise(self, inputs, l_out):
         join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
 
         adv = Adversary(
             bn=self.bn,
             params=self.params,
-            layer_eps=self.params.epsilon[l],
-            start_layer=l
+            layer_eps=self.params.epsilon[l_out],
+            start_layer=l_out
         )
 
         x = unlabeled(inputs)
@@ -50,21 +50,21 @@ class VANEncoder(Encoder):
 
         return join(tf.zeros(tf.shape(labeled(inputs))), ul_noise)
 
-    def print_progress(self, l):
+    def print_progress(self, l_out):
         el = self.encoder_layers
-        print("Layer {}: {} -> {}, epsilon {}".format(l, el[l - 1], el[l]),
-              self.params.epsilon[l])
+        print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1], el[l_out]),
+              self.params.epsilon[l_out - 1])
 
-    def generate_noise(self, inputs, l):
+    def generate_noise(self, inputs, l_out):
 
         if self.noise_sd > 0.0:
             noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
-            if self.params.model == "n" and l==0:
-                noise += self.get_vadv_noise(inputs, l)
+            if self.params.model == "n" and l_out==0:
+                noise += self.get_vadv_noise(inputs, l_out)
 
             elif self.params.model == "nlw":
-                noise += self.get_vadv_noise(inputs, l)
+                noise += self.get_vadv_noise(inputs, l_out)
 
         else:
             noise = tf.zeros(tf.shape(inputs))

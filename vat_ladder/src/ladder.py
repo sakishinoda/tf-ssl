@@ -74,23 +74,23 @@ class Encoder(object):
         self.num_layers = len(el) - 1
 
         # Layer 0: inputs, size 784
-        l = 0
-        h = inputs + self.generate_noise(inputs, l)
-        self.labeled.z[l], self.unlabeled.z[l] = split_lu(h)
+        l_out = 0
+        h = inputs + self.generate_noise(inputs, l_out)
+        self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(h)
 
-        for l in range(start_layer+1, self.num_layers + 1):
-            self.print_progress(l)
+        for l_out in range(start_layer+1, self.num_layers + 1):
+            self.print_progress(l_out)
 
-            self.labeled.h[l-1], self.unlabeled.z[l-1] = split_lu(h)
+            self.labeled.h[l_out-1], self.unlabeled.z[l_out-1] = split_lu(h)
             # z_pre = tf.matmul(h, self.W[l-1])
             z_pre = layers.fully_connected(
                 h,
-                num_outputs=el[l],
+                num_outputs=el[l_out],
                 weights_initializer=tf.random_normal_initializer(
-                    stddev=1/math.sqrt(el[l-1])),
+                    stddev=1/math.sqrt(el[l_out-1])),
                 biases_initializer=None,
                 activation_fn=None,
-                scope=scope+str(l),
+                scope=scope+str(l_out),
                 reuse=reuse)
             z_pre_l, z_pre_u = split_lu(z_pre)
             # bn_axes = list(range(len(z_pre_u.get_shape().as_list())))
@@ -108,13 +108,13 @@ class Encoder(object):
                     # batch normalization + noise
                     z = join(bn.batch_normalization(z_pre_l),
                              bn.batch_normalization(z_pre_u, m, v))
-                    noise = self.generate_noise(z_pre, l)
+                    noise = self.generate_noise(z_pre, l_out)
                     z += noise
                 else:
                     # Clean encoder
                     # batch normalization + update the average mean and variance
                     # using batch mean and variance of labeled examples
-                    bn_l = bn.update_batch_normalization(z_pre_l, l) if \
+                    bn_l = bn.update_batch_normalization(z_pre_l, l_out) if \
                         update_batch_stats else bn.batch_normalization(z_pre_l)
                     bn_u = bn.batch_normalization(z_pre_u, m, v)
                     z = join(bn_l, bn_u)
@@ -124,8 +124,8 @@ class Encoder(object):
             def eval_batch_norm():
                 # Evaluation batch normalization
                 # obtain average mean and variance and use it to normalize the batch
-                mean = bn.ema.average(bn.running_mean[l-1])
-                var = bn.ema.average(bn.running_var[l-1])
+                mean = bn.ema.average(bn.running_mean[l_out-1])
+                var = bn.ema.average(bn.running_var[l_out-1])
                 z = bn.batch_normalization(z_pre, mean, var)
 
                 return z
@@ -133,41 +133,24 @@ class Encoder(object):
             # perform batch normalization according to value of boolean "training" placeholder:
             z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
 
-            if l == self.num_layers:
+            if l_out == self.num_layers:
                 # return pre-softmax logits in final layer
-                self.logits = bn.gamma[l-1] * (z + bn.beta[l-1])
+                self.logits = bn.gamma[l_out-1] * (z + bn.beta[l_out-1])
                 h = tf.nn.softmax(self.logits)
             else:
                 # use ReLU activation in hidden layers
-                h = tf.nn.relu(z + bn.beta[l - 1])
+                h = tf.nn.relu(z + bn.beta[l_out - 1])
 
             # save mean and variance of unlabeled examples for decoding
-            self.unlabeled.m[l], self.unlabeled.v[l] = m, v
-            self.labeled.z[l], self.unlabeled.z[l] = split_lu(z)
-            self.labeled.h[l], self.unlabeled.h[l] = split_lu(h)
+            self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
+            self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(z)
+            self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
 
-    def print_progress(self, l):
+    def print_progress(self, l_out):
         el = self.encoder_layers
-        print("Layer {}: {} -> {}".format(l, el[l - 1], el[l]))
+        print("Layer {}: {} -> {}".format(l_out, el[l_out - 1], el[l_out]))
 
-    def generate_noise(self, inputs, l):
-        """Add noise depending on corruption parameters"""
-        # start_layer = l+1
-        # corrupt = self.params.corrupt
-        # if corrupt == 'vatgauss':
-        #     noise = generate_virtual_adversarial_perturbation(
-        #         inputs, clean_logits, is_training=is_training,
-        #         start_layer=start_layer) + \
-        #         tf.random_normal(tf.shape(inputs)) * noise_sd
-        # elif corrupt == 'vat':
-        #     noise = generate_virtual_adversarial_perturbation(
-        #         inputs, clean_logits, is_training=is_training,
-        #         start_layer=start_layer)
-        # elif corrupt == 'gauss':
-        #     noise = tf.random_normal(tf.shape(inputs)) * noise_sd
-        # else:
-        #     noise = tf.zeros(tf.shape(inputs))
-        # return noise
+    def generate_noise(self, inputs, l_out):
         return tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
 # -----------------------------
