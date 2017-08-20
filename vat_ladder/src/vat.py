@@ -67,11 +67,12 @@ class Adversary(object):
         return vatfw.logits  # logits by default includes both labeled/unlabeled
 
     def generate_virtual_adversarial_perturbation(self, x, logit, is_training):
+        print("--- VAT Pass: Generating VAT perturbation ---")
         d = tf.random_normal(shape=tf.shape(x))
         for k in range(self.num_power_iters):
             d = self.xi * get_normalized_vector(d)
             logit_p = logit
-            print("=== Power Iteration: {} ===".format(k))
+            print("Power Iteration: {}".format(k))
             logit_m = self.forward(x + d, update_batch_stats=False,
                               is_training=is_training)
             dist = kl_divergence_with_logit(logit_p, logit_m)
@@ -95,13 +96,13 @@ class Adversary(object):
     def virtual_adversarial_loss(self, x, logit, is_training,
                                  name="vat_loss"):
 
-        print("=== VAT Pass: Generating VAT perturbation ===")
+
         r_vadv = self.generate_virtual_adversarial_perturbation(
             x, logit, is_training=is_training)
         logit = tf.stop_gradient(logit)
         logit_p = logit
 
-        print("=== VAT Pass: Computing VAT Loss (KL Divergence)")
+        print("--- VAT Pass: Computing VAT Loss (KL Divergence) ---")
         logit_m = self.forward(x + r_vadv, update_batch_stats=False,
                           is_training=is_training)
         loss = kl_divergence_with_logit(logit_p, logit_m)

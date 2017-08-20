@@ -14,6 +14,7 @@ class LadderWithVAN(Ladder):
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
 
+
 class VANEncoder(Encoder):
     def __init__(
             self, inputs, bn, is_training, params, clean_logits,
@@ -49,15 +50,22 @@ class VANEncoder(Encoder):
 
         return join(tf.zeros(tf.shape(labeled(inputs))), ul_noise)
 
+    def print_progress(self, l):
+        el = self.encoder_layers
+        print("Layer {}: {} -> {}, epsilon {}".format(l, el[l - 1], el[l]),
+              self.params.epsilon[l])
 
     def generate_noise(self, inputs, l):
 
         if self.noise_sd > 0.0:
             noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
+
             if self.params.model == "n" and l==0:
                 noise += self.get_vadv_noise(inputs, l)
+
             elif self.params.model == "nlw":
                 noise += self.get_vadv_noise(inputs, l)
+
         else:
             noise = tf.zeros(tf.shape(inputs))
 
@@ -79,7 +87,7 @@ def get_vat_cost(ladder, train_flag, params):
         return (
             adv.virtual_adversarial_loss(
                 x=ladder.corr.unlabeled.z[l],
-                logit=unlabeled(ladder.corr.logits),
+                logit=unlabeled(ladder.corr.logits),  # should this be clean?
                 is_training=train_flag)
         )
 

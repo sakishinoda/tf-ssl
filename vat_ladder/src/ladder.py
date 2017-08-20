@@ -79,7 +79,8 @@ class Encoder(object):
         self.labeled.z[l], self.unlabeled.z[l] = split_lu(h)
 
         for l in range(start_layer+1, self.num_layers + 1):
-            print("Layer {}: {} -> {}".format(l, el[l-1], el[l]))
+            self.print_progress(l)
+
             self.labeled.h[l-1], self.unlabeled.z[l-1] = split_lu(h)
             # z_pre = tf.matmul(h, self.W[l-1])
             z_pre = layers.fully_connected(
@@ -145,6 +146,9 @@ class Encoder(object):
             self.labeled.z[l], self.unlabeled.z[l] = split_lu(z)
             self.labeled.h[l], self.unlabeled.h[l] = split_lu(h)
 
+    def print_progress(self, l):
+        el = self.encoder_layers
+        print("Layer {}: {} -> {}".format(l, el[l - 1], el[l]))
 
     def generate_noise(self, inputs, l):
         """Add noise depending on corruption parameters"""
