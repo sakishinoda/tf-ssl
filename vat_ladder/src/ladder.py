@@ -74,20 +74,20 @@ class Encoder(object):
         self.num_layers = len(el) - 1
 
         # Layer 0: inputs, size 784
-        l_out = 0
-        h = inputs + self.generate_noise(inputs, l_out)
-        self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(h)
+        h = inputs + self.generate_noise(inputs, start_layer)
+        self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
 
-        for l_out in range(start_layer+1, self.num_layers + 1):
+        for l_out in range(start_layer+1, self.num_layers+1):
+            l_in = l_out-1
             self.print_progress(l_out)
 
-            self.labeled.h[l_out-1], self.unlabeled.z[l_out-1] = split_lu(h)
+            self.labeled.h[l_in], self.unlabeled.z[l_in] = split_lu(h)
             # z_pre = tf.matmul(h, self.W[l-1])
             z_pre = layers.fully_connected(
                 h,
                 num_outputs=el[l_out],
                 weights_initializer=tf.random_normal_initializer(
-                    stddev=1/math.sqrt(el[l_out-1])),
+                    stddev=1/math.sqrt(el[l_in])),
                 biases_initializer=None,
                 activation_fn=None,
                 scope=scope+str(l_out),
@@ -124,8 +124,8 @@ class Encoder(object):
             def eval_batch_norm():
                 # Evaluation batch normalization
                 # obtain average mean and variance and use it to normalize the batch
-                mean = bn.ema.average(bn.running_mean[l_out-1])
-                var = bn.ema.average(bn.running_var[l_out-1])
+                mean = bn.ema.average(bn.running_mean[l_in])
+                var = bn.ema.average(bn.running_var[l_in])
                 z = bn.batch_normalization(z_pre, mean, var)
 
                 return z
@@ -135,11 +135,11 @@ class Encoder(object):
 
             if l_out == self.num_layers:
                 # return pre-softmax logits in final layer
-                self.logits = bn.gamma[l_out-1] * (z + bn.beta[l_out-1])
+                self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
                 h = tf.nn.softmax(self.logits)
             else:
                 # use ReLU activation in hidden layers
-                h = tf.nn.relu(z + bn.beta[l_out - 1])
+                h = tf.nn.relu(z + bn.beta[l_in])
 
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
