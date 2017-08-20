@@ -1,8 +1,8 @@
 """Virtual Adversarial Ladder"""
 import tensorflow as tf
 from src.utils import count_trainable_params, preprocess, get_batch_ops
-from src.vat import Adversary
-from src.ladder import Ladder, Encoder, Decoder
+from src.vat import Adversary, get_spectral_radius
+from src.ladder import Ladder, Encoder
 
 class LadderWithVAN(Ladder):
     def get_corrupted_encoder(self, inputs, bn, train_flag, params,
@@ -122,7 +122,6 @@ def build_graph(params):
         ladder = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_vat_cost(ladder, train_flag, params)
 
-
     elif model == "n" or model == "nlw":
         ladder = LadderWithVAN(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
@@ -133,6 +132,7 @@ def build_graph(params):
 
     # -----------------------------
     # Loss, accuracy and training steps
+
     loss = ladder.cost + ladder.u_cost + vat_cost
     accuracy = tf.reduce_mean(
         tf.cast(
@@ -174,3 +174,23 @@ def build_graph(params):
     trainable_params = count_trainable_params()
 
     return g, m, trainable_params
+
+
+def measure_smoothness(g, params):
+    # Measure smoothness using clean logits
+    inputs = g['images']
+    logits = g['ladder'].clean.logits
+    forward = lambda x: Encoder(
+        inputs=x,
+        bn=g['ladder'].bn,
+        is_training=g['train_flag'],
+        params=params,
+        this_encoder_noise=0.0,
+        start_layer=0,
+        update_batch_stats=False,
+        scope='enc',
+        reuse=True
+    )
+
+    return get_spectral_radius(
+        x=inputs, logit=logits, forward=forward, num_power_iters=1)

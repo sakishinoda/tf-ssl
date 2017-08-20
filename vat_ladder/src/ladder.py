@@ -31,14 +31,15 @@ class Encoder(object):
         inputs: tensor
         bn: BatchNormLayers
         is_training: tensorflow bool
-        noise_sd: float
-        params: argparse Namespace object with attributes:
-            encoder_layers: sequence of ints
-            batch_size: int
-        start_layer: int
+        params: argparse Namespace
+            with attributes
+            encoder_layers (sequence of ints), and
+            batch_size (int)
+        this_encoder_noise: float, default 0.0
+        start_layer: int, default 0
         update_batch_stats: bool
-        scope: str
-        reuse: bool or None
+        scope: str, default 'enc'
+        reuse: bool or None, default None
 
     Attributes
     ----------
