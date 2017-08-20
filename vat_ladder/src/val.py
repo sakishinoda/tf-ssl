@@ -38,8 +38,8 @@ class VANEncoder(Encoder):
         adv = Adversary(
             bn=self.bn,
             params=self.params,
-            layer_eps=self.params.epsilon[l_out],
-            start_layer=l_out
+            layer_eps=self.params.epsilon[l_out-1],
+            start_layer=l_out-1
         )
 
         x = unlabeled(inputs)
