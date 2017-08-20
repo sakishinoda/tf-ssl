@@ -56,7 +56,7 @@ class VANEncoder(Encoder):
               self.params.epsilon[l_out - 1]))
 
     def generate_noise(self, inputs, l_out):
-
+        print("Generating noise for layer", l_out)
         if self.noise_sd > 0.0:
             noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
