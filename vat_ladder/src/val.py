@@ -121,19 +121,19 @@ def build_graph(params):
     if model == "c" or model == "clw":
         ladder = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_vat_cost(ladder, train_flag, params)
-        loss = ladder.cost + ladder.u_cost + vat_cost
+
 
     elif model == "n" or model == "nlw":
         ladder = LadderWithVAN(inputs, outputs, train_flag, params)
-        loss = ladder.cost + ladder.u_cost
+        vat_cost = tf.zeros([])
 
     else:
         ladder = Ladder(inputs, outputs, train_flag, params)
-        loss = ladder.cost + ladder.u_cost
+        vat_cost = tf.zeros([])
 
     # -----------------------------
     # Loss, accuracy and training steps
-    # loss = ladder.cost + ladder.u_cost + vat_cost
+    loss = ladder.cost + ladder.u_cost + vat_cost
     accuracy = tf.reduce_mean(
         tf.cast(
             tf.equal(ladder.predict, tf.argmax(outputs, 1)),
