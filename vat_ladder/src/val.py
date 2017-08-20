@@ -63,7 +63,8 @@ class VANEncoder(Encoder):
             if self.params.model == "n" and l==0:
                 noise += self.get_vadv_noise(inputs, l)
 
-            elif self.params.model == "nlw":
+            elif self.params.model == "nlw" and (l + 1 < self.num_layers):
+                # don't add adversarial noise to logits
                 noise += self.get_vadv_noise(inputs, l)
 
         else:
