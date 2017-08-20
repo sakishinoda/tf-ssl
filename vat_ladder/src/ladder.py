@@ -55,7 +55,7 @@ class Encoder(object):
 
     """
     def __init__(
-            self, inputs, bn, is_training, params, noise_sd=0.0,
+            self, inputs, bn, is_training, params, this_encoder_noise=0.0,
             start_layer=0, update_batch_stats=True, scope='enc', reuse=None):
 
         self.bn = bn
@@ -64,7 +64,7 @@ class Encoder(object):
         el = params.encoder_layers
         self.encoder_layers = el
         self.batch_size = params.batch_size
-        self.noise_sd = noise_sd
+        self.noise_sd = this_encoder_noise
 
         self.labeled = Activations()
         self.unlabeled = Activations()
@@ -360,8 +360,7 @@ def gauss_combinator(z_c, u, size):
 
 class Ladder(object):
     """"""
-    def __init__(self, inputs, outputs, train_flag, params,
-                 encoder=Encoder, decoder=Decoder):
+    def __init__(self, inputs, outputs, train_flag, params):
         """
 
         :param inputs: tensor or placeholder
@@ -375,37 +374,33 @@ class Ladder(object):
 
         print("=== Batch Norm === ")
         if params.static_bn is False:
-            bn_decay = tf.Variable(1e-10, trainable=False)
+            self.bn_decay = tf.Variable(1e-10, trainable=False)
         else:
-            bn_decay = params.static_bn
-        bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
+            self.bn_decay = params.static_bn
 
-        print("=== Corrupted Encoder === ")
-        corr = encoder(inputs=inputs, bn=bn, is_training=train_flag,
-                       params=params, noise_sd=params.corrupt_sd,
-                       start_layer=0, update_batch_stats=False,
-                       scope='enc', reuse=None)
+        self.bn = BatchNormLayers(params.encoder_layers, decay=self.bn_decay)
 
         print("=== Clean Encoder ===")
-        clean = encoder(inputs=inputs, bn=bn, is_training=train_flag,
-                        params=params, noise_sd=0.0,
-                        start_layer=0, update_batch_stats=True,
-                        scope='enc', reuse=True)
+        self.clean = Encoder(
+            inputs=inputs, bn=self.bn, is_training=train_flag,
+            params=params, this_encoder_noise=0.0,
+            start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=True)
+
+        print("=== Corrupted Encoder === ")
+        self.corr = self.get_corrupted_encoder(
+            inputs, self.bn, train_flag, params)
 
         print("=== Decoder ===")
-        dec = decoder(clean=clean, corr=corr, bn=bn,
-                      combinator=gauss_combinator,
-                      encoder_layers=params.encoder_layers,
-                      denoising_cost=params.rc_weights,
-                      batch_size=params.batch_size,
-                      scope='dec', reuse=None)
+        self.dec = Decoder(
+            clean=self.clean, corr=self.corr, bn=self.bn,
+            combinator=gauss_combinator,
+            encoder_layers=params.encoder_layers,
+            denoising_cost=params.rc_weights,
+            batch_size=params.batch_size,
+            scope='dec', reuse=None)
 
 
-        self.bn = bn
-        self.corr = corr
-        self.clean = clean
-        self.dec = dec
-        self.bn_decay = bn_decay
         self.num_layers = self.clean.num_layers
 
         # Calculate total unsupervised cost
@@ -413,9 +408,17 @@ class Ladder(object):
 
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
-            labels=outputs, logits=labeled(corr.logits))
+            labels=outputs, logits=labeled(self.corr.logits))
         self.cost = tf.reduce_mean(ce)
 
         # Compute predictions
-        self.predict = tf.argmax(clean.logits, 1)
+        self.predict = tf.argmax(self.clean.logits, 1)
+
+
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params):
+        return Encoder(
+            inputs=inputs, bn=bn, is_training=train_flag,
+            params=params, this_encoder_noise=params.corrupt_sd,
+            start_layer=0, update_batch_stats=False,
+            scope='enc', reuse=None)
 

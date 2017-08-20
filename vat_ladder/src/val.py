@@ -2,20 +2,28 @@
 import tensorflow as tf
 from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.vat import Adversary
-from src.ladder import Ladder, Encoder
+from src.ladder import Ladder, Encoder, Decoder
+
+class LadderWithVAN(Ladder):
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params):
+        return VANEncoder(
+            inputs, bn, train_flag, params, self.clean.logits,
+            this_encoder_noise=params.corrupt_sd,
+            start_layer=0, update_batch_stats=False,
+            scope='enc', reuse=None)
 
 class VANEncoder(Encoder):
     def __init__(
-            self, inputs, bn, is_training, params, noise_sd=0.0,
-            start_layer=0, update_batch_stats=True,
+            self, inputs, bn, is_training, params, clean_logits,
+            this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
             scope='enc', reuse=None):
 
         self.params = params
-
+        self.clean_logits = clean_logits
 
         super(VANEncoder, self).__init__(
             inputs, bn, is_training, params,
-            noise_sd=noise_sd,
+            this_encoder_noise=this_encoder_noise,
             start_layer=start_layer,
             update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse
@@ -33,7 +41,7 @@ class VANEncoder(Encoder):
         )
 
         x = unlabeled(inputs)
-        logit = unlabeled(self.logits)
+        logit = unlabeled(self.clean_logits)
 
         ul_noise = adv.generate_virtual_adversarial_perturbation(
             x=x, logit=logit, is_training=self.is_training)
@@ -105,8 +113,7 @@ def build_graph(params):
         vat_cost = get_vat_cost(ladder, train_flag, params)
 
     elif model == "n" or model == "nlw":
-        ladder = Ladder(inputs, outputs, train_flag, params,
-                        encoder=VANEncoder)
+        ladder = LadderWithVAN(inputs, outputs, train_flag, params)
         vat_cost = 0.0
 
     else:

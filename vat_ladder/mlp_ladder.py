@@ -8,6 +8,7 @@ from src.utils import get_cli_params, process_cli_params, \
 from src.ladder import Ladder
 from src import input_data
 import numpy as np
+from src.train import update_decays
 
 
 def main():
@@ -179,21 +180,7 @@ def main():
         # Epoch completed?
         if (i > 1) and ((i+1) % params.iter_per_epoch == 0):
             epoch_n = i // (num_examples // params.batch_size)
-
-            # ---------------------------------------------
-            # Update batch norm decay constant
-            if params.bn_decay == 'dynamic':
-                ladder.bn_decay.assign(1.0 - (1.0 / (epoch_n + 1)))
-
-            # ---------------------------------------------
-            # Update learning rate every epoch
-            if ((epoch_n + 1) >= params.decay_start_epoch) and ((i + 1) % (
-                    params.lr_decay_frequency * params.iter_per_epoch) == 0):
-                # epoch_n + 1 because learning rate is set for next epoch
-                ratio = 1.0 * (params.end_epoch - (epoch_n + 1))
-                ratio = max(0., ratio / (params.end_epoch - params.decay_start_epoch))
-                sess.run(learning_rate.assign(params.initial_learning_rate *
-                                              ratio))
+            update_decays(sess, epoch_n, iter=i, graph=g, params=p)
 
             # ---------------------------------------------
             # Evaluate every test_frequency_in_epochs
