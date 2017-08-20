@@ -1,9 +1,9 @@
 
 def evaluate_metric(dataset, sess, op, graph, params):
     metric = 0
-    num_eval_iters = dataset.num_examples // params.eval_batch_size
+    num_eval_iters = dataset.num_examples // params.batch_size
     for _ in range(num_eval_iters):
-        images, labels = dataset.next_batch(params.eval_batch_size)
+        images, labels = dataset.next_batch(params.batch_size)
         init_feed = {graph['images']: images,
                      graph['labels']: labels,
                      graph['train_flag']: False}
@@ -13,9 +13,9 @@ def evaluate_metric(dataset, sess, op, graph, params):
 
 def evaluate_metric_list(dataset, sess, ops, graph, params):
     metrics = [0.0 for _ in ops]
-    num_eval_iters = dataset.num_examples // params.eval_batch_size
+    num_eval_iters = dataset.num_examples // params.batch_size
     for _ in range(num_eval_iters):
-        images, labels = dataset.next_batch(params.eval_batch_size)
+        images, labels = dataset.next_batch(params.batch_size)
         init_feed = {graph['images']: images,
                      graph['labels']: labels,
                      graph['train_flag']: False}

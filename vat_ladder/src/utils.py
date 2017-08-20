@@ -109,7 +109,7 @@ def process_cli_params(params):
     params.encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
     params.rc_weights = enum_dict(parse_argstring(params.rc_weights, dtype=float))
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
-    params.eval_batch_size = params.batch_size
+    params.eval_batch_size = params.batch_size  # this should be redundant
 
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
