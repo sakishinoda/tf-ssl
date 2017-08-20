@@ -53,7 +53,7 @@ class VANEncoder(Encoder):
     def print_progress(self, l_out):
         el = self.encoder_layers
         print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1], el[l_out],
-              self.params.epsilon[l_out - 1].get(None)))
+              self.params.epsilon.get(l_out - 1)))
 
     def generate_noise(self, inputs, l_out):
         print("Generating noise for layer", l_out)
