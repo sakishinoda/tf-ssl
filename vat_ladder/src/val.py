@@ -6,17 +6,16 @@ from src.ladder import Ladder, Encoder
 
 class VANEncoder(Encoder):
     def __init__(
-            self, inputs, bn, is_training, params,
+            self, inputs, bn, is_training, params, noise_sd=0.0,
             start_layer=0, update_batch_stats=True,
             scope='enc', reuse=None):
 
-        self.eps = params.epsilon
-        self.xi = params.xi
-        self.num_power_iters = params.num_power_iters
-        self.model = params.model
+        self.params = params
+
 
         super(VANEncoder, self).__init__(
             inputs, bn, is_training, params,
+            noise_sd=noise_sd,
             start_layer=start_layer,
             update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse
@@ -27,11 +26,8 @@ class VANEncoder(Encoder):
 
         adv = Adversary(
             bn=self.bn,
-            encoder_layers=self.encoder_layers,
-            batch_size=self.batch_size,
-            epsilon=self.eps[l],
-            xi=self.xi,
-            num_power_iters=self.num_power_iters,
+            params=self.params,
+            layer_eps=self.params.epsilon[l],
             start_layer=l,
             encoder_class=VANEncoder
         )
@@ -49,9 +45,9 @@ class VANEncoder(Encoder):
 
         if self.noise_sd > 0.0:
             noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
-            if self.model == "n" and l==0:
+            if self.params.model == "n" and l==0:
                 noise += self.get_vadv_noise(inputs, l)
-            elif self.model == "nlw":
+            elif self.params.model == "nlw":
                 noise += self.get_vadv_noise(inputs, l)
         else:
             noise = tf.zeros(tf.shape(inputs))
@@ -64,12 +60,10 @@ def get_vat_cost(ladder, train_flag, params):
     unlabeled = lambda x: x[params.batch_size:] if x is not None else x
 
     def get_adv_cost(l):
+
         adv = Adversary(bn=ladder.bn,
-                        encoder_layers=params.encoder_layers,
-                        batch_size=params.batch_size,
-                        epsilon=params.epsilon[l],
-                        xi=params.xi,
-                        num_power_iters=params.num_power_iterations,
+                        params=params,
+                        layer_eps=params.epsilon[l],
                         start_layer=l)
 
         # VAT on unlabeled only

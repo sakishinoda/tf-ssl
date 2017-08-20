@@ -63,7 +63,7 @@ class Hyperopt(object):
         add('xi', default=1e-6, type=float)
         add('cnn', False)
         add('ul_batch_size', 250)
-        add('encoder_noise_sd', 0.3)
+        add('corrupt_sd', 0.3)
 
 
 

@@ -64,7 +64,7 @@ def get_cli_params():
                         default='784-1000-500-250-250-250-10')
 
     # Standard deviation of the Gaussian noise to inject at each level
-    add('--encoder_noise_sd', default=0.3, type=float)
+    add('--corrupt_sd', default=0.3, type=float)
 
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
@@ -79,8 +79,11 @@ def get_cli_params():
     add('--epsilon', default='5.0')  # vary this instead of vat_weight
     add('--num_power_iters', default=1, type=int)
     add('--xi', default=1e-6, type=float, help="small constant for finite difference")
+    add('--vadv_sd', default=0.5, type=float,
+        help="noise to add at each layer of forward pass for stability")
 
     # -------------------------
+
     # VAL SETTINGS
     # -------------------------
     add('--model', default="c", choices=["n", "nlw", "c", "clw"])

@@ -31,9 +31,9 @@ class Encoder(object):
         inputs: tensor
         bn: BatchNormLayers
         is_training: tensorflow bool
+        noise_sd: float
         params: argparse Namespace object with attributes:
             encoder_layers: sequence of ints
-            noise_sd: float
             batch_size: int
         start_layer: int
         update_batch_stats: bool
@@ -55,7 +55,7 @@ class Encoder(object):
 
     """
     def __init__(
-            self, inputs, bn, is_training, params,
+            self, inputs, bn, is_training, params, noise_sd=0.0,
             start_layer=0, update_batch_stats=True, scope='enc', reuse=None):
 
         self.bn = bn
@@ -64,7 +64,7 @@ class Encoder(object):
         el = params.encoder_layers
         self.encoder_layers = el
         self.batch_size = params.batch_size
-        self.noise_sd = params.encoder_noise_sd
+        self.noise_sd = noise_sd
 
         self.labeled = Activations()
         self.unlabeled = Activations()
@@ -382,12 +382,14 @@ class Ladder(object):
 
         print("=== Corrupted Encoder === ")
         corr = encoder(inputs=inputs, bn=bn, is_training=train_flag,
-                       params=params, start_layer=0, update_batch_stats=False,
+                       params=params, noise_sd=params.corrupt_sd,
+                       start_layer=0, update_batch_stats=False,
                        scope='enc', reuse=None)
 
         print("=== Clean Encoder ===")
         clean = encoder(inputs=inputs, bn=bn, is_training=train_flag,
-                        params=params, start_layer=0, update_batch_stats=True,
+                        params=params, noise_sd=0.0,
+                        start_layer=0, update_batch_stats=True,
                         scope='enc', reuse=True)
 
         print("=== Decoder ===")
