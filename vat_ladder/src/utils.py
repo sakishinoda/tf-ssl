@@ -34,7 +34,6 @@ def get_cli_params():
     # -------------------------
 
     add('--test_frequency_in_epochs', default=5, type=int)
-    # add('--eval_batch_size', default=100, type=int)  # has to be same as lbs
     # validation
     add('--validation', default=0, nargs='?', const=1000, type=int)
 

@@ -5,7 +5,7 @@ from src.train import evaluate_metric
 from src import input_data
 import numpy as np
 import argparse
-from src.utils import parse_argstring
+from src.utils import parse_argstring, enum_dict
 from skopt import gp_minimize, dump
 import sys
 
@@ -30,8 +30,9 @@ class Hyperopt(object):
         # Specify at run time of hyperopt
         parser.add_argument('--which_gpu', default=0, type=int)
         parser.add_argument('--num_labeled', default=100, type=int)
-        parser.add_argument('--dump_path', default='res')
-        parser.add_argument('--model', default='c', choices=['c', 'clw'])
+        parser.add_argument('--dump', default='res')
+        parser.add_argument('--model', default='c',
+                            choices=['c', 'clw', 'n', 'nlw'])
         parser.add_argument('--end_epoch', default=1, type=int)
 
         params = parser.parse_args()
@@ -52,7 +53,6 @@ class Hyperopt(object):
         add('beta1', 0.9)
         add('beta1_during_decay', 0.5)
         add('test_frequency_in_epochs', default=5, type=int)
-        add('eval_batch_size', default=100, type=int)
         add('validation', default=1000, type=int)
         add('seed', default=1, type=int)
         add('lr_decay_frequency', default=5, type=int)
@@ -65,25 +65,24 @@ class Hyperopt(object):
         add('ul_batch_size', 250)
         add('encoder_noise_sd', 0.3)
 
-        # rc_weights = [1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
-        # add('rc_weights', dict(zip(range(len(rc_weights)), rc_weights)))
 
 
     def convert_dims_to_params(self, x):
 
         add = self.add
+
         # -------------------------
         # Optimize
-        add('epsilon', x[0])
-        add('rc_weights', dict(zip(range(len(x[1:8])), x[1:8])))
 
-        if self.params.model == "clw":
-            lw_eps = x[8:]
-            self.params.lw_eps = dict(zip(range(len(lw_eps)), lw_eps))
+        add('rc_weights', enum_dict(x[:7]))
+        add('epsilon', enum_dict(x[7:]))
 
         return self.params
 
     def objective(self, x):
+
+        print("----------------------------------------")
+        print("----------------------------------------")
 
         p = self.convert_dims_to_params(x)
 
@@ -129,8 +128,7 @@ class Hyperopt(object):
                                g['labels']: labels,
                                g['train_flag']: True})
 
-            print("----------------------------------------")
-            print("----------------------------------------")
+
             print("=== Evaluating ===")
             error = tf.constant(100.0) - m['acc']
             val_err = evaluate_metric(mnist.validation, sess, error, graph=g,
@@ -146,29 +144,29 @@ def main():
     hyperopt = Hyperopt()
 
     dims = [
-        (0.01, 10.0, 'log-uniform'),    # 0: epsilon
         # rc_weights
-        (500., 5000, 'log-uniform'), # 1
-        (5.00, 50., 'log-uniform'), # 2
-        (0.01, 1.0, 'log-uniform'), # 3
-        (0.01, 1.0, 'log-uniform'), # 4
-        (0.01, 1.0, 'log-uniform'), # 5
-        (0.01, 1.0, 'log-uniform'), # 6
-        (0.01, 1.0, 'log-uniform')  # 7
+        (500., 5000, 'log-uniform'), # 0 rc_0
+        (5.00, 50., 'log-uniform'), # 1 rc_1
+        (0.01, 1.0, 'log-uniform'), # 2 rc_2
+        (0.01, 1.0, 'log-uniform'), # 3 rc_3
+        (0.01, 1.0, 'log-uniform'), # 4 rc_4
+        (0.01, 1.0, 'log-uniform'), # 5 rc_5
+        (0.01, 1.0, 'log-uniform'),  # 6 rc_6
+        (0.01, 10.0, 'log-uniform')  # 7: eps_0
     ]
-    x0 = [5.0, 1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
 
-    if hyperopt.params.model == 'clw':
+    x0 = [1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0]
+
+    if hyperopt.params.model == 'clw' or hyperopt.params.model == 'nlw':
         dims += [
-            (0.5, 5.0, 'log-uniform'), # 8
-            (1e-3, 0.5, 'log-uniform'), # 9
-            (1e-5, 0.1, 'log-uniform'), # 10
-            (1e-5, 0.1, 'log-uniform'), # 11
-            (1e-5, 0.1, 'log-uniform'), # 12
-            (1e-5, 0.1, 'log-uniform'), # 13
-            (1e-5, 0.1, 'log-uniform')  # 14
+            (1e-3, 0.5, 'log-uniform'), # 7 eps_1
+            (1e-5, 0.1, 'log-uniform'), # 8 eps_2
+            (1e-5, 0.1, 'log-uniform'), # 9 eps_3
+            (1e-5, 0.1, 'log-uniform'), # 10 eps_4
+            (1e-5, 0.1, 'log-uniform'), # 11 eps_5
+            (1e-5, 0.1, 'log-uniform')  # 12 eps_6
         ]
-        x0 += [1.0, 0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
+        x0 += [0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
 
 
     print("=== Beginning Search ===")
@@ -176,7 +174,7 @@ def main():
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
     print(res.x, res.fun)
 
-    dump(res, hyperopt.params.dump_path + '.gz')
+    dump(res, hyperopt.params.dump + '.gz')
 
 
 
