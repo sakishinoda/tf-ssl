@@ -113,7 +113,7 @@ class Hyperopt(object):
 
         # Build graph
 
-        g, m, trainable_parameters = build_graph(p, model=p.model)
+        g, m, trainable_parameters = build_graph(p)
 
         with tf.Session() as sess:
             init = tf.global_variables_initializer()

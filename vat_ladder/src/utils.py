@@ -77,16 +77,13 @@ def get_cli_params():
     # VAT SETTINGS
     # -------------------------
     # vat params
-    add('--epsilon', default=5.0, type=float)  # vary this instead of vat_weight
-    add('--num_power_iterations', default=1, type=int)
+    add('--epsilon', default='5.0')  # vary this instead of vat_weight
+    add('--num_power_iters', default=1, type=int)
     add('--xi', default=1e-6, type=float, help="small constant for finite difference")
 
     # -------------------------
     # VAL SETTINGS
     # -------------------------
-    # layerwise VAT costs
-    add('--lw', default=False, nargs='?',
-        const='5.0-0.5-0.05-0.05-0.05-0.05-0.05')
     add('--model', default="c", choices=["n", "nlw", "c", "clw"])
 
     # -------------------------
@@ -100,13 +97,15 @@ def get_cli_params():
 
     return params
 
+
+def enum_dict(list_):
+    return dict(zip(range(len(list_)), list_))
+
+
 def process_cli_params(params):
     # Specify base structure
-    encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
-    rc_weights = parse_argstring(params.rc_weights, dtype=float)
-    rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
-    params.encoder_layers = encoder_layers
-    params.rc_weights = rc_weights
+    params.encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
+    params.rc_weights = enum_dict(parse_argstring(params.rc_weights, dtype=float))
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
     params.eval_batch_size = params.batch_size
 
@@ -126,12 +125,7 @@ def process_cli_params(params):
     params.encoder_layers = params.cnn_fan if params.cnn else \
         params.encoder_layers
 
-    if params.lw is not False:
-        lw = parse_argstring(params.lw, dtype=float)
-        params.lw_eps = dict(zip(range(len(lw)), lw))
-
-    # NUM_EPOCHS = params.end_epoch
-    # NUM_LABELED = params.num_labeled
+    params.epsilon = enum_dict(parse_argstring(params.epsilon))
 
     return params
 

@@ -4,32 +4,26 @@ from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.vat import Adversary
 from src.ladder import Ladder, Encoder
 
-class VANLWEncoder(Encoder):
+class VANEncoder(Encoder):
     def __init__(
-            self, inputs, encoder_layers, bn, is_training,
-            noise_sd=0.0, start_layer=0, batch_size=100,
-            update_batch_stats=True, scope='enc', reuse=None,
-            epsilons={0: 1.0, 1: 0.1, 2: 0.01, 3: 0.01, 4: 0.01, 5: 0.01, 6: 0.01}
-, xi=1e-6,
-            num_power_iters=1):
+            self, inputs, bn, is_training, params,
+            start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None):
 
+        self.eps = params.epsilon
+        self.xi = params.xi
+        self.num_power_iters = params.num_power_iters
+        self.model = params.model
 
-        self.bn = bn
-        self.encoder_layers = encoder_layers
-        self.batch_size = batch_size
-        self.eps = epsilons
-        self.is_training = is_training
-        self.xi = xi
-        self.num_power_iters = num_power_iters
-
-        super(VANLWEncoder, self).__init__(
-            inputs, encoder_layers, bn, is_training,
-            noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
-            update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
+        super(VANEncoder, self).__init__(
+            inputs, bn, is_training, params,
+            start_layer=start_layer,
+            update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse
         )
 
-
-    def generate_noise(self, inputs, l):
+    def get_vadv_noise(self, inputs, l):
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
 
         adv = Adversary(
             bn=self.bn,
@@ -41,102 +35,68 @@ class VANLWEncoder(Encoder):
             start_layer=l,
             encoder_class=VANEncoder
         )
-        noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
-        noise += adv.generate_virtual_adversarial_perturbation(
-            inputs, self.is_training)
 
-        return inputs + noise
+        x = unlabeled(inputs)
+        logit = unlabeled(self.logits)
 
+        ul_noise = adv.generate_virtual_adversarial_perturbation(
+            x=x, logit=logit, is_training=self.is_training)
 
-class VANEncoder(Encoder):
-    def __init__(
-            self, inputs, encoder_layers, bn, is_training,
-            noise_sd=0.0, start_layer=0, batch_size=100,
-            update_batch_stats=True, scope='enc', reuse=None,
-            epsilon=1.0, xi=1e-6, num_power_iters=1):
-
-        self.bn = bn
-        self.encoder_layers = encoder_layers
-        self.batch_size = batch_size
-        self.eps = epsilon
-        self.is_training = is_training
-        self.xi = xi
-        self.num_power_iters = num_power_iters
-
-
-        super(VANEncoder, self).__init__(
-            inputs, encoder_layers, bn, is_training,
-            noise_sd=noise_sd, start_layer=start_layer, batch_size=batch_size,
-            update_batch_stats=update_batch_stats, scope=scope, reuse=reuse
-        )
+        return join(tf.zeros(tf.shape(labeled(inputs))), ul_noise)
 
 
     def generate_noise(self, inputs, l):
 
-        noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
-
-        if l == 0:
-            adv = Adversary(
-                bn=self.bn,
-                encoder_layers=self.encoder_layers,
-                batch_size=self.batch_size,
-                epsilon=self.eps,
-                xi=self.xi,
-                num_power_iters=self.num_power_iters,
-                start_layer=l,
-                encoder_class=VANEncoder
-            )
-            noise += adv.generate_virtual_adversarial_perturbation(
-                inputs, self.is_training)
+        if self.noise_sd > 0.0:
+            noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
+            if self.model == "n" and l==0:
+                noise += self.get_vadv_noise(inputs, l)
+            elif self.model == "nlw":
+                noise += self.get_vadv_noise(inputs, l)
+        else:
+            noise = tf.zeros(tf.shape(inputs))
 
         return inputs + noise
 
 
-def get_lw_vat_cost(ladder, train_flag, params):
+
+def get_vat_cost(ladder, train_flag, params):
     unlabeled = lambda x: x[params.batch_size:] if x is not None else x
 
-    vat_costs = []
-    for l in range(ladder.num_layers):
+    def get_adv_cost(l):
         adv = Adversary(bn=ladder.bn,
                         encoder_layers=params.encoder_layers,
                         batch_size=params.batch_size,
-                        epsilon=params.lw_eps[l],
+                        epsilon=params.epsilon[l],
                         xi=params.xi,
                         num_power_iters=params.num_power_iterations,
                         start_layer=l)
 
         # VAT on unlabeled only
-        vat_costs.append(
+        return (
             adv.virtual_adversarial_loss(
                 x=ladder.corr.unlabeled.z[l],
                 logit=unlabeled(ladder.corr.logits),
                 is_training=train_flag)
         )
-    vat_cost = tf.add_n(vat_costs)
+
+    if params.model == "clw":
+        vat_costs = []
+        for l in range(ladder.num_layers):
+            vat_costs.append(get_adv_cost(l))
+        vat_cost = tf.add_n(vat_costs)
+
+    elif params.model == "c":
+        vat_cost = get_adv_cost(0)
+
+    else:
+        vat_cost = 0.0
+
     return vat_cost
 
 
-def get_top_vat_cost(ladder, train_flag, params):
-    unlabeled = lambda x: x[params.batch_size:] if x is not None else x
-    adv = Adversary(bn=ladder.bn,
-                    encoder_layers=params.encoder_layers,
-                    batch_size=params.batch_size,
-                    epsilon=params.epsilon,
-                    xi=params.xi,
-                    num_power_iters=params.num_power_iterations,
-                    start_layer=0)
-
-    # VAT on unlabeled only
-    vat_cost = \
-        adv.virtual_adversarial_loss(
-            x=ladder.corr.unlabeled.z[0],
-            logit=unlabeled(ladder.corr.logits),
-            is_training=train_flag)
-    return vat_cost
-
-
-def build_graph(params, model='top'):
-
+def build_graph(params):
+    model = params.model
     # -----------------------------
     # Placeholder setup
     inputs_placeholder = tf.placeholder(
@@ -146,33 +106,18 @@ def build_graph(params, model='top'):
     train_flag = tf.placeholder(tf.bool)
 
 
-
-    if model == "c":
-        # Add top-level VAT/AT cost
+    if model == "c" or model == "clw":
         ladder = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_top_vat_cost(ladder, train_flag, params)
+        vat_cost = get_vat_cost(ladder, train_flag, params)
 
-    elif model == "clw":
-        # Layer-wise VAT costs
-        ladder = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_lw_vat_cost(ladder, train_flag, params)
-
-    elif model == "n":
+    elif model == "n" or model == "nlw":
         ladder = Ladder(inputs, outputs, train_flag, params,
                         encoder=VANEncoder)
         vat_cost = 0.0
 
-    elif model == "nlw":
-        # Add Virtual Adversarial Noise at each layer
-        ladder = Ladder(inputs, outputs, train_flag, params,
-                        encoder=VANLWEncoder)
-        vat_cost = 0.0
-
     else:
-
         ladder = Ladder(inputs, outputs, train_flag, params)
         vat_cost = 0.0
-
 
     # -----------------------------
     # Loss, accuracy and training steps

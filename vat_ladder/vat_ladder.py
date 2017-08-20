@@ -39,7 +39,7 @@ def main():
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
     # Build graph
-    g, m, trainable_parameters = build_graph(p, model=p.model)
+    g, m, trainable_parameters = build_graph(p)
 
 
     # Collect losses

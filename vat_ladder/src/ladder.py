@@ -29,35 +29,49 @@ class Encoder(object):
     Arguments
     ---------
         inputs: tensor
-        encoder_layers: sequence of ints
         bn: BatchNormLayers
         is_training: tensorflow bool
-        noise_sd: float
+        params: argparse Namespace object with attributes:
+            encoder_layers: sequence of ints
+            noise_sd: float
+            batch_size: int
         start_layer: int
-        batch_size: int
         update_batch_stats: bool
+        scope: str
+        reuse: bool or None
 
     Attributes
     ----------
-        logits, pre-softmax output at final layer
-        labeled, an Activations object with attributes z, h, m, v
-        unlabeled, an Activations object
+        bn: reference to batch norm class
+        start_layer
+        is_training: tf bool
+        encoder_layer: list
+        batch_size: int
+        noise_sd: float
+        logits: pre-softmax output at final layer
+        labeled: an Activations object with attributes z, h, m, v
+        unlabeled: an Activations object
 
 
     """
     def __init__(
-            self, inputs, encoder_layers, bn, is_training,
-            noise_sd=0.0, start_layer=0, batch_size=100,
-            update_batch_stats=True, scope='enc', reuse=None):
+            self, inputs, bn, is_training, params,
+            start_layer=0, update_batch_stats=True, scope='enc', reuse=None):
 
+        self.bn = bn
+        self.start_layer = start_layer
+        self.is_training = is_training
+        el = params.encoder_layers
+        self.encoder_layers = el
+        self.batch_size = params.batch_size
+        self.noise_sd = params.encoder_noise_sd
 
-        self.noise_sd = noise_sd
         self.labeled = Activations()
         self.unlabeled = Activations()
-        join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
 
-        ls = encoder_layers  # seq of layer sizes, len num_layers
-        self.num_layers = len(encoder_layers) - 1
+        # encoder_layers = encoder_layers  # seq of layer sizes, len num_layers
+        self.num_layers = len(el) - 1
 
         # Layer 0: inputs, size 784
         l = 0
@@ -65,14 +79,14 @@ class Encoder(object):
         self.labeled.z[l], self.unlabeled.z[l] = split_lu(h)
 
         for l in range(start_layer+1, self.num_layers + 1):
-            print("Layer {}: {} -> {}".format(l, ls[l - 1], ls[l]))
+            print("Layer {}: {} -> {}".format(l, el[l-1], el[l]))
             self.labeled.h[l-1], self.unlabeled.z[l-1] = split_lu(h)
             # z_pre = tf.matmul(h, self.W[l-1])
             z_pre = layers.fully_connected(
                 h,
-                num_outputs=ls[l],
+                num_outputs=el[l],
                 weights_initializer=tf.random_normal_initializer(
-                    stddev=1/math.sqrt(ls[l-1])),
+                    stddev=1/math.sqrt(el[l-1])),
                 biases_initializer=None,
                 activation_fn=None,
                 scope=scope+str(l),
@@ -367,16 +381,13 @@ class Ladder(object):
         bn = BatchNormLayers(params.encoder_layers, decay=bn_decay)
 
         print("=== Corrupted Encoder === ")
-        corr = encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
-                       is_training=train_flag,
-                       noise_sd=params.encoder_noise_sd, start_layer=0,
-                       batch_size=params.batch_size, update_batch_stats=False,
+        corr = encoder(inputs=inputs, bn=bn, is_training=train_flag,
+                       params=params, start_layer=0, update_batch_stats=False,
                        scope='enc', reuse=None)
 
         print("=== Clean Encoder ===")
-        clean = encoder(inputs=inputs, encoder_layers=params.encoder_layers, bn=bn,
-                        is_training=train_flag, noise_sd=0.0, start_layer=0,
-                        batch_size=params.batch_size, update_batch_stats=True,
+        clean = encoder(inputs=inputs, bn=bn, is_training=train_flag,
+                        params=params, start_layer=0, update_batch_stats=True,
                         scope='enc', reuse=True)
 
         print("=== Decoder ===")
