@@ -5,12 +5,14 @@ from src.vat import Adversary
 from src.ladder import Ladder, Encoder, Decoder
 
 class LadderWithVAN(Ladder):
-    def get_corrupted_encoder(self, inputs, bn, train_flag, params):
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
+                              start_layer=0, update_batch_stats=False,
+                              scope='enc', reuse=True):
         return VANEncoder(
             inputs, bn, train_flag, params, self.clean.logits,
             this_encoder_noise=params.corrupt_sd,
-            start_layer=0, update_batch_stats=False,
-            scope='enc', reuse=None)
+            start_layer=start_layer, update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse)
 
 class VANEncoder(Encoder):
     def __init__(

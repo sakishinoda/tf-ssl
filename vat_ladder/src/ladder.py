@@ -385,7 +385,7 @@ class Ladder(object):
             inputs=inputs, bn=self.bn, is_training=train_flag,
             params=params, this_encoder_noise=0.0,
             start_layer=0, update_batch_stats=True,
-            scope='enc', reuse=True)
+            scope='enc', reuse=None)
 
         print("=== Corrupted Encoder === ")
         self.corr = self.get_corrupted_encoder(
@@ -415,10 +415,12 @@ class Ladder(object):
         self.predict = tf.argmax(self.clean.logits, 1)
 
 
-    def get_corrupted_encoder(self, inputs, bn, train_flag, params):
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
+                              start_layer=0, update_batch_stats=False,
+                              scope='enc', reuse=True):
         return Encoder(
             inputs=inputs, bn=bn, is_training=train_flag,
             params=params, this_encoder_noise=params.corrupt_sd,
-            start_layer=0, update_batch_stats=False,
-            scope='enc', reuse=None)
+            start_layer=start_layer, update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse)
 
