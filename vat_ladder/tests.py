@@ -108,7 +108,7 @@ def test_nargs():
 from src.val import build_graph
 from src.utils import get_cli_params, process_cli_params
 from src import input_data
-from src.vat import softmax_cross_entropy_with_logits
+from src.val import softmax_cross_entropy_with_logits
 def test_hessian_ops():
     p = process_cli_params(get_cli_params())
     mnist = input_data.read_data_sets("MNIST_data",
