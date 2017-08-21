@@ -139,8 +139,11 @@ def build_graph(params):
             tf.equal(ladder.predict, tf.argmax(outputs, 1)),
             "float")) * tf.constant(100.0)
 
-    learning_rate = tf.Variable(params.initial_learning_rate, trainable=False)
-    beta1 = tf.Variable(params.beta1, trainable=False)
+    learning_rate = tf.Variable(params.initial_learning_rate,
+        name='lr', trainable=False)
+    # beta1 = tf.Variable(params.beta1, name='beta1', trainable=False)
+    beta1 = 0.9
+
     train_step = tf.train.AdamOptimizer(learning_rate,
                                         beta1=beta1).minimize(loss)
 
@@ -178,6 +181,7 @@ def build_graph(params):
 
 def measure_smoothness(g, params):
     # Measure smoothness using clean logits
+    print("=== Measuring smoothness ===")
     inputs = g['images']
     logits = g['ladder'].clean.logits
     forward = lambda x: Encoder(
@@ -193,4 +197,4 @@ def measure_smoothness(g, params):
     ).logits
 
     return get_spectral_radius(
-        x=inputs, logit=logits, forward=forward, num_power_iters=1)
+        x=inputs, logit=logits, forward=forward, num_power_iters=5)

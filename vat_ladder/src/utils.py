@@ -33,7 +33,7 @@ def get_cli_params():
     # EVALUATE
     # -------------------------
 
-    add('--test_frequency_in_epochs', default=5, type=int)
+    add('--test_frequency_in_epochs', default=5, type=float)
     # validation
     add('--validation', default=0, nargs='?', const=1000, type=int)
 

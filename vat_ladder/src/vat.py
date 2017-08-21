@@ -126,5 +126,5 @@ def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
         grad = tf.gradients(dist, [d], aggregation_method=2)[0]
         prev_d = tf.stop_gradient(grad)
 
-    dot = lambda a, b: tf.matmul(a, b, transpose_a=True, transpose_b=False)
+    dot = lambda a, b: tf.reduce_sum(tf.multiply(a, b), axis=1)
     return dot(d, prev_d)/dot(prev_d, prev_d)
