@@ -3,8 +3,8 @@ import numpy as np
 import os
 import IPython
 from conv_ladder import *
-from src import *
 from tensorflow.examples.tutorials.mnist import input_data
+import argparse
 
 def test_copying_by_strided_deconv():
     x = tf.placeholder(dtype=tf.float32, shape=[10,4,4,1])
@@ -93,11 +93,6 @@ def test_simple_dae(training=True):
 
             print("Mean AER:", mean_aer/num_steps)
 
-
-# def test_batch_norm():
-
-import argparse
-
 def test_nargs():
     parser = argparse.ArgumentParser()
     parser.add_argument('--static_bn', default=False, nargs='?', const=0.99,
@@ -110,8 +105,50 @@ def test_nargs():
 
     print(bn_decay)
 
+from src.val import build_graph
+from src.utils import get_cli_params, process_cli_params
+from src import input_data
+from src.vat import softmax_cross_entropy_with_logits
+def test_hessian_ops():
+    p = process_cli_params(get_cli_params())
+    mnist = input_data.read_data_sets("MNIST_data",
+                                      n_labeled=p.num_labeled,
+                                      validation_size=p.validation,
+                                      one_hot=True,
+                                      disjoint=False)
+    num_examples = mnist.train.num_examples
+    p.num_examples = num_examples
+    if p.validation > 0:
+        mnist.test = mnist.validation
+    p.iter_per_epoch = (num_examples // p.batch_size)
+    p.num_iter = p.iter_per_epoch * p.end_epoch
+    p.model = 'ladder'
+
+    # Build graph
+    inputs = tf.placeholder(tf.float32, shape=(784))
+    outputs = tf.placeholder(tf.float32)
+    logits = tf.matmul(
+        tf.expand_dims(inputs, axis=0), tf.get_variable('w', shape=(784, 10))
+    )
+
+
+    loss = softmax_cross_entropy_with_logits(outputs, logits)
+    loss_grad = tf.gradients(loss, inputs, name='help')
+    # hess = tf.hessians(loss, inputs)
+
+    IPython.embed()
+    # ul_hess = tf.hessians(g['ladder'].u_cost, g['images'])
+
+    # s = tf.stop_gradient(tf.svd(hess, compute_uv=False))
+    # ul_s = tf.stop_gradient(tf.svd(ul_hess, compute_uv=False))
+
+    # print(s.get_shape(), ul_s.get_shape())
+
+
+
 if __name__ == '__main__':
-    test_nargs()
+    test_hessian_ops()
+    # test_nargs()
     # test_simple_dae(training=False)
     # test_cnn_ladder()
     # print(*make_layer_spec().items(), sep='\n')

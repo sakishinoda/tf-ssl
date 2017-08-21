@@ -1,9 +1,11 @@
 
+
+
 def evaluate_metric(dataset, sess, op, graph, params):
     metric = 0
-    num_eval_iters = dataset.num_examples // params.eval_batch_size
+    num_eval_iters = dataset.num_examples // params.batch_size
     for _ in range(num_eval_iters):
-        images, labels = dataset.next_batch(params.eval_batch_size)
+        images, labels = dataset.next_batch(params.batch_size)
         init_feed = {graph['images']: images,
                      graph['labels']: labels,
                      graph['train_flag']: False}
@@ -13,9 +15,9 @@ def evaluate_metric(dataset, sess, op, graph, params):
 
 def evaluate_metric_list(dataset, sess, ops, graph, params):
     metrics = [0.0 for _ in ops]
-    num_eval_iters = dataset.num_examples // params.eval_batch_size
+    num_eval_iters = dataset.num_examples // params.batch_size
     for _ in range(num_eval_iters):
-        images, labels = dataset.next_batch(params.eval_batch_size)
+        images, labels = dataset.next_batch(params.batch_size)
         init_feed = {graph['images']: images,
                      graph['labels']: labels,
                      graph['train_flag']: False}
@@ -43,3 +45,5 @@ def update_decays(sess, epoch_n, iter, graph, params):
         ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
         sess.run(graph['lr'].assign(params.initial_learning_rate *
                                     ratio))
+        if params.beta1_during_decay != params.beta1:
+            sess.run(graph['beta1'].assign(params.beta1_during_decay))

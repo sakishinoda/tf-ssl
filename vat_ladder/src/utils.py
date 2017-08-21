@@ -32,12 +32,11 @@ def get_cli_params():
     # -------------------------
     # EVALUATE
     # -------------------------
-
-    add('--test_frequency_in_epochs', default=5, type=int)
-    add('--eval_batch_size', default=100, type=int)
+    add('--test_frequency_in_epochs', default=5, type=float)
     # validation
     add('--validation', default=0, nargs='?', const=1000, type=int)
 
+    add('--tb', default=False, nargs='?', const='tb/')
     # -------------------------
     # TRAINING
     # -------------------------
@@ -54,6 +53,9 @@ def get_cli_params():
     add('--decay_start', default=0.67, type=float)
     add('--lr_decay_frequency', default=5, type=int)
 
+    add('--beta1', default=0.9, type=float) # first momentum coefficient
+    add('--beta1_during_decay', default=0.9, type=float)
+
     # -------------------------
     # LADDER STRUCTURE
     # -------------------------
@@ -62,7 +64,7 @@ def get_cli_params():
                         default='784-1000-500-250-250-250-10')
 
     # Standard deviation of the Gaussian noise to inject at each level
-    add('--encoder_noise_sd', default=0.3, type=float)
+    add('--corrupt_sd', default=0.3, type=float)
 
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
@@ -70,40 +72,24 @@ def get_cli_params():
     # Batch norm decay weight mode
     add('--static_bn', default=False, nargs='?', const=0.99, type=float)
 
-
-    # -------------------------
-    # COMBINATOR STRUCTURE
-    # -------------------------
-    # Specify form of combinator (A)MLP
-    # add('--combinator_layers', default='4-1')
-    # add('--combinator_sd', default=0.025, type=float)
-
     # -------------------------
     # VAT SETTINGS
     # -------------------------
     # vat params
-    add('--epsilon', default = 8.0, type=float)
-    add('--num_power_iterations', default=1, type=int)
-    add('--xi', default=1e-6, type=float)
+    add('--epsilon', default='5.0')  # vary this instead of vat_weight
+    add('--num_power_iters', default=1, type=int)
+    add('--xi', default=1e-6, type=float, help="small constant for finite difference")
+    add('--vadv_sd', default=0.0, type=float,
+        help="noise to add at each layer of forward pass for stability")
 
-    # weight of VAT cost
-    add('--vat_weight', default=0, type=float)
+    # -------------------------
 
-    # weight of AT cost
-    add('--at_weight', default=0, type=float)
+    # VAL SETTINGS
+    # -------------------------
+    add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder",
+                                         "vat"])
 
-    # use VAT RC cost at each layer
-    # add('--vat_rc', action='store_true')
-
-    # corruption mode
-    # add('--corrupt', default='gauss', choices=['gauss', 'vatgauss', 'vat'])
-    # weight of entropy minimisation cost
-    # add('--ent_weight', default=0, type=float)
-
-    # add('--keep_prob_hidden', default=0.5, type=float)
-    # add('--lrelu_a', default=0.1, type=float)
-    # add('--top_bn', action='store_true')
-    # add('--bn_stats_decay_factor', default=0.99, type=float)
+    add('--measure_smoothness', action='store_true')
 
     # -------------------------
     # CNN LADDER
@@ -116,15 +102,17 @@ def get_cli_params():
 
     return params
 
+
+def enum_dict(list_):
+    return dict(zip(range(len(list_)), list_))
+
+
 def process_cli_params(params):
     # Specify base structure
-    encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
-    rc_weights = parse_argstring(params.rc_weights, dtype=float)
-    rc_weights = dict(zip(range(len(rc_weights)), rc_weights))
-    params.encoder_layers = encoder_layers
-    params.rc_weights = rc_weights
+    params.encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
+    params.rc_weights = enum_dict(parse_argstring(params.rc_weights, dtype=float))
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
-
+    params.eval_batch_size = params.batch_size  # this should be redundant
 
     if params.cnn:
         params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
@@ -136,16 +124,13 @@ def process_cli_params(params):
         params.cnn_strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None)
         params.num_layers = len(params.cnn_fan) - 1
         # assert len(params.rc_weights) == len(params.cnn_fan) -1
-
-
     else:
         params.num_layers = len(params.encoder_layers) - 1
 
     params.encoder_layers = params.cnn_fan if params.cnn else \
         params.encoder_layers
 
-    # NUM_EPOCHS = params.end_epoch
-    # NUM_LABELED = params.num_labeled
+    params.epsilon = enum_dict(parse_argstring(params.epsilon))
 
     return params
 

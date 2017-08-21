@@ -41,7 +41,7 @@ parser.add_argument('--num_iter_per_epoch', default=240, type=int)
 params = parser.parse_args()
 
 # params.layer_spec = [784, 1200, 600, 300, 150, 10]
-params.layer_spec = parse_argstring(params.mlp_layers, int)
+params.encoder_layers = parse_argstring(params.mlp_layers, int)
 
 params.lrelu_a = 0.1
 params.top_bn = False
@@ -66,7 +66,7 @@ def logit(x, is_training=True, update_batch_stats=True, stochastic=True,
         return tf.get_variable('b'+str(i), shape=s,
                                initializer=tf.zeros_initializer)
 
-    ls = list(zip(params.layer_spec[:-1], params.layer_spec[1:]))
+    ls = list(zip(params.encoder_layers[:-1], params.encoder_layers[1:]))
 
     h = x
     for i, l in enumerate(ls):
