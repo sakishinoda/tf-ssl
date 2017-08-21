@@ -482,30 +482,35 @@ class Model(object):
         # Compute predictions
         self.predict = tf.argmax(self.clean.logits, 1)
 
+        self.build_unsupervised()
+        self.cost = self.get_cost()
+        self.u_cost = self.get_u_cost()
+
+
     def labeled(self, x):
         return x[:self.params.batch_size] if x is not None else x
 
-    @property
-    def cost(self):
-
+    def get_cost(self):
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
             labels=self.outputs, logits=self.labeled(self.clean.logits))
         return tf.reduce_mean(ce)
 
-    @property
-    def u_cost(self):
+    def get_u_cost(self):
+        return None
+
+    def build_unsupervised(self):
         return None
 
 
 class VATModel(Model):
-    def __init__(self, inputs, outputs, train_flag, params):
-        super(VATModel, self).__init__(inputs, outputs, train_flag, params)
-        self.adv = Adversary(
-            self.bn, params, layer_eps=params.epsilon[0], start_layer=0)
 
-    @property
-    def u_cost(self):
+    def build_unsupervised(self):
+        self.adv = Adversary(
+            self.bn, self.params, layer_eps=self.params.epsilon[0],
+            start_layer=0)
+
+    def get_u_cost(self):
         return self.adv.virtual_adversarial_loss(
             x=self.inputs,
             logit=self.clean.logits,
@@ -515,36 +520,24 @@ class VATModel(Model):
 class Ladder(Model):
     """"""
 
-    def __init__(self, inputs, outputs, train_flag, params):
-        """
-
-        :param inputs: tensor or placeholder
-        :param outputs:
-        :param train_flag:
-        :param params:
-        """
-
-        super(Ladder, self).__init__(inputs, outputs, train_flag, params)
-
+    def build_unsupervised(self):
         print("=== Corrupted Encoder === ")
         self.corr = self.get_corrupted_encoder(
-            inputs, self.bn, train_flag, params)
+            self.inputs, self.bn, self.train_flag, self.params)
 
         print("=== Decoder ===")
         self.dec = Decoder(
             clean=self.clean, corr=self.corr, bn=self.bn,
             combinator=gauss_combinator,
-            encoder_layers=params.encoder_layers,
-            denoising_cost=params.rc_weights,
-            batch_size=params.batch_size,
+            encoder_layers=self.params.encoder_layers,
+            denoising_cost=self.params.rc_weights,
+            batch_size=self.params.batch_size,
             scope='dec', reuse=None)
 
-    @property
-    def u_cost(self):
+    def get_u_cost(self):
         return tf.add_n(self.dec.d_cost)
 
-    @property
-    def cost(self):
+    def get_cost(self):
         # Overrides base class since we want to use corrupted logits for cost
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
@@ -756,7 +749,6 @@ def build_graph(params):
 
     # -----------------------------
     # Loss, accuracy and training steps
-
 
     accuracy = tf.reduce_mean(
         tf.cast(
