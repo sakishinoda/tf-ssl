@@ -345,6 +345,102 @@ def gauss_combinator(z_c, u, size):
 
 
 
+from src.vat import Adversary
+
+class Model(object):
+    """
+    Base class for models.
+
+    Arguments
+    ---------
+        inputs
+        outputs
+        train_flag
+        params
+        bn
+
+    Required Attributes
+    -------------------
+        bn
+        bn_decay
+        clean
+        u_cost
+        cost
+        predict
+
+    Additional attributes (ladder)
+    ------------------------------
+        corr
+        dec
+
+    Additional attributes (vat)
+    ---------------------------
+        adv
+
+    """
+    def __init__(self, inputs, outputs, train_flag, params):
+        self.params = params
+        self.inputs = inputs
+        self.outputs = outputs
+        self.train_flag = train_flag
+        self.build_supervised()
+
+    def build_supervised(self):
+
+        # Supervised components
+        print("=== Batch Norm === ")
+        if self.params.static_bn is False:
+            self.bn_decay = tf.Variable(1e-10, trainable=False)
+        else:
+            self.bn_decay = self.params.static_bn
+
+        self.bn = BatchNormLayers(self.params.encoder_layers, decay=self.bn_decay)
+
+        print("=== Clean Encoder ===")
+        self.clean = Encoder(
+            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+            params=self.params, this_encoder_noise=0.0,
+            start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None)
+
+        self.num_layers = self.clean.num_layers
+
+        # Compute predictions
+        self.predict = tf.argmax(self.clean.logits, 1)
+
+
+    @property
+    def cost(self):
+        labeled = lambda x: x[:self.params.batch_size] if x is not None else x
+        # Calculate supervised cross entropy cost
+        ce = tf.nn.softmax_cross_entropy_with_logits(
+            labels=self.outputs, logits=labeled(self.clean.logits))
+        return tf.reduce_mean(ce)
+
+    @property
+    def u_cost(self):
+        return None
+
+
+
+
+
+class VATModel(Model):
+    def __init__(self, inputs, outputs, train_flag, params, bn):
+
+        super(VATModel, self).__init__(inputs, outputs, train_flag, params)
+        self.adv = Adversary(
+            bn, params, layer_eps=params.epsilon, start_layer=0)
+
+    @property
+    def u_cost(self):
+        return self.adv.virtual_adversarial_loss(
+            x=self.inputs,
+            logit=self.clean.logits,
+            is_training=self.train_flag)
+
+
+
 
 class Ladder(object):
     """"""
