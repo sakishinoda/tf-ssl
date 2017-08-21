@@ -407,22 +407,20 @@ class Model(object):
 
         # Compute predictions
         self.predict = tf.argmax(self.clean.logits, 1)
-
+        self.labeled = lambda x: x[:self.params.batch_size] if x is not None \
+            else x
 
     @property
     def cost(self):
-        labeled = lambda x: x[:self.params.batch_size] if x is not None else x
+
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
-            labels=self.outputs, logits=labeled(self.clean.logits))
+            labels=self.outputs, logits=self.labeled(self.clean.logits))
         return tf.reduce_mean(ce)
 
     @property
     def u_cost(self):
         return None
-
-
-
 
 
 class VATModel(Model):
@@ -440,9 +438,7 @@ class VATModel(Model):
             is_training=self.train_flag)
 
 
-
-
-class Ladder(object):
+class Ladder(Model):
     """"""
     def __init__(self, inputs, outputs, train_flag, params):
         """
@@ -453,23 +449,7 @@ class Ladder(object):
         :param params:
         """
 
-        # join, split_lu, labeled, unlabeled = get_batch_ops(params.batch_size)
-        labeled = lambda x: x[:params.batch_size] if x is not None else x
-
-        print("=== Batch Norm === ")
-        if params.static_bn is False:
-            self.bn_decay = tf.Variable(1e-10, trainable=False)
-        else:
-            self.bn_decay = params.static_bn
-
-        self.bn = BatchNormLayers(params.encoder_layers, decay=self.bn_decay)
-
-        print("=== Clean Encoder ===")
-        self.clean = Encoder(
-            inputs=inputs, bn=self.bn, is_training=train_flag,
-            params=params, this_encoder_noise=0.0,
-            start_layer=0, update_batch_stats=True,
-            scope='enc', reuse=None)
+        super(Ladder, self).__init__(inputs, outputs, train_flag, params)
 
         print("=== Corrupted Encoder === ")
         self.corr = self.get_corrupted_encoder(
@@ -484,20 +464,18 @@ class Ladder(object):
             batch_size=params.batch_size,
             scope='dec', reuse=None)
 
+    @property
+    def u_cost(self):
+        return tf.add_n(self.dec.d_cost)
 
-        self.num_layers = self.clean.num_layers
-
-        # Calculate total unsupervised cost
-        self.u_cost = tf.add_n(self.dec.d_cost)
-
+    @property
+    def cost(self):
+        # Overrides base class since we want to evaluate corrupted logits for
+        #  cost
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
-            labels=outputs, logits=labeled(self.corr.logits))
-        self.cost = tf.reduce_mean(ce)
-
-        # Compute predictions
-        self.predict = tf.argmax(self.clean.logits, 1)
-
+            labels=outputs, logits=self.labeled(self.corr.logits))
+        return tf.reduce_mean(ce)
 
     def get_corrupted_encoder(self, inputs, bn, train_flag, params,
                               start_layer=0, update_batch_stats=False,
