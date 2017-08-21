@@ -1,7 +1,7 @@
 """Virtual Adversarial Ladder"""
 import tensorflow as tf
 from src.utils import count_trainable_params, preprocess, get_batch_ops
-from src.vat import Adversary, get_spectral_radius
+from src.vat import Adversary, get_normalized_vector, kl_divergence_with_logit
 from src.ladder import Ladder, Encoder
 
 class LadderWithVAN(Ladder):
@@ -177,6 +177,24 @@ def build_graph(params):
     trainable_params = count_trainable_params()
 
     return g, m, trainable_params
+
+
+
+def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
+
+    prev_d = tf.random_normal(shape=tf.shape(x))
+    for k in range(num_power_iters):
+        d = xi * get_normalized_vector(prev_d)
+        logit_p = logit
+        logit_m = forward(x + d)
+        dist = kl_divergence_with_logit(logit_p, logit_m)
+        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+        prev_d = tf.stop_gradient(grad)
+
+    prev_d, d = get_normalized_vector(prev_d), get_normalized_vector(d)
+    dot = lambda a, b: tf.reduce_mean(tf.multiply(a, b), axis=1)
+    return dot(d, prev_d)/dot(prev_d, prev_d)
+
 
 
 def measure_smoothness(g, params):

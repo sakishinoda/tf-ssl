@@ -113,18 +113,3 @@ class Adversary(object):
                           is_training=is_training)
         loss = kl_divergence_with_logit(logit_p, logit_m)
         return tf.identity(loss, name=name)
-
-
-def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
-
-    prev_d = tf.random_normal(shape=tf.shape(x))
-    for k in range(num_power_iters):
-        d = xi * get_normalized_vector(prev_d)
-        logit_p = logit
-        logit_m = forward(x + d)
-        dist = kl_divergence_with_logit(logit_p, logit_m)
-        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
-        prev_d = tf.stop_gradient(grad)
-
-    dot = lambda a, b: tf.reduce_sum(tf.multiply(a, b), axis=1)
-    return dot(d, prev_d)/dot(prev_d, prev_d)
