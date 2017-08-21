@@ -51,6 +51,18 @@ def main():
     #     print(s.get_shape())
         train_losses.append(tf.reduce_mean(s))
 
+    if p.tb is not False:
+        train_merged = tf.summary.merge([
+            tf.summary.scalar(x) for x in train_losses
+        ] + [tf.summary.scalar(m['acc'])])
+        test_merged = tf.summary.merge([
+            tf.summary.scalar(x) for x in test_losses
+        ] + [tf.summary.scalar(m['acc'])])
+
+        # Set up tensorboard logging
+        if not os.path.exists(p.tb):
+            os.makedirs(p.tb_dir)
+
     # Write logs to appropriate directory
     log_dir = p.logdir + p.id
     if not os.path.exists(log_dir):
@@ -63,6 +75,7 @@ def main():
               flush=True)
 
     log_file = log_dir + "/" + "train_log"
+
 
     # -----------------------------
     print("===  Starting Session ===")
@@ -91,6 +104,10 @@ def main():
 
         init = tf.global_variables_initializer()
         sess.run(init)
+
+    if p.tb is not False:
+        train_writer = tf.summary.FileWriter(p.tb_dir + '/train', sess.graph)
+        test_writer = tf.summary.FileWriter(p.tb_dir + '/test', sess.graph)
 
     # -----------------------------
     print("=== Training ===")
@@ -125,6 +142,7 @@ def main():
         #       *eval_metrics(
         #           mnist.test, sess, test_losses), file=f,
         #       flush=True)
+
 
     start = time.time()
     for i in tqdm(range(i_iter, p.num_iter)):
@@ -181,8 +199,13 @@ def main():
                            g['train_flag']: False}
             ) + train_costs
 
+            # if np.isnan(log_i[-1]):
+
+
             with open(log_file, 'a') as train_log:
                 print(*log_i, sep=',', flush=True, file=train_log)
+
+
 
 
     with open(desc_file, 'a') as f:
