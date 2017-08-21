@@ -192,7 +192,7 @@ def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
         prev_d = tf.stop_gradient(grad)
 
     prev_d, d = get_normalized_vector(prev_d), get_normalized_vector(d)
-    dot = lambda a, b: tf.reduce_sum(tf.multiply(a, b), axis=1)
+    dot = lambda a, b: tf.reduce_mean(tf.multiply(a, b), axis=1)
     return dot(d, prev_d)/dot(prev_d, prev_d)
 
 
