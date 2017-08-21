@@ -43,4 +43,5 @@ def update_decays(sess, epoch_n, iter, graph, params):
         ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
         sess.run(graph['lr'].assign(params.initial_learning_rate *
                                     ratio))
-        sess.run(graph['beta1'].assign(params.beta1_during_decay))
+        if params.beta1_during_decay != params.beta1:
+            sess.run(graph['beta1'].assign(params.beta1_during_decay))

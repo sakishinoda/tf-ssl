@@ -48,7 +48,8 @@ def main():
 
     if p.measure_smoothness:
         s = measure_smoothness(g, p)
-        train_losses.append(s)
+    #     print(s.get_shape())
+        train_losses.append(tf.reduce_mean(s))
 
     # Write logs to appropriate directory
     log_dir = p.logdir + p.id
@@ -72,16 +73,22 @@ def main():
     ckpt_dir = "checkpoints/" + p.id + "/"
     ckpt = tf.train.get_checkpoint_state(
         ckpt_dir)  # get latest checkpoint (if any)
+
     if ckpt and ckpt.model_checkpoint_path:
-        # if checkpoint exists, restore the parameters and set epoch_n and i_iter
+        # if checkpoint exists,
+        # restore the parameters
+        # and set epoch_n and i_iter
         g['saver'].restore(sess, ckpt.model_checkpoint_path)
         epoch_n = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
         i_iter = (epoch_n + 1) * (p.num_examples // p.batch_size)
         print("Restored Epoch ", epoch_n)
+
     else:
-        # no checkpoint exists. create checkpoints directory if it does not exist.
+        # no checkpoint exists.
+        # create checkpoints directory if it does not exist.
         if not os.path.exists(ckpt_dir):
             os.makedirs(ckpt_dir)
+
         init = tf.global_variables_initializer()
         sess.run(init)
 
@@ -130,51 +137,53 @@ def main():
                        g['labels']: labels,
                        g['train_flag']: True})
 
+        epoch_n = i // (p.num_examples // p.batch_size)
         # ---------------------------------------------
         # Epoch completed?
         if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
-            epoch_n = i // (p.num_examples // p.batch_size)
             update_decays(sess, epoch_n, iter=i, graph=g, params=p)
 
+        # ---------------------------------------------
+        # Evaluate every test_frequency_in_epochs
+        if (i > 1) and ((i + 1) % int(p.test_frequency_in_epochs *
+                           p.iter_per_epoch) == 0):
+
+            now = time.time() - start
+
+            if not p.do_not_save:
+                g['saver'].save(sess, ckpt_dir + 'model.ckpt', epoch_n)
+
             # ---------------------------------------------
-            # Evaluate every test_frequency_in_epochs
-            if ((i + 1) % (p.test_frequency_in_epochs *
-                               p.iter_per_epoch) == 0):
-                now = time.time() - start
+            # Compute error on testing set (10k examples)
+            test_costs = eval_metrics(mnist.test, sess,
+                                      test_losses)
+            train_costs = sess.run(
+                train_losses,
+                feed_dict={g['images']: images,
+                           g['labels']: labels,
+                           g['train_flag']: False})
 
-                if not p.do_not_save:
-                    g['saver'].save(sess, ckpt_dir + 'model.ckpt', epoch_n)
+            # Create log of:
+            # time, epoch number, test accuracy, test cross entropy,
+            # train accuracy, train loss, train cross entropy,
+            # train reconstruction loss, smoothness
 
-                # ---------------------------------------------
-                # Compute error on testing set (10k examples)
-                test_costs = eval_metrics(mnist.test, sess,
-                                          test_losses)
-                train_costs = sess.run(
-                    train_losses,
-                    feed_dict={g['images']: images,
-                               g['labels']: labels,
-                               g['train_flag']: False})
+            log_i = [now, epoch_n] + sess.run(
+                [m['acc']],
+                feed_dict={g['images']: mnist.test.images,
+                           g['labels']: mnist.test.labels,
+                           g['train_flag']: False}
+            ) + test_costs + sess.run(
+                [m['acc']],
+                feed_dict={g['images']:
+                               mnist.train.labeled_ds.images,
+                           g['labels']: mnist.train.labeled_ds.labels,
+                           g['train_flag']: False}
+            ) + train_costs
 
-                # Create log of:
-                # time, epoch number, test accuracy, test cross entropy,
-                # train accuracy, train loss, train cross entropy,
-                # train reconstruction loss
+            with open(log_file, 'a') as train_log:
+                print(*log_i, sep=',', flush=True, file=train_log)
 
-                log_i = [now, epoch_n] + sess.run(
-                    [m['acc']],
-                    feed_dict={g['images']: mnist.test.images,
-                               g['labels']: mnist.test.labels,
-                               g['train_flag']: False}
-                ) + test_costs + sess.run(
-                    [m['acc']],
-                    feed_dict={g['images']:
-                                   mnist.train.labeled_ds.images,
-                               g['labels']: mnist.train.labeled_ds.labels,
-                               g['train_flag']: False}
-                ) + train_costs
-
-                with open(log_file, 'a') as train_log:
-                    print(*log_i, sep=',', flush=True, file=train_log)
 
     with open(desc_file, 'a') as f:
         print("Final Accuracy: ", sess.run(m['acc'], feed_dict={
