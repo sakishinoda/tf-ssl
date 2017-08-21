@@ -1,12 +1,695 @@
 """Virtual Adversarial Ladder"""
 import tensorflow as tf
 from src.utils import count_trainable_params, preprocess, get_batch_ops
-from src.vat import Adversary, get_normalized_vector, kl_divergence_with_logit
-from src.ladder import Ladder, Encoder, VATModel, LadderWithVAN
+import tensorflow.contrib.layers as layers
+import math
+
+# from src.vat import Adversary, get_normalized_vector, kl_divergence_with_logit
+# from src.ladder import Ladder, Encoder, VATModel, LadderWithVAN
+
+# -----------------------------
+# -----------------------------
+# LADDER CLASSES
+# -----------------------------
+# -----------------------------
+class Activations(object):
+    """Store statistics for each layer in the encoder/decoder structures
+
+    Attributes
+    ----------
+        z, dict: pre-activation, used for reconstruction
+        h, dict: activations
+        m, dict: mean of each layer activations
+        v, dict: variance of each layer activations
+
+    """
+
+    def __init__(self):
+        self.z = {}  # pre-activation
+        self.h = {}  # activation
+        self.m = {}  # mean
+        self.v = {}  # variance
+
+
+# -----------------------------
+# ENCODER
+# -----------------------------
+class Encoder(object):
+    """MLP Encoder
+
+    Arguments
+    ---------
+        inputs: tensor
+        bn: BatchNormLayers
+        is_training: tensorflow bool
+        params: argparse Namespace
+            with attributes
+            encoder_layers (sequence of ints), and
+            batch_size (int)
+        this_encoder_noise: float, default 0.0
+        start_layer: int, default 0
+        update_batch_stats: bool
+        scope: str, default 'enc'
+        reuse: bool or None, default None
+
+    Attributes
+    ----------
+        bn: reference to batch norm class
+        start_layer
+        is_training: tf bool
+        encoder_layer: list
+        batch_size: int
+        noise_sd: float
+        logits: pre-softmax output at final layer
+        labeled: an Activations object with attributes z, h, m, v
+        unlabeled: an Activations object
+
+
+    """
+
+    def __init__(
+            self, inputs, bn, is_training, params, this_encoder_noise=0.0,
+            start_layer=0, update_batch_stats=True, scope='enc', reuse=None):
+
+        self.bn = bn
+        self.start_layer = start_layer
+        self.is_training = is_training
+        el = params.encoder_layers
+        self.encoder_layers = el
+        self.batch_size = params.batch_size
+        self.noise_sd = this_encoder_noise
+
+        self.labeled = Activations()
+        self.unlabeled = Activations()
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
+
+        # encoder_layers = encoder_layers  # seq of layer sizes, len num_layers
+        self.num_layers = len(el) - 1
+
+        # Layer 0: inputs, size 784
+        h = inputs + self.generate_noise(inputs, start_layer)
+        self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
+
+        for l_out in range(start_layer + 1, self.num_layers + 1):
+            l_in = l_out - 1
+            self.print_progress(l_out)
+
+            self.labeled.h[l_in], self.unlabeled.z[l_in] = split_lu(h)
+            # z_pre = tf.matmul(h, self.W[l-1])
+            z_pre = layers.fully_connected(
+                h,
+                num_outputs=el[l_out],
+                weights_initializer=tf.random_normal_initializer(
+                    stddev=1 / math.sqrt(el[l_in])),
+                biases_initializer=None,
+                activation_fn=None,
+                scope=scope + str(l_out),
+                reuse=reuse)
+            z_pre_l, z_pre_u = split_lu(z_pre)
+            # bn_axes = list(range(len(z_pre_u.get_shape().as_list())))
+            bn_axes = [0]
+            m, v = tf.nn.moments(z_pre_u, axes=bn_axes)
+
+            # if training:
+            def training_batch_norm():
+                # Training batch normalization
+                # batch normalization for labeled and unlabeled examples is
+                # performed separately
+                # if noise_sd > 0:
+                if self.noise_sd > 0:
+                    # Corrupted encoder
+                    # batch normalization + noise
+                    z = join(bn.batch_normalization(z_pre_l),
+                             bn.batch_normalization(z_pre_u, m, v))
+                    noise = self.generate_noise(z_pre, l_out)
+                    z += noise
+                else:
+                    # Clean encoder
+                    # batch normalization + update the average mean and variance
+                    # using batch mean and variance of labeled examples
+                    bn_l = bn.update_batch_normalization(z_pre_l, l_out) if \
+                        update_batch_stats else bn.batch_normalization(z_pre_l)
+                    bn_u = bn.batch_normalization(z_pre_u, m, v)
+                    z = join(bn_l, bn_u)
+                return z
+
+            # else:
+            def eval_batch_norm():
+                # Evaluation batch normalization
+                # obtain average mean and variance and use it to normalize the batch
+                mean = bn.ema.average(bn.running_mean[l_in])
+                var = bn.ema.average(bn.running_var[l_in])
+                z = bn.batch_normalization(z_pre, mean, var)
+
+                return z
+
+            # perform batch normalization according to value of boolean "training" placeholder:
+            z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
+
+            if l_out == self.num_layers:
+                # return pre-softmax logits in final layer
+                self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
+                h = tf.nn.softmax(self.logits)
+            else:
+                # use ReLU activation in hidden layers
+                h = tf.nn.relu(z + bn.beta[l_in])
+
+            # save mean and variance of unlabeled examples for decoding
+            self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
+            self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(z)
+            self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
+
+    def print_progress(self, l_out):
+        el = self.encoder_layers
+        print("Layer {}: {} -> {}".format(l_out, el[l_out - 1], el[l_out]))
+
+    def generate_noise(self, inputs, l_out):
+        return tf.random_normal(tf.shape(inputs)) * self.noise_sd
+
+# VAN Encoder
+
+class VANEncoder(Encoder):
+    def __init__(
+            self, inputs, bn, is_training, params, clean_logits,
+            this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None):
+
+        self.params = params
+        self.clean_logits = clean_logits
+
+        super(VANEncoder, self).__init__(
+            inputs, bn, is_training, params,
+            this_encoder_noise=this_encoder_noise,
+            start_layer=start_layer,
+            update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse
+        )
+
+    def get_vadv_noise(self, inputs, l):
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
+
+        adv = Adversary(
+            bn=self.bn,
+            params=self.params,
+            layer_eps=self.params.epsilon[l],
+            start_layer=l
+        )
+
+        x = unlabeled(inputs)
+        logit = unlabeled(self.clean_logits)
+
+        ul_noise = adv.generate_virtual_adversarial_perturbation(
+            x=x, logit=logit, is_training=self.is_training)
+
+        return join(tf.zeros(tf.shape(labeled(inputs))), ul_noise)
+
+    def print_progress(self, l_out):
+        el = self.encoder_layers
+        print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1],
+                                                      el[l_out],
+                                                      self.params.epsilon.get(
+                                                          l_out - 1)))
+
+    def generate_noise(self, inputs, l):
+
+        if self.noise_sd > 0.0:
+            noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
+
+            if self.params.model == "n" and l == 0:
+                noise += self.get_vadv_noise(inputs, l)
+
+            elif self.params.model == "nlw" and (l + 1 < self.num_layers):
+                # don't add adversarial noise to logits
+                noise += self.get_vadv_noise(inputs, l)
+
+        else:
+            noise = tf.zeros(tf.shape(inputs))
+
+        return inputs + noise
+
+
+# -----------------------------
+# DECODER
+# -----------------------------
+class Decoder(object):
+    """MLP Decoder
+
+    Arguments
+    ---------
+        clean: Encoder object
+        corr: Encoder object
+        bn: BatchNormLayers object
+        combinator: function with signature (z_c, u, size)
+        encoder_layers: seq of ints
+        denoising_cost: seq of floats
+        batch_size: int
+
+
+    Attributes
+    ----------
+        z_est: dict of tensors
+        d_cost: seq of scalar tensors
+
+    """
+
+    def __init__(self, clean, corr, bn, combinator, encoder_layers,
+                 denoising_cost, batch_size=100, scope='dec', reuse=None):
+
+        # self.params = params
+        ls = encoder_layers  # seq of layer sizes, len num_layers
+        num_layers = len(encoder_layers) - 1
+        # denoising_cost = params.rc_weights
+        join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
+        z_est = {}  # activation reconstruction
+        d_cost = []  # denoising cost
+
+        for l in range(num_layers, -1, -1):
+            print("Layer {}: {} -> {}, denoising cost: {}".format(
+                l, ls[l + 1] if l + 1 < len(ls) else None,
+                ls[l], denoising_cost[l]
+            ))
+
+            z, z_c = clean.unlabeled.z[l], corr.unlabeled.z[l]
+            m, v = clean.unlabeled.m.get(l, 0), \
+                   clean.unlabeled.v.get(l, 1 - 1e-10)
+            # print(l)
+            if l == num_layers:
+                u = unlabeled(corr.logits)
+            else:
+                u = layers.fully_connected(
+                    z_est[l + 1],
+                    num_outputs=ls[l],
+                    activation_fn=None,
+                    normalizer_fn=None,
+                    weights_initializer=tf.random_normal_initializer(
+                        stddev=1 / math.sqrt(ls[l + 1])),
+                    biases_initializer=None,
+                    scope=scope + str(l),
+                    reuse=reuse
+                )
+
+            u = bn.batch_normalization(u)
+
+            with tf.variable_scope('cmb' + str(l), reuse=None):
+                z_est[l] = combinator(z_c, u, ls[l])
+
+            z_est_bn = (z_est[l] - m) / v
+            # append the cost of this layer to d_cost
+            reduce_axes = list(range(1, len(z_est_bn.get_shape().as_list())))
+            d_cost.append((tf.reduce_mean(
+                tf.reduce_sum(
+                    tf.square(z_est_bn - z),
+                    axis=reduce_axes
+                )) / ls[l]) * denoising_cost[l])
+
+        self.z_est = z_est
+        self.d_cost = d_cost
+
+
+# -----------------------------
+# BATCH NORMALIZATION
+# -----------------------------
+class BatchNormLayers(object):
+    """Batch norm class
+
+    Arguments
+    ---------
+        ls: sequence of ints
+        scope: str
+
+    Attributes
+    ----------
+        bn_assigns: list of TF ops
+        ema: TF op
+        running_var: list of tensors
+        running_mean: list of tensors
+        beta: list of tensors
+        gamma: list of tensors
+
+
+    """
+
+    def __init__(self, ls, decay=0.99):
+        # store updates to be made to average mean, variance
+        self.bn_assigns = []
+        # calculate the moving averages of mean and variance
+        self.ema = tf.train.ExponentialMovingAverage(decay=decay)
+
+        # average mean and variance of all layers
+        # shift & scale
+        # with tf.variable_scope(scope, reuse=None):
+
+        self.running_var = [tf.get_variable(
+            'v' + str(i),
+            initializer=tf.constant(1.0, shape=[l]),
+            trainable=False) for i, l in enumerate(ls[1:])]
+
+        self.running_mean = [tf.get_variable(
+            'm' + str(i),
+            initializer=tf.constant(0.0, shape=[l]),
+            trainable=False) for i, l in enumerate(ls[1:])]
+
+        # shift
+        self.beta = [tf.get_variable(
+            'beta' + str(i),
+            initializer=tf.constant(0.0, shape=[l])
+        ) for i, l in enumerate(ls[1:])]
+
+        # scale
+        self.gamma = [tf.get_variable(
+            'gamma' + str(i),
+            initializer=tf.constant(1.0, shape=[l]))
+            for i, l in enumerate(ls[1:])]
+
+    def update_batch_normalization(self, batch, l):
+        """
+        batch normalize + update average mean and variance of layer l
+        if CNN, use channel-wise batch norm
+        """
+        # bn_axes = [0, 1, 2] if self.params.cnn else [0]
+        # bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        bn_axes = [0]
+        mean, var = tf.nn.moments(batch, axes=bn_axes)
+        assign_mean = self.running_mean[l - 1].assign(mean)
+        assign_var = self.running_var[l - 1].assign(var)
+        self.bn_assigns.append(
+            self.ema.apply([self.running_mean[l - 1], self.running_var[l - 1]]))
+
+        with tf.control_dependencies([assign_mean, assign_var]):
+            return tf.nn.batch_normalization(batch, mean, var, offset=None,
+                                             scale=None, variance_epsilon=1e-10)
+
+    @staticmethod
+    def batch_normalization(batch, mean=None, var=None):
+        # bn_axes = [0, 1, 2] if self.params.cnn else [0]
+        # bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        bn_axes = [0]
+
+        if mean is None or var is None:
+            mean, var = tf.nn.moments(batch, axes=bn_axes)
+
+        # return (batch - mean) / tf.sqrt(var + tf.constant(1e-10))
+        return tf.nn.batch_normalization(batch, mean, var, offset=None,
+                                         scale=None, variance_epsilon=1e-10)
+
+
+# -----------------------------
+# COMBINATOR
+# -----------------------------
+def gauss_combinator(z_c, u, size):
+    "gaussian denoising function proposed in the original paper"
+
+    # wi = lambda inits, name: tf.Variable(inits * tf.ones([size]), name=name)
+    def wi(inits, name):
+        return tf.get_variable(name, initializer=inits * tf.ones([size]))
+
+    a1 = wi(0., 'a1')
+    a2 = wi(1., 'a2')
+    a3 = wi(0., 'a3')
+    a4 = wi(0., 'a4')
+    a5 = wi(0., 'a5')
+
+    a6 = wi(0., 'a6')
+    a7 = wi(1., 'a7')
+    a8 = wi(0., 'a8')
+    a9 = wi(0., 'a9')
+    a10 = wi(0., 'a10')
+
+    mu = a1 * tf.sigmoid(a2 * u + a3) + a4 * u + a5
+    v = a6 * tf.sigmoid(a7 * u + a8) + a9 * u + a10
+
+    z_est = (z_c - mu) * v + mu
+    return z_est
+
+
+class Model(object):
+    """
+    Base class for models.
+
+    Arguments
+    ---------
+        inputs
+        outputs
+        train_flag
+        params
+        bn
+
+    Required Attributes
+    -------------------
+        bn
+        bn_decay
+        clean
+        u_cost
+        cost
+        predict
+
+    Additional attributes (ladder)
+    ------------------------------
+        corr
+        dec
+
+    Additional attributes (vat)
+    ---------------------------
+        adv
+
+    """
+
+    def __init__(self, inputs, outputs, train_flag, params):
+        self.params = params
+        self.inputs = inputs
+        self.outputs = outputs
+        self.train_flag = train_flag
+
+        # Supervised components
+        print("=== Batch Norm === ")
+        if self.params.static_bn is False:
+            self.bn_decay = tf.Variable(1e-10, trainable=False)
+        else:
+            self.bn_decay = self.params.static_bn
+
+        self.bn = BatchNormLayers(self.params.encoder_layers,
+                                  decay=self.bn_decay)
+
+        print("=== Clean Encoder ===")
+        self.clean = Encoder(
+            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+            params=self.params, this_encoder_noise=0.0,
+            start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None)
+
+        self.num_layers = self.clean.num_layers
+
+        # Compute predictions
+        self.predict = tf.argmax(self.clean.logits, 1)
+
+    def labeled(self, x):
+        return x[:self.params.batch_size] if x is not None else x
+
+    @property
+    def cost(self):
+
+        # Calculate supervised cross entropy cost
+        ce = tf.nn.softmax_cross_entropy_with_logits(
+            labels=self.outputs, logits=self.labeled(self.clean.logits))
+        return tf.reduce_mean(ce)
+
+    @property
+    def u_cost(self):
+        return None
+
+
+class VATModel(Model):
+    def __init__(self, inputs, outputs, train_flag, params):
+        super(VATModel, self).__init__(inputs, outputs, train_flag, params)
+        self.adv = Adversary(
+            self.bn, params, layer_eps=params.epsilon[0], start_layer=0)
+
+    @property
+    def u_cost(self):
+        return self.adv.virtual_adversarial_loss(
+            x=self.inputs,
+            logit=self.clean.logits,
+            is_training=self.train_flag)
+
+
+class Ladder(Model):
+    """"""
+
+    def __init__(self, inputs, outputs, train_flag, params):
+        """
+
+        :param inputs: tensor or placeholder
+        :param outputs:
+        :param train_flag:
+        :param params:
+        """
+
+        super(Ladder, self).__init__(inputs, outputs, train_flag, params)
+
+        print("=== Corrupted Encoder === ")
+        self.corr = self.get_corrupted_encoder(
+            inputs, self.bn, train_flag, params)
+
+        print("=== Decoder ===")
+        self.dec = Decoder(
+            clean=self.clean, corr=self.corr, bn=self.bn,
+            combinator=gauss_combinator,
+            encoder_layers=params.encoder_layers,
+            denoising_cost=params.rc_weights,
+            batch_size=params.batch_size,
+            scope='dec', reuse=None)
+
+    @property
+    def u_cost(self):
+        return tf.add_n(self.dec.d_cost)
+
+    @property
+    def cost(self):
+        # Overrides base class since we want to use corrupted logits for cost
+        # Calculate supervised cross entropy cost
+        ce = tf.nn.softmax_cross_entropy_with_logits(
+            labels=self.outputs, logits=self.labeled(self.corr.logits))
+        return tf.reduce_mean(ce)
+
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
+                              start_layer=0, update_batch_stats=False,
+                              scope='enc', reuse=True):
+        return Encoder(
+            inputs=inputs, bn=bn, is_training=train_flag,
+            params=params, this_encoder_noise=params.corrupt_sd,
+            start_layer=start_layer, update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse)
+
+
+class LadderWithVAN(Ladder):
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
+                              start_layer=0, update_batch_stats=False,
+                              scope='enc', reuse=True):
+        return VANEncoder(
+            inputs, bn, train_flag, params, self.clean.logits,
+            this_encoder_noise=params.corrupt_sd,
+            start_layer=start_layer, update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse)
+
+
+# -----------------------------
+# -----------------------------
+# VAT FUNCTIONS
+# -----------------------------
+# -----------------------------
+def ce_loss(logit, y):
+    return tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(logits=logit, labels=y))
+
+
+def logsoftmax(x):
+    xdev = x - tf.reduce_max(x, 1, keep_dims=True)
+    lsm = xdev - tf.log(tf.reduce_sum(tf.exp(xdev), 1, keep_dims=True))
+    return lsm
+
+
+def kl_divergence_with_logit(q_logit, p_logit):
+    q = tf.nn.softmax(q_logit)
+    qlogq = tf.reduce_mean(tf.reduce_sum(q * logsoftmax(q_logit), 1))
+    qlogp = tf.reduce_mean(tf.reduce_sum(q * logsoftmax(p_logit), 1))
+    return qlogq - qlogp
+
+
+def entropy_y_x(logit):
+    p = tf.nn.softmax(logit)
+    return -tf.reduce_mean(tf.reduce_sum(p * logsoftmax(logit), 1))
+
+
+def get_normalized_vector(d):
+    red_axes = list(range(1, len(d.get_shape())))
+    # print(d.get_shape(), red_axes)
+    d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=red_axes,
+                                keep_dims=True))
+    d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0),
+                                      axis=red_axes,
+                                      keep_dims=True))
+    return d
+
+
+def softmax_cross_entropy_with_logits(labels, logits):
+    q = tf.nn.softmax(labels)
+    return -tf.reduce_mean(tf.reduce_sum(q * logsoftmax(logits), 1))
+
+
+class Adversary(object):
+    def __init__(self,
+                 bn,
+                 params,
+                 layer_eps=5.0,
+                 start_layer=0):
+        # Ladder (encoder parameters)
+        self.bn = bn
+        self.params = params
+        self.start_layer = start_layer
+
+        # VAT
+        self.this_adv_eps = layer_eps
+        self.xi = params.xi
+        self.num_power_iters = params.num_power_iters
+
+    def forward(self, x, is_training, update_batch_stats=False):
+        # always use a standard Gaussian-noise encoder
+        vatfw = Encoder(
+            inputs=x,
+            bn=self.bn,
+            is_training=is_training,
+            params=self.params,  # for encoder_layers, batch_size, van settings
+            this_encoder_noise=self.params.vadv_sd,
+            # add gaussian for stability
+            start_layer=self.start_layer,
+            update_batch_stats=update_batch_stats,
+            scope='enc', reuse=True)
+        return vatfw.logits  # logits by default includes both labeled/unlabeled
+
+    def generate_virtual_adversarial_perturbation(self, x, logit, is_training):
+        print("--- VAT Pass: Generating VAT perturbation ---")
+        d = tf.random_normal(shape=tf.shape(x))
+        for k in range(self.num_power_iters):
+            d = self.xi * get_normalized_vector(d)
+            logit_p = logit
+            print("Power Iteration: {}".format(k))
+            logit_m = self.forward(x + d, update_batch_stats=False,
+                                   is_training=is_training)
+            dist = kl_divergence_with_logit(logit_p, logit_m)
+            grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+            d = tf.stop_gradient(grad)
+        return self.this_adv_eps * get_normalized_vector(d)
+
+    def generate_adversarial_perturbation(self, x, loss):
+        grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+        grad = tf.stop_gradient(grad)
+        return self.this_adv_eps * get_normalized_vector(grad)
+
+    def adversarial_loss(self, x, y, loss, is_training,
+                         name="at_loss"):
+        r_adv = self.generate_adversarial_perturbation(x, loss)
+        logit = self.forward(x + r_adv, is_training=is_training,
+                             update_batch_stats=False)
+        loss = ce_loss(logit, y)
+        return tf.identity(loss, name=name)
+
+    def virtual_adversarial_loss(self, x, logit, is_training,
+                                 name="vat_loss"):
+        r_vadv = self.generate_virtual_adversarial_perturbation(
+            x, logit, is_training=is_training)
+        logit = tf.stop_gradient(logit)
+        logit_p = logit
+
+        print("--- VAT Pass: Computing VAT Loss (KL Divergence) ---")
+        logit_m = self.forward(x + r_vadv, update_batch_stats=False,
+                               is_training=is_training)
+        loss = kl_divergence_with_logit(logit_p, logit_m)
+        return tf.identity(loss, name=name)
 
 
 def get_vat_cost(ladder, train_flag, params):
-    unlabeled = lambda x: x[params.batch_size:] if x is not None else x
+    def unlabeled(x):
+        return x[params.batch_size:] if x is not None else x
 
     def get_layer_vat_cost(l):
 
@@ -38,6 +721,8 @@ def get_vat_cost(ladder, train_flag, params):
     return vat_cost
 
 
+# -----------------------------
+# -----------------------------
 
 def build_graph(params):
     model = params.model
@@ -48,7 +733,6 @@ def build_graph(params):
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
-
 
     if model == "c" or model == "clw":
         model = Ladder(inputs, outputs, train_flag, params)
@@ -80,7 +764,7 @@ def build_graph(params):
             "float")) * tf.constant(100.0)
 
     learning_rate = tf.Variable(params.initial_learning_rate,
-        name='lr', trainable=False)
+                                name='lr', trainable=False)
     # beta1 = tf.Variable(params.beta1, name='beta1', trainable=False)
     beta1 = 0.9
 
@@ -93,7 +777,7 @@ def build_graph(params):
         train_step = tf.group(bn_updates)
 
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5,
-                            max_to_keep=5)
+                           max_to_keep=5)
 
     # Graph
     g = dict()
@@ -119,9 +803,7 @@ def build_graph(params):
     return g, m, trainable_params
 
 
-
 def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
-
     prev_d = tf.random_normal(shape=tf.shape(x))
     for k in range(num_power_iters):
         d = xi * get_normalized_vector(prev_d)
@@ -132,9 +814,10 @@ def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
         prev_d = tf.stop_gradient(grad)
 
     prev_d, d = get_normalized_vector(prev_d), get_normalized_vector(d)
-    dot = lambda a, b: tf.reduce_mean(tf.multiply(a, b), axis=1)
-    return dot(d, prev_d)/dot(prev_d, prev_d)
 
+    def dot(a, b): return tf.reduce_mean(tf.multiply(a, b), axis=1)
+
+    return dot(d, prev_d) / dot(prev_d, prev_d)
 
 
 def measure_smoothness(g, params):
@@ -142,17 +825,18 @@ def measure_smoothness(g, params):
     print("=== Measuring smoothness ===")
     inputs = g['images']
     logits = g['ladder'].clean.logits
-    forward = lambda x: Encoder(
-        inputs=x,
-        bn=g['ladder'].bn,
-        is_training=g['train_flag'],
-        params=params,
-        this_encoder_noise=0.0,
-        start_layer=0,
-        update_batch_stats=False,
-        scope='enc',
-        reuse=True
-    ).logits
+
+    def forward(x):
+        return Encoder(
+            inputs=x,
+            bn=g['ladder'].bn,
+            is_training=g['train_flag'],
+            params=params,
+            this_encoder_noise=0.0,
+            start_layer=0,
+            update_batch_stats=False,
+            scope='enc',
+            reuse=True).logits
 
     return get_spectral_radius(
         x=inputs, logit=logits, forward=forward, num_power_iters=5)
