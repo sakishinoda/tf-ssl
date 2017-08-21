@@ -86,7 +86,8 @@ def get_cli_params():
 
     # VAL SETTINGS
     # -------------------------
-    add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder"])
+    add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder",
+                                         "vat"])
 
     add('--measure_smoothness', action='store_true')
 

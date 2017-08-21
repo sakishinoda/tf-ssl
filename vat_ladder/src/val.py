@@ -2,76 +2,7 @@
 import tensorflow as tf
 from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.vat import Adversary, get_normalized_vector, kl_divergence_with_logit
-from src.ladder import Ladder, Encoder
-
-class LadderWithVAN(Ladder):
-    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
-                              start_layer=0, update_batch_stats=False,
-                              scope='enc', reuse=True):
-        return VANEncoder(
-            inputs, bn, train_flag, params, self.clean.logits,
-            this_encoder_noise=params.corrupt_sd,
-            start_layer=start_layer, update_batch_stats=update_batch_stats,
-            scope=scope, reuse=reuse)
-
-
-class VANEncoder(Encoder):
-    def __init__(
-            self, inputs, bn, is_training, params, clean_logits,
-            this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
-            scope='enc', reuse=None):
-
-        self.params = params
-        self.clean_logits = clean_logits
-
-        super(VANEncoder, self).__init__(
-            inputs, bn, is_training, params,
-            this_encoder_noise=this_encoder_noise,
-            start_layer=start_layer,
-            update_batch_stats=update_batch_stats,
-            scope=scope, reuse=reuse
-        )
-
-    def get_vadv_noise(self, inputs, l):
-        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
-
-        adv = Adversary(
-            bn=self.bn,
-            params=self.params,
-            layer_eps=self.params.epsilon[l],
-            start_layer=l
-        )
-
-        x = unlabeled(inputs)
-        logit = unlabeled(self.clean_logits)
-
-        ul_noise = adv.generate_virtual_adversarial_perturbation(
-            x=x, logit=logit, is_training=self.is_training)
-
-        return join(tf.zeros(tf.shape(labeled(inputs))), ul_noise)
-
-    def print_progress(self, l_out):
-        el = self.encoder_layers
-        print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1], el[l_out],
-              self.params.epsilon.get(l_out - 1)))
-
-    def generate_noise(self, inputs, l):
-
-        if self.noise_sd > 0.0:
-            noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
-
-            if self.params.model == "n" and l==0:
-                noise += self.get_vadv_noise(inputs, l)
-
-            elif self.params.model == "nlw" and (l + 1 < self.num_layers):
-                # don't add adversarial noise to logits
-                noise += self.get_vadv_noise(inputs, l)
-
-        else:
-            noise = tf.zeros(tf.shape(inputs))
-
-        return inputs + noise
-
+from src.ladder import Ladder, Encoder, VATModel, LadderWithVAN
 
 
 def get_vat_cost(ladder, train_flag, params):
@@ -107,6 +38,7 @@ def get_vat_cost(ladder, train_flag, params):
     return vat_cost
 
 
+
 def build_graph(params):
     model = params.model
     # -----------------------------
@@ -119,24 +51,32 @@ def build_graph(params):
 
 
     if model == "c" or model == "clw":
-        ladder = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_vat_cost(ladder, train_flag, params)
+        model = Ladder(inputs, outputs, train_flag, params)
+        vat_cost = get_vat_cost(model, train_flag, params)
+        loss = model.cost + model.u_cost + vat_cost
 
     elif model == "n" or model == "nlw":
-        ladder = LadderWithVAN(inputs, outputs, train_flag, params)
+        model = LadderWithVAN(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
+        loss = model.cost + model.u_cost
+
+    elif model == "vat":
+        model = VATModel(inputs, outputs, train_flag, params)
+        vat_cost = model.u_cost
+        loss = model.cost + model.u_cost
 
     else:
-        ladder = Ladder(inputs, outputs, train_flag, params)
+        model = Ladder(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
+        loss = model.cost + model.u_cost
 
     # -----------------------------
     # Loss, accuracy and training steps
 
-    loss = ladder.cost + ladder.u_cost + vat_cost
+
     accuracy = tf.reduce_mean(
         tf.cast(
-            tf.equal(ladder.predict, tf.argmax(outputs, 1)),
+            tf.equal(model.predict, tf.argmax(outputs, 1)),
             "float")) * tf.constant(100.0)
 
     learning_rate = tf.Variable(params.initial_learning_rate,
@@ -148,7 +88,7 @@ def build_graph(params):
                                         beta1=beta1).minimize(loss)
 
     # add the updates of batch normalization statistics to train_step
-    bn_updates = tf.group(*ladder.bn.bn_assigns)
+    bn_updates = tf.group(*model.bn.bn_assigns)
     with tf.control_dependencies([train_step]):
         train_step = tf.group(bn_updates)
 
@@ -160,7 +100,7 @@ def build_graph(params):
     g['images'] = inputs_placeholder
     g['labels'] = outputs
     g['train_flag'] = train_flag
-    g['ladder'] = ladder
+    g['ladder'] = model
     g['saver'] = saver
     g['train_step'] = train_step
     g['lr'] = learning_rate
@@ -169,10 +109,10 @@ def build_graph(params):
     # Metrics
     m = dict()
     m['loss'] = loss
-    m['cost'] = ladder.cost
-    m['uc'] = ladder.u_cost
-    m['vc'] = vat_cost
+    m['cost'] = model.cost
+    m['uc'] = model.u_cost * 0.0
     m['acc'] = accuracy
+    m['vc'] = vat_cost
 
     trainable_params = count_trainable_params()
 

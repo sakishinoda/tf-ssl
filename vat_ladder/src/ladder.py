@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import math
 from src.utils import get_batch_ops
+from src.vat import Adversary
 
 class Activations(object):
     """Store statistics for each layer in the encoder/decoder structures
@@ -345,8 +346,6 @@ def gauss_combinator(z_c, u, size):
 
 
 
-from src.vat import Adversary
-
 class Model(object):
     """
     Base class for models.
@@ -424,11 +423,11 @@ class Model(object):
 
 
 class VATModel(Model):
-    def __init__(self, inputs, outputs, train_flag, params, bn):
+    def __init__(self, inputs, outputs, train_flag, params):
 
         super(VATModel, self).__init__(inputs, outputs, train_flag, params)
         self.adv = Adversary(
-            bn, params, layer_eps=params.epsilon, start_layer=0)
+            self.bn, params, layer_eps=params.epsilon, start_layer=0)
 
     @property
     def u_cost(self):
@@ -484,4 +483,74 @@ class Ladder(Model):
             params=params, this_encoder_noise=params.corrupt_sd,
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
+
+
+class LadderWithVAN(Ladder):
+    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
+                              start_layer=0, update_batch_stats=False,
+                              scope='enc', reuse=True):
+        return VANEncoder(
+            inputs, bn, train_flag, params, self.clean.logits,
+            this_encoder_noise=params.corrupt_sd,
+            start_layer=start_layer, update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse)
+
+
+class VANEncoder(Encoder):
+    def __init__(
+            self, inputs, bn, is_training, params, clean_logits,
+            this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None):
+
+        self.params = params
+        self.clean_logits = clean_logits
+
+        super(VANEncoder, self).__init__(
+            inputs, bn, is_training, params,
+            this_encoder_noise=this_encoder_noise,
+            start_layer=start_layer,
+            update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse
+        )
+
+    def get_vadv_noise(self, inputs, l):
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
+
+        adv = Adversary(
+            bn=self.bn,
+            params=self.params,
+            layer_eps=self.params.epsilon[l],
+            start_layer=l
+        )
+
+        x = unlabeled(inputs)
+        logit = unlabeled(self.clean_logits)
+
+        ul_noise = adv.generate_virtual_adversarial_perturbation(
+            x=x, logit=logit, is_training=self.is_training)
+
+        return join(tf.zeros(tf.shape(labeled(inputs))), ul_noise)
+
+    def print_progress(self, l_out):
+        el = self.encoder_layers
+        print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1], el[l_out],
+              self.params.epsilon.get(l_out - 1)))
+
+    def generate_noise(self, inputs, l):
+
+        if self.noise_sd > 0.0:
+            noise = tf.random_normal(tf.shape(inputs)) * self.noise_sd
+
+            if self.params.model == "n" and l==0:
+                noise += self.get_vadv_noise(inputs, l)
+
+            elif self.params.model == "nlw" and (l + 1 < self.num_layers):
+                # don't add adversarial noise to logits
+                noise += self.get_vadv_noise(inputs, l)
+
+        else:
+            noise = tf.zeros(tf.shape(inputs))
+
+        return inputs + noise
+
 

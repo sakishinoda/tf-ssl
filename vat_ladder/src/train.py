@@ -1,4 +1,6 @@
 
+
+
 def evaluate_metric(dataset, sess, op, graph, params):
     metric = 0
     num_eval_iters = dataset.num_examples // params.batch_size
