@@ -470,11 +470,10 @@ class Ladder(Model):
 
     @property
     def cost(self):
-        # Overrides base class since we want to evaluate corrupted logits for
-        #  cost
+        # Overrides base class since we want to use corrupted logits for cost
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
-            labels=outputs, logits=self.labeled(self.corr.logits))
+            labels=self.outputs, logits=self.labeled(self.corr.logits))
         return tf.reduce_mean(ce)
 
     def get_corrupted_encoder(self, inputs, bn, train_flag, params,
