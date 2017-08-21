@@ -51,7 +51,7 @@ class Hyperopt(object):
         add('decay_start_epoch', self.params.end_epoch *
             self.params.decay_start)
         add('beta1', 0.9)
-        add('beta1_during_decay', 0.5)
+        add('beta1_during_decay', 0.9)
         add('test_frequency_in_epochs', default=5, type=int)
         add('validation', default=1000, type=int)
         add('seed', default=1, type=int)
@@ -65,7 +65,6 @@ class Hyperopt(object):
         add('ul_batch_size', 250)
         add('corrupt_sd', 0.3)
         add('vadv_sd', 0.5)
-
 
 
     def convert_dims_to_params(self, x):
@@ -137,41 +136,72 @@ class Hyperopt(object):
 
         return val_err
 
+    def get_dims(self):
+        dims = [
+            # rc_weights
+            (500., 5000, 'log-uniform'),  # 0 rc_0
+            (5.00, 50., 'log-uniform'),  # 1 rc_1
+            (0.01, 1.0, 'log-uniform'),  # 2 rc_2
+            (0.01, 1.0, 'log-uniform'),  # 3 rc_3
+            (0.01, 1.0, 'log-uniform'),  # 4 rc_4
+            (0.01, 1.0, 'log-uniform'),  # 5 rc_5
+            (0.01, 1.0, 'log-uniform'),  # 6 rc_6
+            (0.01, 10.0, 'log-uniform')  # 7: eps_0
+        ]
+
+        x0 = [1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0]
+
+        if self.params.model == 'clw' or self.params.model == 'nlw':
+            dims += [
+                (1e-3, 0.5, 'log-uniform'),  # 7 eps_1
+                (1e-5, 0.1, 'log-uniform'),  # 8 eps_2
+                (1e-5, 0.1, 'log-uniform'),  # 9 eps_3
+                (1e-5, 0.1, 'log-uniform'),  # 10 eps_4
+                (1e-5, 0.1, 'log-uniform'),  # 11 eps_5
+                (1e-5, 0.1, 'log-uniform')  # 12 eps_6
+            ]
+            x0 += [0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
+
+        return dims, x0
+
+class HyperoptPowerIters(Hyperopt):
+    def convert_dims_to_params(self, x):
+        self.params.num_power_iters = x
+        return self.params
+
+    def get_default_params(self):
+        super(HyperoptPowerIters, self).get_default_params()
+
+        if self.params.model == "c":
+            self.params.rc_weights = enum_dict([898.44421, 20.73306, 0.17875, 0.31394, 0.02214, 0.39981, 0.04065])
+            self.params.epsilon = enum_dict([0.03723])
+        elif self.params.model == "clw":
+            self.params.rc_weights = enum_dict([898.44421, 8.81609, 0.61101, 0.11661, 0.13746, 0.50335, 0.63461])
+            self.params.epsilon = enum_dict([0.11002, 0.0093, 0.00508, 1e-05, 0.00073, 0.00113, 0.00019])
+
+
+def tune_single_parameter():
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
+    hyperopt = HyperoptPowerIters()
+    dims = [1, 2, 3, 4, 5]
+    res = {}
+    for x in dims:
+        res[x] = hyperopt.objective(x)
+        print(x, res[x])
+
+    print("=== Complete ===")
+    for k, v in res.items():
+        print(k, v)
+
 
 def main():
 
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
 
     hyperopt = Hyperopt()
-
-    dims = [
-        # rc_weights
-        (500., 5000, 'log-uniform'), # 0 rc_0
-        (5.00, 50., 'log-uniform'), # 1 rc_1
-        (0.01, 1.0, 'log-uniform'), # 2 rc_2
-        (0.01, 1.0, 'log-uniform'), # 3 rc_3
-        (0.01, 1.0, 'log-uniform'), # 4 rc_4
-        (0.01, 1.0, 'log-uniform'), # 5 rc_5
-        (0.01, 1.0, 'log-uniform'),  # 6 rc_6
-        (0.01, 10.0, 'log-uniform')  # 7: eps_0
-    ]
-
-    x0 = [1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0]
-
-    if hyperopt.params.model == 'clw' or hyperopt.params.model == 'nlw':
-        dims += [
-            (1e-3, 0.5, 'log-uniform'), # 7 eps_1
-            (1e-5, 0.1, 'log-uniform'), # 8 eps_2
-            (1e-5, 0.1, 'log-uniform'), # 9 eps_3
-            (1e-5, 0.1, 'log-uniform'), # 10 eps_4
-            (1e-5, 0.1, 'log-uniform'), # 11 eps_5
-            (1e-5, 0.1, 'log-uniform')  # 12 eps_6
-        ]
-        x0 += [0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
-
+    dims, x0 = hyperopt.get_dims()
 
     print("=== Beginning Search ===")
-
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
     print(res.x, res.fun)
 
@@ -180,5 +210,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
-    # func()
+    tune_single_parameter()
+    # main()
+
