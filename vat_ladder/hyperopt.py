@@ -8,6 +8,7 @@ import argparse
 from src.utils import parse_argstring, enum_dict
 from skopt import gp_minimize, dump
 import sys
+from tqdm import tqdm
 
 class Hyperopt(object):
     def __init__(self):
@@ -118,7 +119,7 @@ class Hyperopt(object):
             init = tf.global_variables_initializer()
             sess.run(init)
             print("=== Training ===")
-            for i in range(num_iter):
+            for i in tqdm(range(num_iter)):
 
                 images, labels = mnist.train.next_batch(p.batch_size,
                                                         p.ul_batch_size)
@@ -189,6 +190,8 @@ def tune_single_parameter():
         res[x] = hyperopt.objective(x)
         print(x, res[x])
 
+    print("""----------------------------------------
+----------------------------------------""")
     print("=== Complete ===")
     for k, v in res.items():
         print(k, v)
