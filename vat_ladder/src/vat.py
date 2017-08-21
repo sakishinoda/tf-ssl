@@ -34,8 +34,6 @@ def get_normalized_vector(d):
                                       keep_dims=True))
     return d
 
-
-
 def softmax_cross_entropy_with_logits(labels, logits):
     q = tf.nn.softmax(labels)
     return -tf.reduce_mean(tf.reduce_sum(q * logsoftmax(logits), 1))
@@ -54,7 +52,7 @@ class Adversary(object):
         self.start_layer = start_layer
 
         # VAT
-        self.layer_eps = layer_eps
+        self.this_adv_eps = layer_eps
         self.xi = params.xi
         self.num_power_iters = params.num_power_iters
 
@@ -84,12 +82,12 @@ class Adversary(object):
             dist = kl_divergence_with_logit(logit_p, logit_m)
             grad = tf.gradients(dist, [d], aggregation_method=2)[0]
             d = tf.stop_gradient(grad)
-        return self.layer_eps * get_normalized_vector(d)
+        return self.this_adv_eps * get_normalized_vector(d)
 
     def generate_adversarial_perturbation(self, x, loss):
         grad = tf.gradients(loss, [x], aggregation_method=2)[0]
         grad = tf.stop_gradient(grad)
-        return self.layer_eps * get_normalized_vector(grad)
+        return self.this_adv_eps * get_normalized_vector(grad)
 
     def adversarial_loss(self, x, y, loss, is_training,
                          name="at_loss"):
