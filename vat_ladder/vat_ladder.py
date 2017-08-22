@@ -169,8 +169,9 @@ def main():
 
             # ---------------------------------------------
             # Compute error on testing set (10k examples)
-            test_costs = eval_metrics(mnist.test, sess,
-                                      test_losses)
+            test_acc_and_costs = eval_metrics(mnist.test, sess,
+                                      [m['acc']] + test_losses)
+            train_acc = eval_metric(mnist.train.labeled_ds, sess, [m['acc']])
             train_costs = sess.run(
                 train_losses,
                 feed_dict={g['images']: images,
@@ -182,18 +183,8 @@ def main():
             # train accuracy, train loss, train cross entropy,
             # train reconstruction loss, smoothness
 
-            log_i = [now, epoch_n] + sess.run(
-                [m['acc']],
-                feed_dict={g['images']: mnist.test.images,
-                           g['labels']: mnist.test.labels,
-                           g['train_flag']: False}
-            ) + test_costs + sess.run(
-                [m['acc']],
-                feed_dict={g['images']:
-                               mnist.train.labeled_ds.images,
-                           g['labels']: mnist.train.labeled_ds.labels,
-                           g['train_flag']: False}
-            ) + train_costs
+            log_i = [now, epoch_n] + test_acc_and_costs + train_acc + \
+                    train_costs
 
             # if np.isnan(log_i[-1]):
 
