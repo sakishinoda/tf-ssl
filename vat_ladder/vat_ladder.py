@@ -160,9 +160,6 @@ def main():
         # Epoch completed?
         if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
             # update_decays(sess, epoch_n, iter=i, graph=g, params=p)
-            if p.static_bn is False:
-                sess.run(g['ladder'].bn_decay.assign(
-                    1.0 - (1.0 / (epoch_n + 1))))
 
             # Update learning rate and momentum
             if ((epoch_n + 1) >= p.decay_start_epoch) and ((i + 1) % (

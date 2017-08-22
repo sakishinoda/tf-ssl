@@ -75,7 +75,7 @@ def get_cli_params():
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
     # Batch norm decay weight mode
-    add('--static_bn', default=False, nargs='?', const=0.99, type=float)
+    add('--static_bn', default=0.99, type=float)
 
     # -------------------------
     # VAT SETTINGS

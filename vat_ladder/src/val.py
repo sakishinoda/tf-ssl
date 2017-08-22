@@ -662,10 +662,7 @@ class Model(object):
 
         # Supervised components
         print("=== Batch Norm === ")
-        if self.params.static_bn is False:
-            self.bn_decay = tf.Variable(1e-10, trainable=False)
-        else:
-            self.bn_decay = self.params.static_bn
+        self.bn_decay = self.params.static_bn
 
         self.bn = BatchNormLayers(self.params.encoder_layers,
                                   decay=self.bn_decay)

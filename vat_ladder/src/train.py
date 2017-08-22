@@ -32,8 +32,8 @@ def evaluate_metric_list(dataset, sess, ops, graph, params):
 def update_decays(sess, epoch_n, iter, graph, params):
     # ---------------------------------------------
     # Update batch norm decay constant
-    if params.static_bn is False:
-        sess.run(graph['ladder'].bn_decay.assign(1.0 - (1.0 / (epoch_n + 1))))
+    # if params.static_bn is False:
+    #     sess.run(graph['ladder'].bn_decay.assign(1.0 - (1.0 / (epoch_n + 1))))
 
     # ---------------------------------------------
     # Update learning rate every epoch
