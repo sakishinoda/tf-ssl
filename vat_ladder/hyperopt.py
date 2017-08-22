@@ -181,7 +181,8 @@ class HyperoptPowerIters(Hyperopt):
             self.params.epsilon = enum_dict([0.11002, 0.0093, 0.00508, 1e-05, 0.00073, 0.00113, 0.00019])
         elif self.params.model == "vat":
             self.params.epsilon = enum_dict([5.0])
-            self.params.encoder_layers = parse_argstring("784-1200-600-300-150-10")
+            self.params.encoder_layers = parse_argstring(
+                "784-1200-600-300-150-10", dtype=int)
             self.params.beta1_during_decay = 0.5
             self.params.decay_start = 0.5
             self.params.decay_start_epoch = self.params.decay_start * \
