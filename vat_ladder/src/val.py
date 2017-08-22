@@ -691,6 +691,9 @@ class Model(object):
     def labeled(self, x):
         return x[:self.params.batch_size] if x is not None else x
 
+    def unlabeled(self, x):
+        return x[self.params.batch_size:] if x is not None else x
+
     def get_cost(self):
         # Calculate supervised cross entropy cost
         ce = tf.nn.softmax_cross_entropy_with_logits(
@@ -713,8 +716,8 @@ class VirtualAdversarialTraining(Model):
 
     def get_u_cost(self):
         return self.adv.virtual_adversarial_loss(
-            x=self.inputs,
-            logit=self.clean.logits,
+            x=self.unlabeled(self.inputs),
+            logit=self.unlabeled(self.clean.logits),
             is_training=self.train_flag)
 
 
