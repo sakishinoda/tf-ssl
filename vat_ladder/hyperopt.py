@@ -33,7 +33,7 @@ class Hyperopt(object):
         parser.add_argument('--num_labeled', default=100, type=int)
         parser.add_argument('--dump', default='res')
         parser.add_argument('--model', default='c',
-                            choices=['c', 'clw', 'n', 'nlw'])
+                            choices=['c', 'clw', 'n', 'nlw', "ladder", "vat"])
         parser.add_argument('--end_epoch', default=1, type=int)
 
         params = parser.parse_args()
