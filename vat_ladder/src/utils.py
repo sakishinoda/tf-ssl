@@ -136,12 +136,15 @@ def process_cli_params(params):
         params.encoder_layers = params.cnn_fan
         params.rc_weights = enum_dict(([0] * (len(params.cnn_fan)-1)) + [float(
             params.rc_weights)])
+
         if params.dataset == "mnist":
             params.cnn_init_size = 28
             params.cnn_fan[0] = 1
         elif params.dataset == "cifar":
             params.cnn_init_size = 32
             params.cnn_fan[0] = 3
+        else:
+            params.cnn_init_size = 28
 
     else:
         params.encoder_layers = parse_argstring(params.encoder_layers,
