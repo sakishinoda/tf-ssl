@@ -30,6 +30,11 @@ def get_cli_params():
     add('--do_not_save', action='store_true')
 
     # -------------------------
+    # DATA
+    # -------------------------
+    add('--dataset', default='mnist')
+
+    # -------------------------
     # EVALUATE
     # -------------------------
     add('--test_frequency_in_epochs', default=5, type=float)
@@ -87,17 +92,21 @@ def get_cli_params():
     # VAL SETTINGS
     # -------------------------
     add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder",
-                                         "vat"])
+                                         "vat", "gamma"])
     add('--measure_smoothness', action='store_true')
 
     # -------------------------
     # CNN LADDER
     # -------------------------
     add('--cnn', action='store_true')
-    # arguments for the cnn encoder/decoder
-    add('--cnn_init_size', default=32, type=int)
     add('--lrelu_a', default=0.1, type=float)
     add('--top_bn', action='store_true')
+
+    # arguments for the cnn encoder/decoder
+    add('--cnn_layer_types', default='c-c-c-max-c-c-c-max-c-c-c-avg-fc')
+    add('--cnn_fan', default='3-96-96-96-96-192-192-192-192-192-192-192-192-10')
+    add('--cnn_ksizes', default='3-3-3-3-3-3-3-3-3-1-1-0-0')
+    add('--cnn_strides', default='1-1-1-2-1-1-1-2-1-1-1-0-0')
 
     params = parser.parse_args()
 
@@ -110,27 +119,38 @@ def enum_dict(list_):
 
 def process_cli_params(params):
     # Specify base structure
-    params.encoder_layers = parse_argstring(params.encoder_layers, dtype=int)
-    params.rc_weights = enum_dict(parse_argstring(params.rc_weights, dtype=float))
+
+
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
     params.eval_batch_size = params.batch_size  # this should be redundant
+    params.input_size = 784 if params.dataset == "mnist" else 784
 
     if params.cnn:
-        params.cnn_layer_types = ('c', 'c', 'c', 'max', 'c', 'c', 'c', 'max',
-                                'c', 'c',
-                       'c', 'avg', 'fc')
-        params.cnn_fan = (3, 96, 96, 96, 96, 192, 192, 192, 192, 192, 192, 192,
-                      192, 10)
-        params.cnn_ksizes = (3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, None, None)
-        params.cnn_strides = (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, None, None)
-        params.num_layers = len(params.cnn_fan) - 1
-        # assert len(params.rc_weights) == len(params.cnn_fan) -1
+        params.cnn_layer_types = parse_argstring(params.cnn_layer_types,
+                                                 dtype=str)
+        params.cnn_fan = parse_argstring(params.cnn_fan, dtype=int)
+        params.cnn_ksizes = parse_argstring(params.cnn_ksizes, dtype=int)
+        params.cnn_strides = parse_argstring(params.cnn_strides, dtype=int)
+        params.encoder_layers = params.cnn_fan
+        params.rc_weights = enum_dict(([0] * (len(params.cnn_fan)-1)) + [float(
+            params.rc_weights)])
+        if params.dataset == "mnist":
+            params.cnn_init_size = 28
+            params.cnn_fan[0] = 1
+        elif params.dataset == "cifar":
+            params.cnn_init_size = 32
+            params.cnn_fan[0] = 3
+
     else:
-        params.num_layers = len(params.encoder_layers) - 1
+        params.encoder_layers = parse_argstring(params.encoder_layers,
+                                                dtype=int)
+        params.rc_weights = enum_dict(
+            parse_argstring(params.rc_weights, dtype=float))
 
-    params.encoder_layers = params.cnn_fan if params.cnn else \
-        params.encoder_layers
 
+
+
+    params.num_layers = len(params.encoder_layers) - 1
     params.epsilon = enum_dict(parse_argstring(params.epsilon))
 
     return params

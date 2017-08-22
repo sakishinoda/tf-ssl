@@ -331,8 +331,8 @@ class ConvEncoder(Encoder):
                 return z
 
             def eval_batch_norm():
-                mean = bn.ewma.average(bn.running_mean[l-1])
-                var = bn.ewma.average(bn.running_var[l-1])
+                mean = bn.ema.average(bn.running_mean[l-1])
+                var = bn.ema.average(bn.running_var[l-1])
                 z = bn.batch_normalization(z_pre, mean, var)
                 return z
 
@@ -346,7 +346,7 @@ class ConvEncoder(Encoder):
             print("Layer {}: {} -> {}".format(
                 l, layer_spec[l-1]['f_in'], layer_spec[l-1]['f_out']))
 
-            self.labeled['h'][l-1], self.unlabeled['h'][l-1] = split_lu(h)
+            self.labeled.h[l-1], self.unlabeled.h[l-1] = split_lu(h)
 
             if layer_spec[l-1]['type'] == 'c':
                 h = conv(h,
@@ -354,7 +354,8 @@ class ConvEncoder(Encoder):
                          stride=1,
                          f_in=layer_spec[l-1]['f_in'],
                          f_out=layer_spec[l-1]['f_out'],
-                         seed=None, name='c' + str(l-1))
+                         seed=None, name='c' + str(l-1),
+                         scope=self.scope, reuse=self.reuse)
                 h, m, v = split_bn(h, is_training=is_training, noise_sd=self.noise_sd)
                 h = lrelu(h, self.lrelu_a)
 
@@ -372,8 +373,7 @@ class ConvEncoder(Encoder):
             elif layer_spec[l-1]['type'] == 'fc':
                 h = fc(h, layer_spec[l-1]['f_in'],
                        layer_spec[l-1]['f_out'],
-                       seed=None,
-                       name='fc')
+                       seed=None, name='fc', scope=self.scope, reuse=self.reuse)
                 if self.top_bn:
                     h, m, v = split_bn(h, is_training=is_training,
                                      noise_sd=self.noise_sd)
@@ -383,13 +383,14 @@ class ConvEncoder(Encoder):
                 print('Layer type not defined')
                 m, v, _, _ = split_moments(h)
 
-            print(l, h.get_shape())
+            # print(l, h.get_shape())
             self.labeled.z[l], self.unlabeled.z[l] = split_lu(h)
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l], self.unlabeled.v[l] = m, v
 
         self.labeled.h[l], self.unlabeled.h[l] = split_lu(h)
         self.logits = h
+
 
 # -----------------------------
 # DECODER
@@ -431,10 +432,10 @@ class Decoder(object):
 
         self.num_layers = len(encoder_layers) - 1
 
-
         self.z_est = {}  # activation reconstruction
         self.d_cost = []  # denoising cost
 
+        self.build()
 
     def build(self):
         for l in range(self.num_layers, -1, -1):
@@ -442,7 +443,6 @@ class Decoder(object):
 
 
     def create_layer(self, l):
-
         ls = self.encoder_layers
         denoising_cost = self.denoising_cost
         batch_size = self.batch_size
@@ -464,7 +464,7 @@ class Decoder(object):
         z, z_c = clean.unlabeled.z[l], corr.unlabeled.z[l]
         m, v = clean.unlabeled.m.get(l, 0), \
                clean.unlabeled.v.get(l, 1 - 1e-10)
-        # print(l)
+
         if l == num_layers:
             u = unlabeled(corr.logits)
         else:
@@ -497,11 +497,13 @@ class Decoder(object):
 
         return d_cost
 
-# Gamma Decoder
 
+# Gamma Decoder
 class GammaDecoder(Decoder):
     def build(self):
-        self.d_cost.append(self.create_layer(self.num_layers))
+        d_cost = self.create_layer(self.num_layers)
+        self.d_cost.append(d_cost)
+
 
 
 # -----------------------------
@@ -565,8 +567,8 @@ class BatchNormLayers(object):
         if CNN, use channel-wise batch norm
         """
         # bn_axes = [0, 1, 2] if self.params.cnn else [0]
-        # bn_axes = list(range(len(batch.get_shape().as_list())-1))
-        bn_axes = [0]
+        bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        # bn_axes = [0]
         mean, var = tf.nn.moments(batch, axes=bn_axes)
         assign_mean = self.running_mean[l - 1].assign(mean)
         assign_var = self.running_var[l - 1].assign(var)
@@ -580,8 +582,8 @@ class BatchNormLayers(object):
     @staticmethod
     def batch_normalization(batch, mean=None, var=None):
         # bn_axes = [0, 1, 2] if self.params.cnn else [0]
-        # bn_axes = list(range(len(batch.get_shape().as_list())-1))
-        bn_axes = [0]
+        bn_axes = list(range(len(batch.get_shape().as_list())-1))
+        # bn_axes = [0]
 
         if mean is None or var is None:
             mean, var = tf.nn.moments(batch, axes=bn_axes)
@@ -776,8 +778,15 @@ class Gamma(Ladder):
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
 
-    # def get_decoder(self):
-    #     return GammaDecoder()
+    def get_decoder(self):
+        return GammaDecoder(
+            clean=self.clean, corr=self.corr, bn=self.bn,
+            combinator=gauss_combinator,
+            encoder_layers=self.params.encoder_layers,
+            denoising_cost=self.params.rc_weights,
+            batch_size=self.params.batch_size,
+            scope='dec', reuse=None
+        )
 
 #  VAN encoder
 class LadderWithVAN(Ladder):
@@ -948,7 +957,8 @@ def build_graph(params):
     # -----------------------------
     # Placeholder setup
     inputs_placeholder = tf.placeholder(
-        tf.float32, shape=(None, params.encoder_layers[0]))
+        tf.float32, shape=(None, params.input_size))
+
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
@@ -966,6 +976,11 @@ def build_graph(params):
     elif model == "vat":
         model = VirtualAdversarialTraining(inputs, outputs, train_flag, params)
         vat_cost = model.u_cost
+        loss = model.cost + model.u_cost
+
+    elif model == "gamma":
+        model = Gamma(inputs, outputs, train_flag, params)
+        vat_cost = tf.zeros([])
         loss = model.cost + model.u_cost
 
     else:
