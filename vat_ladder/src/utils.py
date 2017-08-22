@@ -86,6 +86,8 @@ def get_cli_params():
     add('--xi', default=1e-6, type=float, help="small constant for finite difference")
     add('--vadv_sd', default=0.0, type=float,
         help="noise to add at each layer of forward pass for stability")
+    add('--lrelu_a', default=0.0, type=float)
+    add('--top_bn', action='store_true')
 
     # -------------------------
 
@@ -95,12 +97,11 @@ def get_cli_params():
                                          "vat", "gamma"])
     add('--measure_smoothness', action='store_true')
 
+
     # -------------------------
     # CNN LADDER
     # -------------------------
     add('--cnn', action='store_true')
-    add('--lrelu_a', default=0.1, type=float)
-    add('--top_bn', action='store_true')
 
     # arguments for the cnn encoder/decoder
     add('--cnn_layer_types', default='c-c-c-max-c-c-c-max-c-c-c-avg-fc')

@@ -75,6 +75,7 @@ class Encoder(object):
         self.start_layer = start_layer
         self.is_training = is_training
 
+        self.lrelu_a = params.lrelu_a
         self.batch_size = params.batch_size
         self.encoder_layers = params.encoder_layers
 
@@ -173,6 +174,10 @@ class Encoder(object):
                 # return pre-softmax logits in final layer
                 self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
                 h = tf.nn.softmax(self.logits)
+
+            elif self.lrelu_a > 0.0:
+                h = lrelu(z + bn.beta[l_in])
+
             else:
                 # use ReLU activation in hidden layers
                 h = tf.nn.relu(z + bn.beta[l_in])
