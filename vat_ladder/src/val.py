@@ -71,21 +71,42 @@ class Encoder(object):
             self, inputs, bn, is_training, params, this_encoder_noise=0.0,
             start_layer=0, update_batch_stats=True, scope='enc', reuse=None):
 
+        self.inputs = inputs
         self.bn = bn
         self.start_layer = start_layer
         self.is_training = is_training
-        el = params.encoder_layers
-        self.encoder_layers = el
+
         self.batch_size = params.batch_size
+        self.encoder_layers = params.encoder_layers
+
         self.noise_sd = this_encoder_noise
+        self.start_layer = start_layer
+        self.update_batch_stats = update_batch_stats
+        self.scope = scope
+        self.reuse = reuse
 
         self.labeled = Activations()
         self.unlabeled = Activations()
-        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
 
         # encoder_layers = encoder_layers  # seq of layer sizes, len num_layers
-        self.num_layers = len(el) - 1
+        self.num_layers = len(params.encoder_layers) - 1
 
+        self.create_layers(inputs, bn, is_training, start_layer,
+                           update_batch_stats, scope, reuse)
+
+    def create_layers(self, inputs, bn, is_training, start_layer,
+                      update_batch_stats, scope, reuse):
+        # inputs = self.inputs
+        # bn = self.bn
+        # is_training = self.is_training
+        # start_layer = self.start_layer
+        # update_batch_stats = self.update_batch_stats
+        # scope = self.scope
+        # reuse = self.reuse
+
+        el = self.encoder_layers
+
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
         # Layer 0: inputs, size 784
         h = inputs + self.generate_noise(inputs, start_layer)
         self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
@@ -168,7 +189,7 @@ class Encoder(object):
 
 # VAN Encoder
 
-class VANEncoder(Encoder):
+class VirtualAdversarialNoiseEncoder(Encoder):
     def __init__(
             self, inputs, bn, is_training, params, clean_logits,
             this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
@@ -177,7 +198,7 @@ class VANEncoder(Encoder):
         self.params = params
         self.clean_logits = clean_logits
 
-        super(VANEncoder, self).__init__(
+        super(VirtualAdversarialNoiseEncoder, self).__init__(
             inputs, bn, is_training, params,
             this_encoder_noise=this_encoder_noise,
             start_layer=start_layer,
@@ -558,7 +579,7 @@ class LadderWithVAN(Ladder):
     def get_corrupted_encoder(self, inputs, bn, train_flag, params,
                               start_layer=0, update_batch_stats=False,
                               scope='enc', reuse=True):
-        return VANEncoder(
+        return VirtualAdversarialNoiseEncoder(
             inputs, bn, train_flag, params, self.clean.logits,
             this_encoder_noise=params.corrupt_sd,
             start_layer=start_layer, update_batch_stats=update_batch_stats,

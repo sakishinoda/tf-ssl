@@ -88,7 +88,6 @@ def get_cli_params():
     # -------------------------
     add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder",
                                          "vat"])
-
     add('--measure_smoothness', action='store_true')
 
     # -------------------------
@@ -97,6 +96,8 @@ def get_cli_params():
     add('--cnn', action='store_true')
     # arguments for the cnn encoder/decoder
     add('--cnn_init_size', default=32, type=int)
+    add('--lrelu_a', default=0.1, type=float)
+    add('--top_bn', action='store_true')
 
     params = parser.parse_args()
 
