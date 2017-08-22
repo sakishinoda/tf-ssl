@@ -171,7 +171,7 @@ def main():
             # Compute error on testing set (10k examples)
             test_acc_and_costs = eval_metrics(mnist.test, sess,
                                       [m['acc']] + test_losses)
-            train_acc = eval_metric(mnist.train.labeled_ds, sess, [m['acc']])
+            train_acc = eval_metric(mnist.train.labeled_ds, sess, m['acc'])
             train_costs = sess.run(
                 train_losses,
                 feed_dict={g['images']: images,
