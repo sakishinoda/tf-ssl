@@ -36,7 +36,7 @@ def main():
     p.num_examples = num_examples
     if p.validation > 0:
         mnist.test = mnist.validation
-    p.iter_per_epoch = (num_examples // p.batch_size)
+    p.iter_per_epoch = (num_examples // p.ul_batch_size)
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
     # -----------------------------
@@ -94,7 +94,7 @@ def main():
         # and set epoch_n and i_iter
         g['saver'].restore(sess, ckpt.model_checkpoint_path)
         epoch_n = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
-        i_iter = (epoch_n + 1) * (p.num_examples // p.batch_size)
+        i_iter = (epoch_n + 1) * (p.num_examples // p.ul_batch_size)
         print("Restored Epoch ", epoch_n)
 
     else:
@@ -155,7 +155,7 @@ def main():
             [g['train_step']],
             feed_dict=train_dict)
 
-        epoch_n = i // (p.num_examples // p.batch_size)
+        epoch_n = i // (p.num_examples // p.ul_batch_size)
         # ---------------------------------------------
         # Epoch completed?
         if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
