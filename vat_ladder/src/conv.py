@@ -5,6 +5,7 @@ Dropout on the pooling layers is replaced with batch norm.
 Batch norm on convolution layers are carried out per-channel.
 """
 import tensorflow as tf
+import math
 
 def lrelu(x, a=0.1):
     if a < 1e-16:
@@ -16,8 +17,9 @@ def fc(x, dim_in, dim_out, seed=None, name='fc', scope=None, reuse=None):
 
     num_units_in = dim_in
     num_units_out = dim_out
-    weights_initializer = tf.contrib.layers.variance_scaling_initializer(
-        seed=seed)
+    # weights_initializer = tf.contrib.layers.variance_scaling_initializer(
+    #     seed=seed)
+    weights_initializer = tf.random_normal_initializer(stddev=1./math.sqrt(dim_in))
 
     if scope is None:
         scope = tf.get_variable_scope()
@@ -36,7 +38,13 @@ def fc(x, dim_in, dim_out, seed=None, name='fc', scope=None, reuse=None):
 def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
          seed=None, name='conv', scope=None, reuse=None):
     shape = [ksize, ksize, f_in, f_out]
-    initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
+    # As used in VAT
+    # initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
+
+    # As used in Ladder
+
+    bound = math.sqrt(3.0 / max(1.0, (ksize*ksize*f_in)))
+    initializer = tf.random_uniform_initializer(minval=-bound, maxval=bound)
 
     if scope is None:
         scope = tf.get_variable_scope()
@@ -66,7 +74,8 @@ def deconv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
     out_shape = x.get_shape().as_list()
     out_shape[-1] = f_out
     w_shape = [ksize, ksize, f_out, f_in]  # deconv requires f_out, f_in
-    initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
+    bound = math.sqrt(3.0 / max(1.0, (ksize*ksize*f_out)))
+    initializer = tf.random_uniform_initializer(minval=-bound, maxval=bound)
 
     if scope is None:
         scope = tf.get_variable_scope()
