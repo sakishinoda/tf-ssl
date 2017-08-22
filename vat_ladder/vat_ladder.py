@@ -182,10 +182,8 @@ def main():
             # train accuracy, train loss, train cross entropy,
             # train reconstruction loss, smoothness
 
-            log_i = [now, epoch_n] + test_acc_and_costs + train_acc + \
+            log_i = [int(now), epoch_n] + test_acc_and_costs + train_acc + \
                     train_costs
-
-            # if np.isnan(log_i[-1]):
 
 
             with open(log_file, 'a') as train_log:

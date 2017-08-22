@@ -272,11 +272,11 @@ class ConvEncoder(Encoder):
         fan = params.cnn_fan
         ksizes = params.cnn_ksizes
         strides = params.cnn_strides
-
-        dims = [init_size, ] * 4 + [init_size // 2, ] * 4 + [init_size // 4, ] * 4 + \
-               [1, ]
-        init_dim = fan[0]
-        n_classes = fan[-1]
+        dims = params.cnn_dims
+        # dims = [init_size, ] * 4 + [init_size // 2, ] * 4 + [init_size // 4, ] * 4 + \
+        #        [1, ]
+        # init_dim = fan[0]
+        # n_classes = fan[-1]
 
         layers = {}
         for l, type_ in enumerate(types):
@@ -915,13 +915,13 @@ class Adversary(object):
         return tf.identity(loss, name=name)
 
 
-def get_vat_cost(ladder, train_flag, params):
+def get_vat_cost(model, train_flag, params):
     def unlabeled(x):
         return x[params.batch_size:] if x is not None else x
 
     def get_layer_vat_cost(l):
 
-        adv = Adversary(bn=ladder.bn,
+        adv = Adversary(bn=model.bn,
                         params=params,
                         layer_eps=params.epsilon[l],
                         start_layer=l)
@@ -929,14 +929,14 @@ def get_vat_cost(ladder, train_flag, params):
         # VAT on unlabeled only
         return (
             adv.virtual_adversarial_loss(
-                x=ladder.corr.unlabeled.z[l],
-                logit=unlabeled(ladder.corr.logits),  # should this be clean?
+                x=model.corr.unlabeled.z[l],
+                logit=unlabeled(model.corr.logits),  # should this be clean?
                 is_training=train_flag)
         )
 
     if params.model == "clw":
         vat_costs = []
-        for l in range(ladder.num_layers):
+        for l in range(model.num_layers):
             vat_costs.append(get_layer_vat_cost(l))
         vat_cost = tf.add_n(vat_costs)
 

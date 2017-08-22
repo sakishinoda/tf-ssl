@@ -107,6 +107,7 @@ def get_cli_params():
     add('--cnn_fan', default='3-96-96-96-96-192-192-192-192-192-192-192-192-10')
     add('--cnn_ksizes', default='3-3-3-3-3-3-3-3-3-1-1-0-0')
     add('--cnn_strides', default='1-1-1-2-1-1-1-2-1-1-1-0-0')
+    add('--cnn_dims', default='32-32-32-32-16-16-16-16-8-8-8-8-1')
 
     params = parser.parse_args()
 
@@ -131,6 +132,7 @@ def process_cli_params(params):
         params.cnn_fan = parse_argstring(params.cnn_fan, dtype=int)
         params.cnn_ksizes = parse_argstring(params.cnn_ksizes, dtype=int)
         params.cnn_strides = parse_argstring(params.cnn_strides, dtype=int)
+        params.cnn_dims = parse_argstring(params.cnn_dims, dtype=int)
         params.encoder_layers = params.cnn_fan
         params.rc_weights = enum_dict(([0] * (len(params.cnn_fan)-1)) + [float(
             params.rc_weights)])
