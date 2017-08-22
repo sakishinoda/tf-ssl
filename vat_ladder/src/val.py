@@ -996,10 +996,10 @@ def build_graph(params):
             tf.equal(model.predict, tf.argmax(outputs, 1)),
             "float")) * tf.constant(100.0)
 
-    learning_rate = tf.Variable(params.initial_learning_rate,
-                                name='lr', trainable=False)
+    # learning_rate = tf.Variable(params.initial_learning_rate, name='lr', trainable=False)
     # beta1 = tf.Variable(params.beta1, name='beta1', trainable=False)
-    beta1 = 0.9
+    learning_rate = tf.placeholder_with_default(params.initial_learning_rate, shape=[], name='lr')
+    beta1 = tf.placeholder_with_default(params.beta1, shape=[], name='beta1')
 
     train_step = tf.train.AdamOptimizer(learning_rate,
                                         beta1=beta1).minimize(loss)

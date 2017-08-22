@@ -140,22 +140,40 @@ def main():
         #       flush=True)
 
 
+    train_dict = {g['beta1']: p.beta1, g['lr']: p.initial_learning_rate}
+
     start = time.time()
     for i in tqdm(range(i_iter, p.num_iter)):
 
         images, labels = mnist.train.next_batch(p.batch_size, p.ul_batch_size)
+        train_dict.update({
+            g['images']: images,
+            g['labels']: labels,
+            g['train_flag']: True})
 
         _ = sess.run(
             [g['train_step']],
-            feed_dict={g['images']: images,
-                       g['labels']: labels,
-                       g['train_flag']: True})
+            feed_dict=train_dict)
 
         epoch_n = i // (p.num_examples // p.batch_size)
         # ---------------------------------------------
         # Epoch completed?
         if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
-            update_decays(sess, epoch_n, iter=i, graph=g, params=p)
+            # update_decays(sess, epoch_n, iter=i, graph=g, params=p)
+            if p.static_bn is False:
+                sess.run(g['ladder'].bn_decay.assign(
+                    1.0 - (1.0 / (epoch_n + 1))))
+
+            # Update learning rate and momentum
+            if ((epoch_n + 1) >= p.decay_start_epoch) and ((i + 1) % (
+                        p.iter_per_epoch * p.lr_decay_frequency) == 0):
+                # epoch_n + 1 because learning rate is set for next epoch
+                ratio = 1.0 * (p.end_epoch - (epoch_n + 1))
+                decay_epochs = p.end_epoch - p.decay_start_epoch
+                ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
+
+                train_dict[g['lr']] = (p.initial_learning_rate * ratio)
+                train_dict[g['beta1']] = p.beta1_during_decay
 
         # ---------------------------------------------
         # Evaluate every test_frequency_in_epochs
