@@ -127,6 +127,7 @@ class Encoder(object):
                 activation_fn=None,
                 scope=scope + str(l_out),
                 reuse=reuse)
+
             z_pre_l, z_pre_u = split_lu(z_pre)
             # bn_axes = list(range(len(z_pre_u.get_shape().as_list())))
             bn_axes = [0]
@@ -247,7 +248,7 @@ class VirtualAdversarialNoiseEncoder(Encoder):
         else:
             noise = tf.zeros(tf.shape(inputs))
 
-        return inputs + noise
+        return noise
 
 
 # ConvEncoder
@@ -708,6 +709,14 @@ class Model(object):
 
 
 class VirtualAdversarialTraining(Model):
+
+    def get_encoder(self):
+        return Encoder(
+            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+            params=self.params, this_encoder_noise=self.params.vadv_sd,
+            start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None
+        )
 
     def build_unsupervised(self):
         self.adv = Adversary(

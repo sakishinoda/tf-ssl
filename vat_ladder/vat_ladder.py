@@ -37,6 +37,7 @@ def main():
     if p.validation > 0:
         mnist.test = mnist.validation
     p.iter_per_epoch = (num_examples // p.ul_batch_size)
+
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
     # -----------------------------
