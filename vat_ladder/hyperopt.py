@@ -179,6 +179,14 @@ class HyperoptPowerIters(Hyperopt):
         elif self.params.model == "clw":
             self.params.rc_weights = enum_dict([898.44421, 8.81609, 0.61101, 0.11661, 0.13746, 0.50335, 0.63461])
             self.params.epsilon = enum_dict([0.11002, 0.0093, 0.00508, 1e-05, 0.00073, 0.00113, 0.00019])
+        elif self.params.model == "vat":
+            self.params.epsilon = enum_dict([5.0])
+            self.params.encoder_layers = parse_argstring("784-1200-600-300-150-10")
+            self.params.beta1_during_decay = 0.5
+            self.params.decay_start = 0.5
+            self.params.decay_start_epoch = self.params.decay_start * \
+                                            self.params.end_epoch
+
 
 
 def tune_single_parameter():
@@ -190,8 +198,8 @@ def tune_single_parameter():
         res[x] = hyperopt.objective(x)
         print(x, res[x])
 
-    print("""----------------------------------------
-----------------------------------------""")
+    print("----------------------------------------")
+    print("----------------------------------------")
     print("=== Complete ===")
     for k, v in res.items():
         print(k, v)
