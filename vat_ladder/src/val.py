@@ -112,6 +112,8 @@ class Encoder(object):
 
         for l_out in range(start_layer + 1, self.num_layers + 1):
             l_in = l_out - 1
+            # init_sd = 1 / math.sqrt(el[l_in]) # ladder
+            init_sd = 1 / math.sqrt(el[l_in] + el[l_out])  # vat
             self.print_progress(l_out)
 
             self.labeled.h[l_in], self.unlabeled.z[l_in] = split_lu(h)
@@ -120,7 +122,7 @@ class Encoder(object):
                 h,
                 num_outputs=el[l_out],
                 weights_initializer=tf.random_normal_initializer(
-                    stddev=1 / math.sqrt(el[l_in])),
+                    stddev=init_sd),
                 biases_initializer=None,
                 activation_fn=None,
                 scope=scope + str(l_out),
