@@ -6,9 +6,10 @@ from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings
 from src.val import build_graph, measure_smoothness
-from src.train import evaluate_metric_list, update_decays
+from src.train import evaluate_metric_list, update_decays, evaluate_metric
 from src import input_data
 import numpy as np
+
 
 
 def main():
@@ -112,8 +113,12 @@ def main():
     # -----------------------------
     print("=== Training ===")
     # -----------------------------
-    eval_metrics = lambda dataset, sess, ops: evaluate_metric_list(
-        dataset, sess, ops, graph=g, params=p)
+
+    def eval_metrics(dataset, sess, ops):
+        return evaluate_metric_list(dataset, sess, ops, graph=g, params=p)
+
+    def eval_metric(dataset, sess, op):
+        return evaluate_metric(dataset, sess, op, graph=g, params=p)
 
     # Evaluate initial training accuracy and losses
     # init_loss = evaluate_metric(
@@ -121,22 +126,13 @@ def main():
     with open(desc_file, 'a') as f:
         print('================================', file=f, flush=True)
         print("Initial Train Accuracy: ",
-              sess.run(m['acc'], feed_dict={
-                  g['images']: mnist.train.labeled_ds.images,
-                  g['labels']: mnist.train.labeled_ds.labels,
-                  g['train_flag']: False}),
+              eval_metric(mnist.train.labeled_ds, sess, m['acc']),
               "%", file=f, flush=True)
-        # print("Initial Train Losses: ", *eval_metrics(
-        #     mnist.train, sess, train_losses), file=f,
-        #       flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
         print("Initial Test Accuracy: ",
-              sess.run(m['acc'], feed_dict={
-                  g['images']: mnist.test.images,
-                  g['labels']: mnist.test.labels,
-                  g['train_flag']: False}),
+              eval_metric(mnist.test, sess, m['acc']),
               "%", file=f, flush=True)
         # print("Initial Test Losses: ",
         #       *eval_metrics(
