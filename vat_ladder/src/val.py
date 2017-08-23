@@ -172,7 +172,7 @@ class Encoder(object):
 
             if l_out == self.num_layers:
                 # return pre-softmax logits in final layer
-                self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
+                self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
                 h = tf.nn.softmax(self.logits)
 
             elif self.lrelu_a > 0.0:
@@ -194,8 +194,92 @@ class Encoder(object):
     def generate_noise(self, inputs, l_out):
         return tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
-# VAN Encoder
 
+# VAT Encoder
+class VATEncoder(Encoder):
+    def create_layers(self, inputs, bn, is_training, start_layer,
+                      update_batch_stats, scope, reuse):
+        # inputs = self.inputs
+        # bn = self.bn
+        # is_training = self.is_training
+        # start_layer = self.start_layer
+        # update_batch_stats = self.update_batch_stats
+        # scope = self.scope
+        # reuse = self.reuse
+
+        el = self.encoder_layers
+
+        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
+        # Layer 0: inputs, size 784
+        h = inputs + self.generate_noise(inputs, start_layer)
+        self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
+
+        for l_out in range(start_layer + 1, self.num_layers + 1):
+            l_in = l_out - 1
+            # init_sd = 1 / math.sqrt(el[l_in]) # ladder
+            init_sd = 1 / math.sqrt(el[l_in] + el[l_out])  # vat
+            self.print_progress(l_out)
+
+            self.labeled.h[l_in], self.unlabeled.z[l_in] = split_lu(h)
+            # z_pre = tf.matmul(h, self.W[l-1])
+            z_pre = layers.fully_connected(
+                h,
+                num_outputs=el[l_out],
+                weights_initializer=tf.random_normal_initializer(
+                    stddev=init_sd),
+                biases_initializer=None,
+                activation_fn=None,
+                scope=scope + str(l_out),
+                reuse=reuse)
+
+            m, v = tf.nn.moments(z_pre, axes=[0])
+
+            # if training:
+            def training_batch_norm():
+                # Training batch normalization
+                # batch normalization for labeled and unlabeled examples is
+                # performed separately
+
+                z = bn.update_batch_normalization(z_pre, l_out) if \
+                    update_batch_stats else bn.batch_normalization(z_pre)
+
+                noise = self.generate_noise(z, l_out)
+                z += noise
+
+                return z
+
+            # else:
+            def eval_batch_norm():
+                # Evaluation batch normalization
+                # obtain average mean and variance and use it to normalize the batch
+                mean = bn.ema.average(bn.running_mean[l_in])
+                var = bn.ema.average(bn.running_var[l_in])
+                z = bn.batch_normalization(z_pre, mean, var)
+
+                return z
+
+            # perform batch normalization according to value of boolean "training" placeholder:
+            z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
+
+            if l_out == self.num_layers:
+                # return pre-softmax logits in final layer
+                self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
+                h = tf.nn.softmax(self.logits)
+
+            elif self.lrelu_a > 0.0:
+                h = lrelu(z + bn.beta[l_in])
+
+            else:
+                # use ReLU activation in hidden layers
+                h = tf.nn.relu(z + bn.beta[l_in])
+
+            # save mean and variance of unlabeled examples for decoding
+            self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
+            self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(z)
+            self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
+
+
+# VAN Encoder
 class VirtualAdversarialNoiseEncoder(Encoder):
     def __init__(
             self, inputs, bn, is_training, params, clean_logits,
@@ -409,7 +493,7 @@ class ConvEncoder(Encoder):
                     z = z_pre
 
                 if l_out == self.num_layers:
-                    self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
+                    self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
                     h = tf.nn.softmax(self.logits)
                 elif self.lrelu_a > 0.0:
                     h = lrelu(z + bn.beta[l_in])
@@ -747,7 +831,7 @@ class Model(object):
 class VirtualAdversarialTraining(Model):
 
     def get_encoder(self):
-        return Encoder(
+        return VATEncoder(
             inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
             params=self.params, this_encoder_noise=self.params.vadv_sd,
             start_layer=0, update_batch_stats=True,
