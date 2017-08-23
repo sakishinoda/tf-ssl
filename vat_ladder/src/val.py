@@ -1150,7 +1150,7 @@ class VATAdversary(Adversary):
 
         h = x
         for i, l in enumerate(ls):
-            h = L.lrelu(tf.matmul(h, weight(l, i)) + bias(l[-1], i))
+            h = lrelu(tf.matmul(h, weight(l, i)) + bias(l[-1], i), self.params.lrelu_a)
             if i < len(ls) - 1:
                 h = self.vat_bn(h, l[-1], is_training=is_training,
                                 update_batch_stats=update_batch_stats,
