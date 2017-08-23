@@ -314,7 +314,7 @@ class ConvEncoder(Encoder):
             m_u, v_u = tf.nn.moments(z_pre_u, axes=bn_axes)
             return m_u, v_u, z_pre_l, z_pre_u
 
-        def split_bn(z_pre, is_training, noise_sd=0.0):
+        def split_bn(z_pre, is_training, l_out):
             m_u, v_u, z_pre_l, z_pre_u = split_moments(z_pre)
             # if is_training:
             def training_batch_norm():
@@ -328,19 +328,20 @@ class ConvEncoder(Encoder):
                     bn_l = bn.batch_normalization(z_pre_l)
                     bn_u = bn.batch_normalization(z_pre_u, m_u, v_u)
                     z = join(bn_l, bn_u)
-                    z += tf.random_normal(tf.shape(z_pre)) * self.noise_sd
+                    noise = self.generate_noise(z_pre, l_out)
+                    z += noise
                 else:
                     # Clean encoder
                     # batch normalization + update the average mean and variance using batch mean and variance of labeled examples
-                    bn_l = bn.update_batch_normalization(z_pre_l, l) if \
+                    bn_l = bn.update_batch_normalization(z_pre_l, l_out) if \
                         update_batch_stats else bn.batch_normalization(z_pre_l)
                     bn_u = bn.batch_normalization(z_pre_u, m_u, v_u)
                     z = join(bn_l, bn_u)
                 return z
 
             def eval_batch_norm():
-                mean = bn.ema.average(bn.running_mean[l-1])
-                var = bn.ema.average(bn.running_var[l-1])
+                mean = bn.ema.average(bn.running_mean[l_out-1])
+                var = bn.ema.average(bn.running_var[l_out-1])
                 z = bn.batch_normalization(z_pre, mean, var)
                 return z
 
@@ -349,55 +350,77 @@ class ConvEncoder(Encoder):
             return z, m_u, v_u
 
 
-        for l in range(1, self.num_layers+1):
+        for l_out in range(1, self.num_layers+1):
+            l_in = l_out-1
 
             print("Layer {}: {} -> {}".format(
-                l, layer_spec[l-1]['f_in'], layer_spec[l-1]['f_out']))
+                l_out, layer_spec[l_in]['f_in'],
+                layer_spec[l_out-1]['f_out']))
 
-            self.labeled.h[l-1], self.unlabeled.h[l-1] = split_lu(h)
+            self.labeled.h[l_in], self.unlabeled.h[l_in] = split_lu(h)
 
-            if layer_spec[l-1]['type'] == 'c':
-                h = conv(h,
-                         ksize=layer_spec[l-1]['ksize'],
+            # Convolutional layer
+            if layer_spec[l_in]['type'] == 'c':
+                z_pre = conv(h,
+                         ksize=layer_spec[l_in]['ksize'],
                          stride=1,
-                         f_in=layer_spec[l-1]['f_in'],
-                         f_out=layer_spec[l-1]['f_out'],
-                         seed=None, name='c' + str(l-1),
+                         f_in=layer_spec[l_in]['f_in'],
+                         f_out=layer_spec[l_in]['f_out'],
+                         seed=None, name='c' + str(l_in),
                          scope=self.scope, reuse=self.reuse)
-                h, m, v = split_bn(h, is_training=is_training, noise_sd=self.noise_sd)
-                h = lrelu(h, self.lrelu_a)
+                z, m, v = split_bn(
+                    z_pre, is_training=is_training, l_out=l_out)
+                h = lrelu(z + bn.beta[l_in], self.lrelu_a)
 
-            elif layer_spec[l-1]['type'] == 'max':
-                h = max_pool(h,
-                             ksize=layer_spec[l-1]['ksize'],
-                             stride=layer_spec[l-1]['stride'])
-                h, m, v = split_bn(h, is_training=is_training, noise_sd=self.noise_sd)
+            # Max pooling layer
+            elif layer_spec[l_in]['type'] == 'max':
+                z_pre = max_pool(h,
+                             ksize=layer_spec[l_in]['ksize'],
+                             stride=layer_spec[l_in]['stride'])
+                z, m, v = split_bn(
+                    z_pre, is_training=is_training, l_out=l_out)
+                h = z
 
-            elif layer_spec[l-1]['type'] == 'avg':
-                # Global average poolingg
-                h = tf.reduce_mean(h, reduction_indices=[1, 2])
-                m, v, _, _ = split_moments(h)
+            # Average pooling
+            elif layer_spec[l_in]['type'] == 'avg':
+                # Global average pooling
+                z_pre = tf.reduce_mean(h, reduction_indices=[1, 2])
+                m, v, _, _ = split_moments(z_pre)
+                z = z_pre
+                h = z
 
-            elif layer_spec[l-1]['type'] == 'fc':
-                h = fc(h, layer_spec[l-1]['f_in'],
-                       layer_spec[l-1]['f_out'],
-                       seed=None, name='fc', scope=self.scope, reuse=self.reuse)
+
+            # Fully connected layer
+            elif layer_spec[l_in]['type'] == 'fc':
+                z_pre = fc(h, layer_spec[l_in]['f_in'],
+                       layer_spec[l_in]['f_out'],
+                       seed=None, name='fc',
+                       scope=self.scope, reuse=self.reuse)
+
                 if self.top_bn:
-                    h, m, v = split_bn(h, is_training=is_training,
-                                     noise_sd=self.noise_sd)
+                    z, m, v = split_bn(
+                        z_pre, is_training=is_training, l_out=l_out)
                 else:
-                    m, v, _, _ = split_moments(h)
+                    m, v, _, _ = split_moments(z_pre)
+                    z = z_pre
+
+                if l_out == self.num_layers:
+                    self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
+                    h = tf.nn.softmax(self.logits)
+                else:
+                    h = lrelu(z + bn.beta[l_in])
+
+
             else:
                 print('Layer type not defined')
                 m, v, _, _ = split_moments(h)
 
-            # print(l, h.get_shape())
-            self.labeled.z[l], self.unlabeled.z[l] = split_lu(h)
-            # save mean and variance of unlabeled examples for decoding
-            self.unlabeled.m[l], self.unlabeled.v[l] = m, v
 
-        self.labeled.h[l], self.unlabeled.h[l] = split_lu(h)
-        self.logits = h
+            # save mean and variance of unlabeled examples for decoding
+            self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
+            self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(z)
+            self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
+
 
 
 # -----------------------------
@@ -1043,7 +1066,7 @@ def build_graph(params):
     m = dict()
     m['loss'] = loss
     m['cost'] = model.cost
-    m['uc'] = model.u_cost * 0.0
+    m['uc'] = model.u_cost
     m['acc'] = accuracy
     m['vc'] = vat_cost
 
