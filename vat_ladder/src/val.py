@@ -283,6 +283,7 @@ class VATEncoder(Encoder):
             self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
 
 
+
 # VAN Encoder
 class VirtualAdversarialNoiseEncoder(Encoder):
     def __init__(
@@ -1064,6 +1065,113 @@ class Adversary(object):
         loss = kl_divergence_with_logit(logit_p, logit_m)
         return tf.identity(loss, name=name)
 
+#
+
+class VATAdversary(Adversary):
+    def __init__(self, params):
+        super(VATAdversary, self).__init__(
+            bn=None, params=params, layer_eps=params.epsilon[0], start_layer=0)
+
+
+    def vat_bn(self, x, dim, is_training=True, update_batch_stats=True,
+               collections=None,
+               name="bn"):
+        params_shape = (dim,)
+        n = tf.to_float(tf.reduce_prod(tf.shape(x)[:-1]))
+        axis = list(range(int(tf.shape(x).get_shape().as_list()[0]) - 1))
+        mean = tf.reduce_mean(x, axis)
+        var = tf.reduce_mean(tf.pow(x - mean, 2.0), axis)
+        avg_mean = tf.get_variable(
+            name=name + "_mean",
+            shape=params_shape,
+            initializer=tf.constant_initializer(0.0),
+            collections=collections,
+            trainable=False
+        )
+
+        avg_var = tf.get_variable(
+            name=name + "_var",
+            shape=params_shape,
+            initializer=tf.constant_initializer(1.0),
+            collections=collections,
+            trainable=False
+        )
+
+        gamma = tf.get_variable(
+            name=name + "_gamma",
+            shape=params_shape,
+            initializer=tf.constant_initializer(1.0),
+            collections=collections
+        )
+
+        beta = tf.get_variable(
+            name=name + "_beta",
+            shape=params_shape,
+            initializer=tf.constant_initializer(0.0),
+            collections=collections,
+        )
+
+        if is_training:
+            avg_mean_assign_op = tf.no_op()
+            avg_var_assign_op = tf.no_op()
+            if update_batch_stats:
+                avg_mean_assign_op = tf.assign(
+                    avg_mean,
+                    self.params.static_bn * avg_mean + (
+                        1 - self.params.static_bn) * mean)
+                avg_var_assign_op = tf.assign(
+                    avg_var,
+                    self.params.static_bn * avg_var + (n / (n - 1))
+                    * (1 - self.params.static_bn) * var)
+
+            with tf.control_dependencies(
+                    [avg_mean_assign_op, avg_var_assign_op]):
+                z = (x - mean) / tf.sqrt(1e-6 + var)
+        else:
+            z = (x - avg_mean) / tf.sqrt(1e-6 + avg_var)
+
+        return gamma * z + beta
+
+    def logit(self, x, is_training=True, update_batch_stats=True):
+
+        params = self.params
+
+        def weight(s, i):
+            return tf.get_variable('w' + str(i), shape=s,
+                                   initializer=tf.random_normal_initializer(
+                                       stddev=(
+                                           1 / math.sqrt(sum(s)))))
+
+        def bias(s, i):
+            return tf.get_variable('b' + str(i), shape=s,
+                                   initializer=tf.zeros_initializer)
+
+        ls = list(zip(params.encoder_layers[:-1], params.encoder_layers[1:]))
+
+        h = x
+        for i, l in enumerate(ls):
+            h = L.lrelu(tf.matmul(h, weight(l, i)) + bias(l[-1], i))
+            if i < len(ls) - 1:
+                h = self.vat_bn(h, l[-1], is_training=is_training,
+                                update_batch_stats=update_batch_stats,
+                                name='bn' + str(i))
+                if is_training:  # for stabilisation
+                    h += tf.random_normal(tf.shape(h), stddev=self.params.vadv_sd)
+
+        return h
+
+    def forward(self, x, is_training, update_batch_stats=False):
+
+        def training_logit():
+            return self.logit(x, is_training=True,
+                              update_batch_stats=update_batch_stats)
+
+        def testing_logit():
+            return self.logit(x, is_training=False,
+                              update_batch_stats=update_batch_stats)
+
+        return tf.cond(is_training, training_logit, testing_logit)
+
 
 def get_vat_cost(model, train_flag, params):
     def unlabeled(x):
@@ -1099,11 +1207,13 @@ def get_vat_cost(model, train_flag, params):
     return vat_cost
 
 
+
+
 # -----------------------------
 # -----------------------------
 
 def build_graph(params):
-    model = params.model
+
     # -----------------------------
     # Placeholder setup
     inputs_placeholder = tf.placeholder(
@@ -1113,30 +1223,50 @@ def build_graph(params):
     outputs = tf.placeholder(tf.float32)
     train_flag = tf.placeholder(tf.bool)
 
-    if model == "c" or model == "clw":
+    if params.model == "c" or params.model == "clw":
         model = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_vat_cost(model, train_flag, params)
         loss = model.cost + model.u_cost + vat_cost
+        s_cost = model.cost
+        u_cost = model.u_cost
 
-    elif model == "n" or model == "nlw":
+    elif params.model == "n" or params.model == "nlw":
         model = LadderWithVAN(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
         loss = model.cost + model.u_cost
+        s_cost = model.cost
+        u_cost = model.u_cost
 
-    elif model == "vat":
-        model = VirtualAdversarialTraining(inputs, outputs, train_flag, params)
-        vat_cost = model.u_cost
-        loss = model.cost + model.u_cost
+    elif params.model == "vat":
+        model = VATAdversary(params)
+        logit = model.forward(x=inputs[:params.batch_size], is_training=train_flag, update_batch_stats=True)
+        s_cost = ce_loss(logit=logit,y=outputs)
 
-    elif model == "gamma":
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            ul_x = inputs[params.batch_size:]
+            ul_logit = model.forward(ul_x, is_training=train_flag,
+                                     update_batch_stats=False)
+            vat_cost = model.virtual_adversarial_loss(ul_x, ul_logit)
+            loss = s_cost + vat_cost
+            u_cost = vat_cost
+
+        # model = VirtualAdversarialTraining(inputs, outputs, train_flag, params)
+        # vat_cost = model.u_cost
+        # loss = model.cost + model.u_cost
+
+    elif params.model == "gamma":
         model = Gamma(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
         loss = model.cost + model.u_cost
+        s_cost = model.cost
+        u_cost = model.u_cost
 
     else:
         model = Ladder(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
         loss = model.cost + model.u_cost
+        s_cost = model.cost
+        u_cost = model.u_cost
 
     # -----------------------------
     # Loss, accuracy and training steps
@@ -1176,8 +1306,8 @@ def build_graph(params):
     # Metrics
     m = dict()
     m['loss'] = loss
-    m['cost'] = model.cost
-    m['uc'] = model.u_cost
+    m['cost'] = s_cost
+    m['uc'] = u_cost
     m['acc'] = accuracy
     m['vc'] = vat_cost
 
