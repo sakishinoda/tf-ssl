@@ -77,6 +77,12 @@ def get_cli_params():
     # Batch norm decay weight mode
     add('--static_bn', default=0.99, type=float)
 
+    # Use lrelu
+    add('--lrelu_a', default=0.0, type=float)
+
+    # Batch norm the top logits
+    add('--top_bn', action='store_true')
+
     # -------------------------
     # VAT SETTINGS
     # -------------------------
@@ -86,8 +92,6 @@ def get_cli_params():
     add('--xi', default=1e-6, type=float, help="small constant for finite difference")
     add('--vadv_sd', default=0.0, type=float,
         help="noise to add at each layer of forward pass for stability")
-    add('--lrelu_a', default=0.0, type=float)
-    add('--top_bn', action='store_true')
 
     # -------------------------
 

@@ -495,7 +495,7 @@ class Decoder(object):
         join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
 
         print("Layer {}: {} -> {}, denoising cost: {}".format(
-            l, ls[l + 1] if l + 1 < len(ls) else None,
+            l, ls[l+1] if l + 1 < len(ls) else None,
             ls[l], denoising_cost[l]
         ))
 
@@ -527,11 +527,12 @@ class Decoder(object):
 
         # append the cost of this layer to d_cost
         reduce_axes = list(range(1, len(z_est_bn.get_shape().as_list())))
-        d_cost = (tf.reduce_mean(
+
+        d_cost = denoising_cost[l] * (tf.reduce_mean(
             tf.reduce_sum(
                 tf.square(z_est_bn - z),
                 axis=reduce_axes
-            )) / ls[l]) * denoising_cost[l]
+            ))) # / ls[l])
 
         return d_cost
 
@@ -807,6 +808,15 @@ class Ladder(Model):
 
 #  Gamma
 class Gamma(Ladder):
+
+    def build_unsupervised(self):
+        pass
+
+    def get_cost(self):
+        pass
+
+    def get_u_cost(self):
+        pass
 
     def get_encoder(self):
         return ConvEncoder(
