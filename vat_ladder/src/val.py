@@ -528,11 +528,11 @@ class Decoder(object):
         # append the cost of this layer to d_cost
         reduce_axes = list(range(1, len(z_est_bn.get_shape().as_list())))
 
-        d_cost = denoising_cost[l] * (tf.reduce_mean(
+        d_cost = (tf.reduce_mean(
             tf.reduce_sum(
                 tf.square(z_est_bn - z),
                 axis=reduce_axes
-            ))) # / ls[l])
+            )) / ls[l]) * denoising_cost[l]
 
         return d_cost
 
@@ -772,8 +772,7 @@ class Ladder(Model):
     """"""
     def build_unsupervised(self):
         print("=== Corrupted Encoder === ")
-        self.corr = self.get_corrupted_encoder(
-            self.inputs, self.bn, self.train_flag, self.params)
+        self.corr = self.get_corrupted_encoder()
 
         print("=== Decoder ===")
         self.dec = self.get_decoder()
@@ -788,12 +787,15 @@ class Ladder(Model):
             labels=self.outputs, logits=self.labeled(self.corr.logits))
         return tf.reduce_mean(ce)
 
-    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
-                              start_layer=0, update_batch_stats=False,
-                              scope='enc', reuse=True):
+    def get_corrupted_encoder(self):
+        start_layer = 0
+        update_batch_stats = False
+        scope = 'enc'
+        reuse = True
+        params = self.params
         return Encoder(
-            inputs=inputs, bn=bn, is_training=train_flag,
-            params=params, this_encoder_noise=params.corrupt_sd,
+            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+            params=self.params, this_encoder_noise=params.corrupt_sd,
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
 
@@ -809,30 +811,31 @@ class Ladder(Model):
 #  Gamma
 class Gamma(Ladder):
 
-    def build_unsupervised(self):
-        pass
-
-    def get_cost(self):
-        pass
-
-    def get_u_cost(self):
-        pass
-
     def get_encoder(self):
-        return ConvEncoder(
-            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-            params=self.params, this_encoder_noise=0.0,
-            start_layer=0, update_batch_stats=True,
-            scope='enc', reuse=None)
+        if self.params.cnn:
+            return ConvEncoder(
+                inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+                params=self.params, this_encoder_noise=0.0,
+                start_layer=0, update_batch_stats=True,
+                scope='enc', reuse=None)
+        else:
+            super(Gamma, self).get_encoder()
 
-    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
-                              start_layer=0, update_batch_stats=False,
-                              scope='enc', reuse=True):
-        return ConvEncoder(
-            inputs=inputs, bn=bn, is_training=train_flag,
-            params=params, this_encoder_noise=params.corrupt_sd,
-            start_layer=start_layer, update_batch_stats=update_batch_stats,
-            scope=scope, reuse=reuse)
+
+    def get_corrupted_encoder(self):
+        if self.params.cnn:
+            start_layer = 0
+            update_batch_stats = False
+            scope = 'enc'
+            reuse = True
+            params = self.params
+            return ConvEncoder(
+                inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+                params=params, this_encoder_noise=params.corrupt_sd,
+                start_layer=start_layer, update_batch_stats=update_batch_stats,
+                scope=scope, reuse=reuse)
+        else:
+            super(Gamma, self).get_corrupted_encoder()
 
     def get_decoder(self):
         return GammaDecoder(
@@ -846,11 +849,14 @@ class Gamma(Ladder):
 
 #  VAN encoder
 class LadderWithVAN(Ladder):
-    def get_corrupted_encoder(self, inputs, bn, train_flag, params,
-                              start_layer=0, update_batch_stats=False,
-                              scope='enc', reuse=True):
+    def get_corrupted_encoder(self):
+        start_layer = 0
+        update_batch_stats = False
+        scope = 'enc'
+        reuse = True
+        params = self.params
         return VirtualAdversarialNoiseEncoder(
-            inputs, bn, train_flag, params, self.clean.logits,
+            self.inputs, self.bn, self.train_flag, params, self.clean.logits,
             this_encoder_noise=params.corrupt_sd,
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
