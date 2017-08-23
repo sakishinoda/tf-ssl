@@ -183,6 +183,10 @@ def main():
         if (i > 1) and ((i + 1) % int(p.test_frequency_in_epochs *
                            p.iter_per_epoch) == 0):
 
+            # For the last ten epochs, test every epoch
+            if (i+1) > (p.num_iter - (p.iter_per_epoch * 10)):
+                p.test_frequency_in_epochs = 1
+
             now = time.time() - start
 
             if not p.do_not_save:

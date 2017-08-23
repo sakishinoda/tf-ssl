@@ -78,6 +78,7 @@ class Encoder(object):
         self.lrelu_a = params.lrelu_a
         self.batch_size = params.batch_size
         self.encoder_layers = params.encoder_layers
+        self.top_bn = params.top_bn
 
         self.noise_sd = this_encoder_noise
         self.start_layer = start_layer
@@ -263,7 +264,10 @@ class VATEncoder(Encoder):
 
             if l_out == self.num_layers:
                 # return pre-softmax logits in final layer
-                self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
+                if self.top_bn:
+                    self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
+                else:
+                    self.logits = z
                 h = tf.nn.softmax(self.logits)
 
             elif self.lrelu_a > 0.0:
