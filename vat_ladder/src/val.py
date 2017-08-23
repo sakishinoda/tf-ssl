@@ -370,7 +370,11 @@ class ConvEncoder(Encoder):
                          scope=self.scope, reuse=self.reuse)
                 z, m, v = split_bn(
                     z_pre, is_training=is_training, l_out=l_out)
-                h = lrelu(z + bn.beta[l_in], self.lrelu_a)
+
+                if self.lrelu_a > 0.0:
+                    h = lrelu(z + bn.beta[l_in], self.lrelu_a)
+                else:
+                    h = tf.nn.relu(z + bn.beta[l_in])
 
             # Max pooling layer
             elif layer_spec[l_in]['type'] == 'max':
@@ -407,13 +411,16 @@ class ConvEncoder(Encoder):
                 if l_out == self.num_layers:
                     self.logits = bn.gamma[l_in] * (z + bn.beta[l_in])
                     h = tf.nn.softmax(self.logits)
-                else:
+                elif self.lrelu_a > 0.0:
                     h = lrelu(z + bn.beta[l_in])
+                else:
+                    h = tf.nn.relu(z + bn.beta[l_in])
 
 
             else:
                 print('Layer type not defined')
                 m, v, _, _ = split_moments(h)
+                z = h
 
 
             # save mean and variance of unlabeled examples for decoding

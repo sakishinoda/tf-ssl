@@ -65,27 +65,32 @@ def main():
         if not os.path.exists(p.tb):
             os.makedirs(p.tb_dir)
 
-    # Write logs to appropriate directory
-    log_dir = p.logdir + p.id
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    desc_file = log_dir + "/" + "description"
-    with open(desc_file, 'a') as f:
-        print(*order_param_settings(p), sep='\n', file=f, flush=True)
-        print("Trainable parameters:", trainable_parameters, file=f,
-              flush=True)
-
-    log_file = log_dir + "/" + "train_log"
-
 
     # -----------------------------
     print("===  Starting Session ===")
     sess = tf.Session()
     i_iter = 0
+
     # -----------------------------
+
+    id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
+
+    # Write logs to appropriate directory
+    log_dir = p.logdir + id_seed_dir
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    desc_file = log_dir + "description"
+    with open(desc_file, 'a') as f:
+        print(*order_param_settings(p), sep='\n', file=f, flush=True)
+        print("Trainable parameters:", trainable_parameters, file=f,
+              flush=True)
+
+    log_file = log_dir + "train_log"
+
+
     # Resume from checkpoint
-    ckpt_dir = "checkpoints/" + p.id + "/"
+    ckpt_dir = "checkpoints/" + id_seed_dir
     ckpt = tf.train.get_checkpoint_state(
         ckpt_dir)  # get latest checkpoint (if any)
 
