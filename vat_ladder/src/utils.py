@@ -139,8 +139,8 @@ def process_cli_params(params):
         params.cnn_strides = parse_argstring(params.cnn_strides, dtype=int)
         params.cnn_dims = parse_argstring(params.cnn_dims, dtype=int)
         params.encoder_layers = params.cnn_fan
-        params.rc_weights = enum_dict(([0] * (len(params.cnn_fan)-1)) + [float(
-            params.rc_weights)])
+        # params.rc_weights = enum_dict(([0] * (len(params.cnn_fan)-1)) + [float(
+        #     params.rc_weights)])
 
         if params.dataset == "mnist":
             params.cnn_init_size = 28
@@ -154,8 +154,8 @@ def process_cli_params(params):
     else:
         params.encoder_layers = parse_argstring(params.encoder_layers,
                                                 dtype=int)
-        params.rc_weights = enum_dict(
-            parse_argstring(params.rc_weights, dtype=float))
+    params.rc_weights = enum_dict(
+        parse_argstring(params.rc_weights, dtype=float))
 
 
 
