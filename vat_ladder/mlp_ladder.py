@@ -6,7 +6,7 @@ from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings, count_trainable_params, preprocess
 from src.val import Ladder
-from src import input_data
+from src import mnist
 import numpy as np
 from src.train import update_decays
 
@@ -25,10 +25,10 @@ def main():
     tf.set_random_seed(params.seed)
 
     print("===  Loading Data ===")
-    mnist = input_data.read_data_sets("MNIST_data",
-                                      n_labeled=params.num_labeled,
-                                      one_hot=True,
-                                      disjoint=False)
+    mnist = mnist.read_data_sets("MNIST_data",
+                                 n_labeled=params.num_labeled,
+                                 one_hot=True,
+                                 disjoint=False)
     num_examples = mnist.train.num_examples
     # -----------------------------
     # Parameter setup

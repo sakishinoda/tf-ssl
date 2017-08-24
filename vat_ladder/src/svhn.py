@@ -45,6 +45,7 @@ def maybe_download_and_extract(data_dir, downsample=False):
         urllib.request.urlretrieve(DATA_URL_TEST, filepath_test_mat, _progress)
 
     # Training set
+    print('\n')
     print("Loading training data...")
     print("Preprocessing training data...")
     train_data = loadmat(filepath_train_mat)

@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import IPython
-from conv_ladder import *
+
 from tensorflow.examples.tutorials.mnist import input_data
 import argparse
 
@@ -107,7 +107,7 @@ def test_nargs():
 
 from src.val import build_graph
 from src.utils import get_cli_params, process_cli_params
-from src import input_data
+from src import mnist
 from src.val import softmax_cross_entropy_with_logits
 def test_hessian_ops():
     p = process_cli_params(get_cli_params())
@@ -147,7 +147,12 @@ def test_hessian_ops():
 
 
 if __name__ == '__main__':
-    test_hessian_ops()
+
+    from src.svhn import read_data_sets
+    svhn = read_data_sets('../../data/svhn/')
+    IPython.embed()
+
+    # test_hessian_ops()
     # test_nargs()
     # test_simple_dae(training=False)
     # test_cnn_ladder()

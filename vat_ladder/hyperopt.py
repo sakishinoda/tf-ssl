@@ -2,7 +2,7 @@ import tensorflow as tf
 import os
 from src.val import build_graph
 from src.train import evaluate_metric
-from src import input_data
+from src import mnist
 import numpy as np
 from src.utils import process_cli_params, get_cli_params
 from skopt import gp_minimize, dump
@@ -38,11 +38,11 @@ class Hyperopt(object):
         tf.set_random_seed(p.seed)
 
         # Load data
-        mnist = input_data.read_data_sets("MNIST_data",
-                                          n_labeled=p.num_labeled,
-                                          validation_size=p.validation,
-                                          one_hot=True,
-                                          disjoint=False)
+        mnist = mnist.read_data_sets("MNIST_data",
+                                     n_labeled=p.num_labeled,
+                                     validation_size=p.validation,
+                                     one_hot=True,
+                                     disjoint=False)
         num_examples = mnist.train.num_examples
         if p.validation > 0:
             mnist.test = mnist.validation
