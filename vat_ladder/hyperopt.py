@@ -5,7 +5,7 @@ from src.train import evaluate_metric
 from src import input_data
 import numpy as np
 import argparse
-from src.utils import parse_argstring, enum_dict
+from src.utils import parse_argstring, enum_dict, process_cli_params, get_cli_params
 from skopt import gp_minimize, dump
 import sys
 from tqdm import tqdm
@@ -13,70 +13,10 @@ from tqdm import tqdm
 class Hyperopt(object):
     def __init__(self):
         # Parse command line and default parameters
-        self.params = self.get_cli_params()
-        self.params_dict = vars(self.params)
-        self.get_default_params()
+        self.params = process_cli_params(get_cli_params())
+
         # for k in sorted(self.params_dict.keys()):
         #     print(k, self.params_dict[k])
-
-
-    def get_cli_params(self):
-        # if x is None:
-        #     x = [150, 0.67, 100, 0.002, 0.3, 8.0, 1.0,
-        #          2000, 20, 0.2, 0.2, 0.2, 0.2, 0.2]
-
-        parser = argparse.ArgumentParser()
-
-        # -------------------------
-        # Specify at run time of hyperopt
-        parser.add_argument('--which_gpu', default=0, type=int)
-        parser.add_argument('--num_labeled', default=100, type=int)
-        parser.add_argument('--dump', default='res')
-        parser.add_argument('--model', default='c',
-                            choices=['c', 'clw', 'n', 'nlw', "ladder", "vat"])
-        parser.add_argument('--end_epoch', default=1, type=int)
-
-        parser.add_argument('--batch_size', default=100, type=int)
-        parser.add_argument('--ul_batch_size', default=250, type=int)
-
-        params = parser.parse_args()
-        return params
-
-    def add(self, key, default=None, type=None):
-        self.params_dict[key] = default
-
-    def get_default_params(self):
-        add = self.add
-        # -------------------------
-        # Use default values
-        p = self.params
-        p.dataset = 'mnist'
-        p.lrelu_a = 0.0
-        p.initial_learning_rate = 0.002
-
-        add('static_bn', 0.99)
-        add('decay_start', 1.0)
-        add('decay_start_epoch', self.params.end_epoch *
-            self.params.decay_start)
-        add('beta1', 0.9)
-        add('beta1_during_decay', 0.9)
-        add('test_frequency_in_epochs', default=5, type=int)
-        add('validation', default=1000, type=int)
-        add('seed', default=1, type=int)
-        add('lr_decay_frequency', default=5, type=int)
-
-
-
-        add('encoder_layers',
-            default=parse_argstring('784-1000-500-250-250-250-10', dtype=int))
-        add('num_power_iters', default=1, type=int)
-        add('xi', default=1e-6, type=float)
-        add('cnn', False)
-
-        add('corrupt_sd', 0.3)
-        add('vadv_sd', 0.5)
-
-        add('input_size', 784)
 
 
     def objective(self, x):
@@ -114,6 +54,7 @@ class Hyperopt(object):
 
         g, m, trainable_parameters = build_graph(p)
 
+        print("=== Starting Session ===")
         with tf.Session() as sess:
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -162,8 +103,6 @@ class Hyperopt(object):
 
     def convert_dims_to_params(self, x):
 
-        add = self.add
-
         # -------------------------
         # Optimize
         self.params.rc_weights = {0: x[0], 1: x[1],
@@ -188,46 +127,46 @@ class Hyperopt(object):
 
 
 
-class HyperoptPowerIters(Hyperopt):
-    def convert_dims_to_params(self, x):
-        self.params.num_power_iters = x
-        return self.params
-
-    def get_default_params(self):
-        super(HyperoptPowerIters, self).get_default_params()
-
-        if self.params.model == "c":
-            self.params.rc_weights = enum_dict([898.44421, 20.73306, 0.17875, 0.31394, 0.02214, 0.39981, 0.04065])
-            self.params.epsilon = enum_dict([0.03723])
-        elif self.params.model == "clw":
-            self.params.rc_weights = enum_dict([898.44421, 8.81609, 0.61101, 0.11661, 0.13746, 0.50335, 0.63461])
-            self.params.epsilon = enum_dict([0.11002, 0.0093, 0.00508, 1e-05, 0.00073, 0.00113, 0.00019])
-        elif self.params.model == "vat":
-            self.params.epsilon = enum_dict([5.0])
-            self.params.encoder_layers = parse_argstring(
-                "784-1200-600-300-150-10", dtype=int)
-            self.params.beta1_during_decay = 0.5
-            self.params.decay_start = 0.5
-            self.params.decay_start_epoch = self.params.decay_start * \
-                                            self.params.end_epoch
-
-
-
-def tune_single_parameter():
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
-    hyperopt = HyperoptPowerIters()
-    dims = [1, 2, 3, 4, 5]
-    res = {}
-    for x in dims:
-        res[x] = hyperopt.objective(x)
-        print(x, res[x])
-
-    print("----------------------------------------")
-    print("----------------------------------------")
-    print("=== Complete ===")
-    for k, v in res.items():
-        print(k, v)
-
+# class HyperoptPowerIters(Hyperopt):
+#     def convert_dims_to_params(self, x):
+#         self.params.num_power_iters = x
+#         return self.params
+#
+#     def get_default_params(self):
+#         super(HyperoptPowerIters, self).get_default_params()
+#
+#         if self.params.model == "c":
+#             self.params.rc_weights = enum_dict([898.44421, 20.73306, 0.17875, 0.31394, 0.02214, 0.39981, 0.04065])
+#             self.params.epsilon = enum_dict([0.03723])
+#         elif self.params.model == "clw":
+#             self.params.rc_weights = enum_dict([898.44421, 8.81609, 0.61101, 0.11661, 0.13746, 0.50335, 0.63461])
+#             self.params.epsilon = enum_dict([0.11002, 0.0093, 0.00508, 1e-05, 0.00073, 0.00113, 0.00019])
+#         elif self.params.model == "vat":
+#             self.params.epsilon = enum_dict([5.0])
+#             self.params.encoder_layers = parse_argstring(
+#                 "784-1200-600-300-150-10", dtype=int)
+#             self.params.beta1_during_decay = 0.5
+#             self.params.decay_start = 0.5
+#             self.params.decay_start_epoch = self.params.decay_start * \
+#                                             self.params.end_epoch
+#
+#
+#
+# def tune_single_parameter():
+#     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
+#     hyperopt = HyperoptPowerIters()
+#     dims = [1, 2, 3, 4, 5]
+#     res = {}
+#     for x in dims:
+#         res[x] = hyperopt.objective(x)
+#         print(x, res[x])
+#
+#     print("----------------------------------------")
+#     print("----------------------------------------")
+#     print("=== Complete ===")
+#     for k, v in res.items():
+#         print(k, v)
+#
 
 def main():
 
@@ -240,7 +179,7 @@ def main():
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
     print(res.fun, ":", *res.x)
 
-    dump(res, hyperopt.params.dump + '.gz')
+    dump(res, hyperopt.params.logdir + hyperopt.params.id + '/hyperopt_res.gz')
 
 
 
