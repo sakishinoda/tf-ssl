@@ -154,13 +154,13 @@ def main():
     # mnist.train.labeled_ds, sess, cost)
     with open(desc_file, 'a') as f:
         print('================================', file=f, flush=True)
-        print("Initial Train Accuracy: ",
+        print("Initial Train AER: ",
               eval_metric(dataset.train.labeled_ds, sess, aer),
               "%", file=f, flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
-        print("Initial Test Accuracy: ",
+        print("Initial Test AER: ",
               eval_metric(dataset.test, sess, aer),
               "%", file=f, flush=True)
         # print("Initial Test Losses: ",
@@ -241,7 +241,7 @@ def main():
 
 
     with open(desc_file, 'a') as f:
-        print("Final Accuracy: ", sess.run(aer, feed_dict={
+        print("Final AER: ", sess.run(aer, feed_dict={
             g['images']: dataset.test.images, g['labels']:
                 dataset.test.labels,
             g['train_flag']: False}),
