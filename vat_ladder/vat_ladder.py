@@ -22,6 +22,8 @@ def main():
     # Set GPU device to use
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
 
     # Set seeds
     np.random.seed(p.seed)
