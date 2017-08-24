@@ -72,7 +72,7 @@ def main():
 
     # -----------------------------
     print("===  Starting Session ===")
-    sess = tf.Session()
+    sess = tf.Session(config=config)
     i_iter = 0
 
     # -----------------------------
