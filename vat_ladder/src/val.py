@@ -1542,9 +1542,14 @@ def build_vat_graph(params):
 
     params.epsilon = params.epsilon[0]
     # Training
-    inputs = tf.placeholder(tf.float32, shape=(None, 784))
+    all_inputs = tf.placeholder(tf.float32, shape=(None, 784))
+    inputs = all_inputs[:params.batch_size]
+    inputs.set_shape(shape=(params.batch_size, 784))
+
     outputs = tf.placeholder(tf.float32, shape=(None, 10))
-    ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
+
+    ul_inputs = all_inputs[params.batch_size:]
+    ul_inputs.set_shape(shape=(params.ul_batch_size, 784))
 
     lr = tf.placeholder_with_default(params.initial_learning_rate, shape=[],
                                      name="learning_rate")
@@ -1562,6 +1567,7 @@ def build_vat_graph(params):
     g = dict()
     g['images'] = inputs
     g['labels'] = outputs
+    g['ul_images'] = ul_inputs
     g['train_flag'] = tf.placeholder_with_default(True, shape=[])
     g['ladder'] = None
     g['saver'] = saver
