@@ -7,7 +7,7 @@ from src.utils import get_cli_params, process_cli_params, \
     order_param_settings
 from src.val import build_graph, measure_smoothness, VERBOSE
 from src.train import evaluate_metric_list, update_decays, evaluate_metric
-from src import input_data
+
 import numpy as np
 
 
@@ -31,18 +31,34 @@ def main():
 
     # Load data
     print("===  Loading Data ===")
-    mnist = input_data.read_data_sets("MNIST_data",
-                                      n_labeled=p.num_labeled,
-                                      validation_size=p.validation,
-                                      one_hot=True,
-                                      disjoint=False)
-    num_examples = mnist.train.num_examples
+    if p.dataset == 'svhn':
+        from src.svhn import read_data_sets
+        dataset = read_data_sets(
+            "../../data/svhn/",
+            n_labeled=p.num_labeled,
+            validation_size=p.validation,
+            one_hot=True,
+            disjoint=False,
+            downsample=True,
+            download_and_extract=False
+        )
+
+    else:
+        from src.mnist import read_data_sets
+        dataset = read_data_sets("MNIST_data",
+                         n_labeled=p.num_labeled,
+                         validation_size=p.validation,
+                         one_hot=True,
+                         disjoint=False)
+
+    num_examples = dataset.train.num_examples
     p.num_examples = num_examples
     if p.validation > 0:
-        mnist.test = mnist.validation
+        dataset.test = dataset.validation
     p.iter_per_epoch = (num_examples // p.ul_batch_size)
 
     p.num_iter = p.iter_per_epoch * p.end_epoch
+
 
     # -----------------------------
     # Build graph
@@ -136,13 +152,13 @@ def main():
     with open(desc_file, 'a') as f:
         print('================================', file=f, flush=True)
         print("Initial Train Accuracy: ",
-              eval_metric(mnist.train.labeled_ds, sess, m['acc']),
+              eval_metric(dataset.train.labeled_ds, sess, m['acc']),
               "%", file=f, flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
         print("Initial Test Accuracy: ",
-              eval_metric(mnist.test, sess, m['acc']),
+              eval_metric(dataset.test, sess, m['acc']),
               "%", file=f, flush=True)
         # print("Initial Test Losses: ",
         #       *eval_metrics(
@@ -155,7 +171,7 @@ def main():
     start = time.time()
     for i in tqdm(range(i_iter, p.num_iter)):
 
-        images, labels = mnist.train.next_batch(p.batch_size, p.ul_batch_size)
+        images, labels = dataset.train.next_batch(p.batch_size, p.ul_batch_size)
         train_dict.update({
             g['images']: images,
             g['labels']: labels,
@@ -199,8 +215,8 @@ def main():
             # ---------------------------------------------
             # Compute error on testing set (10k examples)
             test_acc_and_costs = \
-                eval_metrics(mnist.test, sess, [m['acc']] + test_losses)
-            train_acc = eval_metrics(mnist.train.labeled_ds, sess, [m['acc']])
+                eval_metrics(dataset.test, sess, [m['acc']] + test_losses)
+            train_acc = eval_metrics(dataset.train.labeled_ds, sess, [m['acc']])
             train_costs = sess.run(train_losses,
                 feed_dict={g['images']: images,
                            g['labels']: labels,
@@ -223,8 +239,8 @@ def main():
 
     with open(desc_file, 'a') as f:
         print("Final Accuracy: ", sess.run(m['acc'], feed_dict={
-            g['images']: mnist.test.images, g['labels']:
-                mnist.test.labels,
+            g['images']: dataset.test.images, g['labels']:
+                dataset.test.labels,
             g['train_flag']: False}),
               "%", file=f, flush=True)
 

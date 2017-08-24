@@ -5,6 +5,163 @@
 import argparse
 import numpy as np
 import tensorflow as tf
+from math import ceil
+
+# -----------------------------
+# DATASETS
+# -----------------------------
+
+class DataSet(object):
+
+  def __init__(self, images, labels, fake_data=False, preprocessed=False):
+    if fake_data:
+      self._num_examples = 10000
+    elif preprocessed:
+        self._num_examples = images.shape[0]
+    else:
+      assert images.shape[0] == labels.shape[0], (
+          "images.shape: %s labels.shape: %s" % (images.shape,
+                                                 labels.shape))
+      self._num_examples = images.shape[0]
+
+      # Convert shape from [num examples, rows, columns, depth]
+      # to [num examples, rows*columns] (assuming depth == 1)
+      # assert images.shape[3] == 1
+      images = images.reshape(images.shape[0],
+                              images.shape[1] * images.shape[2])
+      # Convert from [0, 255] -> [0.0, 1.0].
+      images = images.astype(np.float32)
+      images = np.multiply(images, 1.0 / 255.0)
+
+    self._images = images
+    self._labels = labels
+    self._epochs_completed = 0
+    self._index_in_epoch = 0
+
+  @property
+  def images(self):
+    return self._images
+
+  @property
+  def labels(self):
+    return self._labels
+
+  @property
+  def num_examples(self):
+    return self._num_examples
+
+  @property
+  def epochs_completed(self):
+    return self._epochs_completed
+
+  def next_batch(self, batch_size, fake_data=False):
+    """Return the next `batch_size` examples from this data set."""
+    if fake_data:
+      fake_image = [1.0 for _ in range(784)]
+      fake_label = 0
+      return [fake_image for _ in range(batch_size)], [
+          fake_label for _ in range(batch_size)]
+    start = self._index_in_epoch
+    self._index_in_epoch += batch_size
+    if self._index_in_epoch > self._num_examples:
+      # Finished epoch
+      self._epochs_completed += 1
+      # Shuffle the data
+      perm = np.arange(self._num_examples)
+      np.random.shuffle(perm)
+      self._images = self._images[perm]
+      self._labels = self._labels[perm]
+      # Start next epoch
+      start = 0
+      self._index_in_epoch = batch_size
+      assert batch_size <= self._num_examples
+    end = self._index_in_epoch
+    return self._images[start:end], self._labels[start:end]
+
+
+class SemiDataSet(object):
+    def __init__(self, images, labels, n_labeled, disjoint=False,
+                 preprocessed=False):
+        self._n_labeled = n_labeled
+        self.disjoint = disjoint
+        l_images, l_labels, u_images, u_labels = self.sample_balanced_labeled(images, labels, num_labeled=n_labeled)
+
+        # Unlabeled DataSet
+        if disjoint:
+            self._unlabeled_ds = DataSet(u_images, u_labels, preprocessed=preprocessed)
+        else:
+            self._unlabeled_ds = DataSet(images, labels, preprocessed=preprocessed)
+
+        # Labeled DataSet
+        self._labeled_ds = DataSet(l_images, l_labels, preprocessed=preprocessed)
+
+    def next_batch(self, batch_size, ul_batch_size=None):
+        if ul_batch_size is None:
+            ul_batch_size = batch_size
+        unlabeled_images, _ = self.unlabeled_ds.next_batch(ul_batch_size)
+        if batch_size > self.n_labeled:
+            labeled_images, labels = self.labeled_ds.next_batch(self.n_labeled)
+        else:
+            labeled_images, labels = self.labeled_ds.next_batch(batch_size)
+        images = np.vstack([labeled_images, unlabeled_images])
+        return images, labels
+
+    def sample_balanced_labeled(self, images, labels, num_labeled):
+        n_total, n_classes = labels.shape
+
+        # First create a fully balanced set larger than desired
+        nl_per_class = int(ceil(num_labeled / n_classes))
+        # rng = self.rng
+        idx = []
+
+        for c in range(n_classes):
+            c_idx = np.where(labels[:,c]==1)[0]
+            idx.append(np.random.choice(c_idx, nl_per_class))
+        l_idx = np.concatenate(idx)
+
+        # Now sample uniformly without replacement from the larger set to get desired
+        l_idx = np.random.choice(l_idx, size=num_labeled, replace=False)
+
+        u_idx = np.setdiff1d(np.arange(n_total), l_idx, assume_unique=True)
+
+        return images[l_idx], labels[l_idx], images[u_idx], labels[u_idx]
+
+
+
+    @property
+    def n_labeled(self):
+        return self._n_labeled
+
+    @property
+    def num_examples(self):
+        if self.disjoint:
+            return self.num_labeled + self.num_unlabeled
+        else:
+            return self.num_unlabeled
+
+    @property
+    def labeled_ds(self):
+        return self._labeled_ds
+
+    @property
+    def unlabeled_ds(self):
+        return self._unlabeled_ds
+
+    @property
+    def num_labeled(self):
+        return self._labeled_ds.num_examples
+
+    @property
+    def num_unlabeled(self):
+        return self._unlabeled_ds.num_examples
+
+def dense_to_one_hot(labels_dense, num_classes=10):
+    """Convert class labels from scalars to one-hot vectors."""
+    num_labels = labels_dense.shape[0]
+    index_offset = np.arange(num_labels) * num_classes
+    labels_one_hot = np.zeros((num_labels, num_classes))
+    labels_one_hot.flat[(index_offset + labels_dense.ravel()).astype(int)] = 1
+    return labels_one_hot
 
 # -----------------------------
 # PARAMETER PARSING
@@ -33,8 +190,8 @@ def get_cli_params():
     # -------------------------
     # DATA
     # -------------------------
-    add('--dataset', default='mnist')
-
+    add('--dataset', default='mnist', choices=['mnist', 'svhn'])
+    add('--input_size', default=784, type=int)
     # -------------------------
     # EVALUATE
     # -------------------------
@@ -130,7 +287,7 @@ def process_cli_params(params):
 
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
     params.eval_batch_size = params.batch_size  # this should be redundant
-    params.input_size = 784 if params.dataset == "mnist" else 784
+    params.input_size = 768 if params.dataset == 'svhn' else 784
 
     if params.cnn:
         params.cnn_layer_types = parse_argstring(params.cnn_layer_types,
