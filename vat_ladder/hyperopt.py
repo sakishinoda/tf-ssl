@@ -46,7 +46,11 @@ class Hyperopt(object):
         add = self.add
         # -------------------------
         # Use default values
-        add('initial_learning_rate', 0.002)
+        p = self.params
+        p.dataset = 'mnist'
+        p.lrelu_a = 0.0
+        p.initial_learning_rate = 0.002
+
         add('static_bn', 0.99)
         add('decay_start', 1.0)
         add('decay_start_epoch', self.params.end_epoch *
@@ -68,17 +72,7 @@ class Hyperopt(object):
         add('vadv_sd', 0.5)
 
 
-    def convert_dims_to_params(self, x):
 
-        add = self.add
-
-        # -------------------------
-        # Optimize
-
-        add('rc_weights', enum_dict(x[:7]))
-        add('epsilon', enum_dict(x[7:]))
-
-        return self.params
 
     def objective(self, x):
 
@@ -138,32 +132,52 @@ class Hyperopt(object):
         return val_err
 
     def get_dims(self):
+
         dims = [
             # rc_weights
             (500., 5000, 'log-uniform'),  # 0 rc_0
             (5.00, 50., 'log-uniform'),  # 1 rc_1
-            (0.01, 1.0, 'log-uniform'),  # 2 rc_2
-            (0.01, 1.0, 'log-uniform'),  # 3 rc_3
-            (0.01, 1.0, 'log-uniform'),  # 4 rc_4
-            (0.01, 1.0, 'log-uniform'),  # 5 rc_5
-            (0.01, 1.0, 'log-uniform'),  # 6 rc_6
-            (0.01, 10.0, 'log-uniform')  # 7: eps_0
+            (0.01, 1.0, 'log-uniform'),  # 2 rc_2:6
+            (0.01, 1.0),                # 3 corrupt_sd
+            (0.01, 1.0),                # 4 vadv_sd
+            (1, 2, 3, 4),               # 5 num_power_iters
+            (0.01, 10.0, 'log-uniform')  # 6: eps_0
         ]
-
-        x0 = [1000, 10, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0]
+        x0 = [1000, 10, 0.1, 0.3, 0.5, 3, 1.0]
 
         if self.params.model == 'clw' or self.params.model == 'nlw':
             dims += [
                 (1e-3, 0.5, 'log-uniform'),  # 7 eps_1
                 (1e-5, 0.1, 'log-uniform'),  # 8 eps_2
-                (1e-5, 0.1, 'log-uniform'),  # 9 eps_3
-                (1e-5, 0.1, 'log-uniform'),  # 10 eps_4
-                (1e-5, 0.1, 'log-uniform'),  # 11 eps_5
-                (1e-5, 0.1, 'log-uniform')  # 12 eps_6
             ]
-            x0 += [0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
+            x0 += [0.1, 0.001]
 
         return dims, x0
+
+
+    def convert_dims_to_params(self, x):
+
+        add = self.add
+
+        # -------------------------
+        # Optimize
+        self.params.rc_weights = {0: x[0], 1: x[1],
+                                  2: x[2], 3: x[2],
+                                  4: x[2], 5: x[2],
+                                  6: x[2]
+                                  }
+        self.params.corrupt_sd = x[3]
+        self.params.vadv_sd = x[4]
+        self.params.num_power_iters = x[5]
+        self.params.epsilon = {0: x[6], 1: x[7],
+                               2: x[8], 3: x[8],
+                               4: x[8], 5: x[8],
+                               6: x[8]
+                               }
+
+        return self.params
+
+
 
 class HyperoptPowerIters(Hyperopt):
     def convert_dims_to_params(self, x):
@@ -215,13 +229,13 @@ def main():
 
     print("=== Beginning Search ===")
     res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
-    print(res.x, res.fun)
+    print(res.fun, ":", *res.x)
 
     dump(res, hyperopt.params.dump + '.gz')
 
 
 
 if __name__ == '__main__':
-    tune_single_parameter()
-    # main()
+    # tune_single_parameter()
+    main()
 
