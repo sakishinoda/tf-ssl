@@ -1483,7 +1483,7 @@ def build_vat_graph(params):
     def generate_virtual_adversarial_perturbation(x, logit, is_training=True):
         d = tf.random_normal(shape=tf.shape(x))
 
-        for _ in range(params.num_power_iterations):
+        for _ in range(params.num_power_iters):
             d = params.xi * get_normalized_vector(d)
             logit_p = logit
             logit_m = forward(x + d, update_batch_stats=False,
