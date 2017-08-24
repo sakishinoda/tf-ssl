@@ -69,6 +69,7 @@ def main():
     # Collect losses
     train_losses = [m['loss'], m['cost'], m['uc'], m['vc']]
     test_losses = [m['cost']]
+    aer = tf.constant(100.0) - m['acc']
 
     if p.measure_smoothness:
         s = measure_smoothness(g, p)
@@ -78,10 +79,10 @@ def main():
     if p.tb is not False:
         train_merged = tf.summary.merge([
             tf.summary.scalar(x) for x in train_losses
-        ] + [tf.summary.scalar(m['acc'])])
+        ] + [tf.summary.scalar(aer)])
         test_merged = tf.summary.merge([
             tf.summary.scalar(x) for x in test_losses
-        ] + [tf.summary.scalar(m['acc'])])
+        ] + [tf.summary.scalar(aer)])
 
         # Set up tensorboard logging
         if not os.path.exists(p.tb):
@@ -154,13 +155,13 @@ def main():
     with open(desc_file, 'a') as f:
         print('================================', file=f, flush=True)
         print("Initial Train Accuracy: ",
-              eval_metric(dataset.train.labeled_ds, sess, m['acc']),
+              eval_metric(dataset.train.labeled_ds, sess, aer),
               "%", file=f, flush=True)
 
         # -----------------------------
         # Evaluate initial testing accuracy and cross-entropy loss
         print("Initial Test Accuracy: ",
-              eval_metric(dataset.test, sess, m['acc']),
+              eval_metric(dataset.test, sess, aer),
               "%", file=f, flush=True)
         # print("Initial Test Losses: ",
         #       *eval_metrics(
@@ -217,8 +218,8 @@ def main():
             # ---------------------------------------------
             # Compute error on testing set (10k examples)
             test_acc_and_costs = \
-                eval_metrics(dataset.test, sess, [m['acc']] + test_losses)
-            train_acc = eval_metrics(dataset.train.labeled_ds, sess, [m['acc']])
+                eval_metrics(dataset.test, sess, [aer] + test_losses)
+            train_acc = eval_metrics(dataset.train.labeled_ds, sess, [aer])
             train_costs = sess.run(train_losses,
                 feed_dict={g['images']: images,
                            g['labels']: labels,
@@ -240,7 +241,7 @@ def main():
 
 
     with open(desc_file, 'a') as f:
-        print("Final Accuracy: ", sess.run(m['acc'], feed_dict={
+        print("Final Accuracy: ", sess.run(aer, feed_dict={
             g['images']: dataset.test.images, g['labels']:
                 dataset.test.labels,
             g['train_flag']: False}),

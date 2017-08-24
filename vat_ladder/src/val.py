@@ -1559,7 +1559,7 @@ def build_vat_graph(params):
     with tf.variable_scope('MLP', reuse=None) as scope:
         train_op, loss, nll_loss, vat_cost = build_training_graph()
         scope.reuse_variables()
-        acc_op = accuracy(inputs, outputs)
+        acc_op = accuracy(inputs, outputs) * tf.constant(100.0)
 
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5,
                            max_to_keep=5)
