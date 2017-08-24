@@ -40,7 +40,7 @@ def main():
             one_hot=True,
             disjoint=False,
             downsample=True,
-            download_and_extract=False
+            download_and_extract=True
         )
 
     else:
