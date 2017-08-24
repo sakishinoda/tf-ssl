@@ -208,7 +208,9 @@ def main():
     with open(desc_file, 'a') as f:
         print(*order_param_settings(params), sep='\n', file=f, flush=True)
 
-    with tf.Session() as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
         sess.run(init_op)
         for ep in range(params.num_epochs):
             if ep < params.epoch_decay_start:
