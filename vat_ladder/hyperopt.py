@@ -74,7 +74,7 @@ class Hyperopt(object):
                                                   iter_per_epoch) == 0):
                     val_err = evaluate_metric(mnist.validation, sess, error, graph=g, params=p)
                     print((i+1)//iter_per_epoch, val_err, sep='\t')
-                    val_errs.append()
+                    val_errs.append(val_err)
 
         val_err = min(val_errs)
 
