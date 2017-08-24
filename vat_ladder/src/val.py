@@ -1516,6 +1516,30 @@ def build_vat_graph(params):
         loss = ce_loss(logit, y)
         return loss
 
+    def build_training_graph():
+        logit = forward(inputs)
+
+        nll_loss = ce_loss(logit, outputs)
+
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            ul_logit = forward(ul_inputs, is_training=True,
+                               update_batch_stats=False)
+            vat_cost = virtual_adversarial_loss(ul_inputs, ul_logit)
+            loss = nll_loss + vat_cost
+
+        opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=beta1)
+        tvars = tf.trainable_variables()
+        grads_and_vars = opt.compute_gradients(loss, tvars)
+        train_op = opt.apply_gradients(grads_and_vars)
+
+        return train_op, loss, nll_loss, vat_cost
+
+    def accuracy(x, y):
+        logit = forward(x, is_training=False, update_batch_stats=False)
+        pred = tf.argmax(logit, 1)
+        true = tf.argmax(y, 1)
+        return tf.reduce_mean(tf.to_float(tf.equal(pred, true)))
+
     # Training
     inputs = tf.placeholder(tf.float32, shape=(None, 784))
     outputs = tf.placeholder(tf.float32, shape=(None, 10))
@@ -1527,30 +1551,9 @@ def build_vat_graph(params):
                                         name='beta1')
 
     with tf.variable_scope('MLP', reuse=None) as scope:
-        logit = forward(inputs)
-
-        nll_loss = ce_loss(logit, outputs)
-
-        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-            ul_logit = forward(ul_inputs, is_training=True,
-                               update_batch_stats=False)
-            vat_cost = virtual_adversarial_loss(ul_inputs, ul_logit)
-            loss = nll_loss + vat_cost
-
-    opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=beta1)
-    tvars = tf.trainable_variables()
-    grads_and_vars = opt.compute_gradients(loss, tvars)
-    train_op = opt.apply_gradients(grads_and_vars)
-
-    scope.reuse_variables()
-
-    def accuracy(x, y):
-        logit = forward(x, is_training=False, update_batch_stats=False)
-        pred = tf.argmax(logit, 1)
-        true = tf.argmax(y, 1)
-        return tf.reduce_mean(tf.to_float(tf.equal(pred, true)))
-
-    acc_op = accuracy(inputs, outputs)
+        train_op, loss, nll_loss, vat_cost = build_training_graph()
+        scope.reuse_variables()
+        acc_op = accuracy(inputs, outputs)
 
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5,
                            max_to_keep=5)
