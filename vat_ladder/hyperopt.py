@@ -174,11 +174,15 @@ class Hyperopt(object):
         self.params.corrupt_sd = x[3]
         self.params.vadv_sd = x[4]
         self.params.num_power_iters = x[5]
-        self.params.epsilon = {0: x[6], 1: x[7],
-                               2: x[8], 3: x[8],
-                               4: x[8], 5: x[8],
-                               6: x[8]
-                               }
+
+        if self.params.model == 'clw' or self.params.model == 'nlw':
+            self.params.epsilon = {0: x[6], 1: x[7],
+                                   2: x[8], 3: x[8],
+                                   4: x[8], 5: x[8],
+                                   6: x[8]
+                                   }
+        else:
+            self.params.epsilon = {0: x[6]}
 
         return self.params
 
