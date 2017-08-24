@@ -1540,6 +1540,7 @@ def build_vat_graph(params):
         true = tf.argmax(y, 1)
         return tf.reduce_mean(tf.to_float(tf.equal(pred, true)))
 
+    params.epsilon = params.epsilon[0]
     # Training
     inputs = tf.placeholder(tf.float32, shape=(None, 784))
     outputs = tf.placeholder(tf.float32, shape=(None, 10))
