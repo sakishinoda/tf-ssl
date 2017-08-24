@@ -1521,7 +1521,7 @@ def build_vat_graph(params):
     outputs = tf.placeholder(tf.float32, shape=(None, 10))
     ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
 
-    lr = tf.placeholder_with_default(params.learning_rate, shape=[],
+    lr = tf.placeholder_with_default(params.initial_learning_rate, shape=[],
                                      name="learning_rate")
     beta1 = tf.placeholder_with_default(params.beta1, shape=[],
                                         name='beta1')
