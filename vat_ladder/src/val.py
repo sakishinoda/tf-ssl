@@ -1562,7 +1562,7 @@ def build_vat_graph(params):
     g = dict()
     g['images'] = inputs
     g['labels'] = outputs
-    g['train_flag'] = tf.placeholder_with_default(True)
+    g['train_flag'] = tf.placeholder_with_default(True, shape=[])
     g['ladder'] = None
     g['saver'] = saver
     g['train_step'] = train_op
