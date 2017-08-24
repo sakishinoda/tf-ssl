@@ -1248,22 +1248,22 @@ def build_graph(params):
         s_cost = model.cost
         u_cost = model.u_cost
 
-    elif params.model == "vat":
-        model = VATAdversary(params)
-        logit = model.forward(x=inputs[:params.batch_size], is_training=train_flag, update_batch_stats=True)
-        s_cost = ce_loss(logit=logit,y=outputs)
-
-        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-            ul_x = inputs[params.batch_size:]
-            ul_logit = model.forward(ul_x, is_training=train_flag,
-                                     update_batch_stats=False)
-            vat_cost = model.virtual_adversarial_loss(ul_x, ul_logit)
-            loss = s_cost + vat_cost
-            u_cost = vat_cost
-
-        # model = VirtualAdversarialTraining(inputs, outputs, train_flag, params)
-        # vat_cost = model.u_cost
-        # loss = model.cost + model.u_cost
+    # elif params.model == "vat":
+    #     model = VATAdversary(params)
+    #     logit = model.forward(x=inputs[:params.batch_size], is_training=train_flag, update_batch_stats=True)
+    #     s_cost = ce_loss(logit=logit,y=outputs)
+    #
+    #     with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+    #         ul_x = inputs[params.batch_size:]
+    #         ul_logit = model.forward(ul_x, is_training=train_flag,
+    #                                  update_batch_stats=False)
+    #         vat_cost = model.virtual_adversarial_loss(ul_x, ul_logit)
+    #         loss = s_cost + vat_cost
+    #         u_cost = vat_cost
+    #
+    #     # model = VirtualAdversarialTraining(inputs, outputs, train_flag, params)
+    #     # vat_cost = model.u_cost
+    #     # loss = model.cost + model.u_cost
 
     elif params.model == "gamma":
         model = Gamma(inputs, outputs, train_flag, params)
@@ -1365,3 +1365,213 @@ def measure_smoothness(g, params):
 
     return get_spectral_radius(
         x=inputs, logit=logits, forward=forward, num_power_iters=5)
+
+
+
+def build_vat_graph(params):
+    def lrelu(x, a=0.1):
+        if a < 1e-16:
+            return tf.nn.relu(x)
+        else:
+            return tf.maximum(x, a * x)
+
+    def bn(x, dim, is_training=True, update_batch_stats=True, collections=None,
+           name="bn"):
+        params_shape = (dim,)
+        n = tf.to_float(tf.reduce_prod(tf.shape(x)[:-1]))
+        axis = list(range(int(tf.shape(x).get_shape().as_list()[0]) - 1))
+        mean = tf.reduce_mean(x, axis)
+        var = tf.reduce_mean(tf.pow(x - mean, 2.0), axis)
+        avg_mean = tf.get_variable(
+            name=name + "_mean",
+            shape=params_shape,
+            initializer=tf.constant_initializer(0.0),
+            collections=collections,
+            trainable=False
+        )
+
+        avg_var = tf.get_variable(
+            name=name + "_var",
+            shape=params_shape,
+            initializer=tf.constant_initializer(1.0),
+            collections=collections,
+            trainable=False
+        )
+
+        gamma = tf.get_variable(
+            name=name + "_gamma",
+            shape=params_shape,
+            initializer=tf.constant_initializer(1.0),
+            collections=collections
+        )
+
+        beta = tf.get_variable(
+            name=name + "_beta",
+            shape=params_shape,
+            initializer=tf.constant_initializer(0.0),
+            collections=collections,
+        )
+
+        if is_training:
+            avg_mean_assign_op = tf.no_op()
+            avg_var_assign_op = tf.no_op()
+            if update_batch_stats:
+                avg_mean_assign_op = tf.assign(
+                    avg_mean,
+                    params.static_bn * avg_mean + (
+                    1 - params.static_bn) * mean)
+                avg_var_assign_op = tf.assign(
+                    avg_var,
+                    params.static_bn * avg_var + (n / (n - 1))
+                    * (1 - params.static_bn) * var)
+
+            with tf.control_dependencies(
+                    [avg_mean_assign_op, avg_var_assign_op]):
+                z = (x - mean) / tf.sqrt(1e-6 + var)
+        else:
+            z = (x - avg_mean) / tf.sqrt(1e-6 + avg_var)
+
+        return gamma * z + beta
+
+    def logit(x, is_training=True, update_batch_stats=True, stochastic=True,
+              seed=1234):
+
+        def weight(s, i):
+            return tf.get_variable('w' + str(i), shape=s,
+                                   initializer=tf.random_normal_initializer(
+                                       stddev=(
+                                           1 / math.sqrt(sum(s)))))
+
+        def bias(s, i):
+            return tf.get_variable('b' + str(i), shape=s,
+                                   initializer=tf.zeros_initializer)
+
+        ls = list(zip(params.encoder_layers[:-1], params.encoder_layers[1:]))
+
+        h = x
+        for i, l in enumerate(ls):
+            h = lrelu(tf.matmul(h, weight(l, i)) + bias(l[-1], i))
+            if i < len(ls) - 1:
+                h = bn(h, l[-1], is_training=is_training,
+                         update_batch_stats=update_batch_stats,
+                         name='bn' + str(i))
+                if is_training:  # for stabilisation
+                    h += tf.random_normal(tf.shape(h), stddev=0.5)
+
+        return h
+
+    def forward(x, is_training=True, update_batch_stats=True, seed=1234):
+        if is_training:
+            return logit(x, is_training=True,
+                         update_batch_stats=update_batch_stats,
+                         stochastic=True, seed=seed)
+        else:
+            return logit(x, is_training=False,
+                         update_batch_stats=update_batch_stats,
+                         stochastic=False, seed=seed)
+
+    def get_normalized_vector(d):
+        red_axes = list(range(1, len(d.get_shape())))
+        # print(d.get_shape(), red_axes)
+        d /= (1e-12 + tf.reduce_max(tf.abs(d), axis=red_axes,
+                                    keep_dims=True))
+        d /= tf.sqrt(1e-6 + tf.reduce_sum(tf.pow(d, 2.0),
+                                          axis=red_axes,
+                                          keep_dims=True))
+        return d
+
+    def generate_virtual_adversarial_perturbation(x, logit, is_training=True):
+        d = tf.random_normal(shape=tf.shape(x))
+
+        for _ in range(params.num_power_iterations):
+            d = params.xi * get_normalized_vector(d)
+            logit_p = logit
+            logit_m = forward(x + d, update_batch_stats=False,
+                              is_training=is_training)
+            dist = kl_divergence_with_logit(logit_p, logit_m)
+            grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+            d = tf.stop_gradient(grad)
+
+        return params.epsilon * get_normalized_vector(d)
+
+    def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss"):
+        r_vadv = generate_virtual_adversarial_perturbation(x, logit,
+                                                           is_training=is_training)
+        logit = tf.stop_gradient(logit)
+        logit_p = logit
+        logit_m = forward(x + r_vadv, update_batch_stats=False,
+                          is_training=is_training)
+        loss = kl_divergence_with_logit(logit_p, logit_m)
+        return tf.identity(loss, name=name)
+
+    def generate_adversarial_perturbation(x, loss):
+        grad = tf.gradients(loss, [x], aggregation_method=2)[0]
+        grad = tf.stop_gradient(grad)
+        return params.epsilon * get_normalized_vector(grad)
+
+    def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
+        r_adv = generate_adversarial_perturbation(x, loss)
+        logit = forward(x + r_adv, is_training=is_training,
+                        update_batch_stats=False)
+        loss = ce_loss(logit, y)
+        return loss
+
+    # Training
+    inputs = tf.placeholder(tf.float32, shape=(None, 784))
+    outputs = tf.placeholder(tf.float32, shape=(None, 10))
+    ul_inputs = tf.placeholder(tf.float32, shape=(params.ul_batch_size, 784))
+
+    lr = tf.placeholder_with_default(params.learning_rate, shape=[],
+                                     name="learning_rate")
+    beta1 = tf.placeholder_with_default(params.beta1, shape=[],
+                                        name='beta1')
+
+    with tf.variable_scope('MLP', reuse=None) as scope:
+        logit = forward(inputs)
+
+        nll_loss = ce_loss(logit, outputs)
+
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            ul_logit = forward(ul_inputs, is_training=True,
+                               update_batch_stats=False)
+            vat_cost = virtual_adversarial_loss(ul_inputs, ul_logit)
+            loss = nll_loss + vat_cost
+
+    opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=beta1)
+    tvars = tf.trainable_variables()
+    grads_and_vars = opt.compute_gradients(loss, tvars)
+    train_op = opt.apply_gradients(grads_and_vars)
+
+    scope.reuse_variables()
+
+    def accuracy(x, y):
+        logit = forward(x, is_training=False, update_batch_stats=False)
+        pred = tf.argmax(logit, 1)
+        true = tf.argmax(y, 1)
+        return tf.reduce_mean(tf.to_float(tf.equal(pred, true)))
+
+    acc_op = accuracy(inputs, outputs)
+
+    saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5,
+                           max_to_keep=5)
+
+    g = dict()
+    g['images'] = inputs
+    g['labels'] = outputs
+    g['train_flag'] = tf.placeholder_with_default(True)
+    g['ladder'] = None
+    g['saver'] = saver
+    g['train_step'] = train_op
+    g['lr'] = lr
+    g['beta1'] = beta1
+
+    m = dict()
+    m['loss'] = loss
+    m['cost'] = nll_loss
+    m['uc'] = tf.zeros([])
+    m['acc'] = acc_op
+    m['vc'] = vat_cost
+
+    trainable_params = count_trainable_params()
+
+    return g, m, trainable_params
