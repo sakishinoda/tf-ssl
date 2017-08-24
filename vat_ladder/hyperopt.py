@@ -179,7 +179,10 @@ def main():
     res = gp_minimize(hyperopt.objective, dims, n_calls=11, x0=x0, verbose=True)
     print(res.fun, ":", *res.x)
 
-    dump(res, hyperopt.params.logdir + hyperopt.params.id + '/hyperopt_res.gz')
+    dump_path = hyperopt.params.logdir + hyperopt.params.id + '.res'
+    if not os.path.exists(dump_path):
+        os.makedirs(dump_path)
+    dump(res, dump_path)
 
 
 
