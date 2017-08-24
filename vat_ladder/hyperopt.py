@@ -36,6 +36,9 @@ class Hyperopt(object):
                             choices=['c', 'clw', 'n', 'nlw', "ladder", "vat"])
         parser.add_argument('--end_epoch', default=1, type=int)
 
+        parser.add_argument('--batch_size', default=100, type=int)
+        parser.add_argument('--ul_batch_size', default=250, type=int)
+
         params = parser.parse_args()
         return params
 
@@ -61,13 +64,15 @@ class Hyperopt(object):
         add('validation', default=1000, type=int)
         add('seed', default=1, type=int)
         add('lr_decay_frequency', default=5, type=int)
-        add('batch_size', default=100, type=int)
+
+
+
         add('encoder_layers',
             default=parse_argstring('784-1000-500-250-250-250-10', dtype=int))
         add('num_power_iters', default=1, type=int)
         add('xi', default=1e-6, type=float)
         add('cnn', False)
-        add('ul_batch_size', 250)
+
         add('corrupt_sd', 0.3)
         add('vadv_sd', 0.5)
 
