@@ -53,6 +53,8 @@ class Hyperopt(object):
         # Build graph
 
         g, m, trainable_parameters = build_graph(p)
+        val_errs = []
+        error = tf.constant(100.0) - m['acc']
 
         print("=== Starting Session ===")
         with tf.Session() as sess:
@@ -69,11 +71,13 @@ class Hyperopt(object):
                                g['labels']: labels,
                                g['train_flag']: True})
 
+                if (i > 1) and ((i + 1) % int(p.test_frequency_in_epochs *
+                                                  iter_per_epoch) == 0):
+            # print("=== Evaluating ===")
 
-            print("=== Evaluating ===")
-            error = tf.constant(100.0) - m['acc']
-            val_err = evaluate_metric(mnist.validation, sess, error, graph=g,
-                                      params=p)
+                    val_errs.append(evaluate_metric(mnist.validation, sess, error, graph=g, params=p))
+
+        val_err = min(val_errs)
 
         return val_err
 
