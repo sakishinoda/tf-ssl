@@ -1565,7 +1565,7 @@ def build_vat_graph(params):
                            max_to_keep=5)
 
     g = dict()
-    g['images'] = inputs
+    g['images'] = all_inputs
     g['labels'] = outputs
     g['train_flag'] = tf.placeholder_with_default(True, shape=[])
     g['ladder'] = None
