@@ -76,7 +76,7 @@ class Hyperopt(object):
         add('corrupt_sd', 0.3)
         add('vadv_sd', 0.5)
 
-
+        add('input_size', 784)
 
 
     def objective(self, x):
