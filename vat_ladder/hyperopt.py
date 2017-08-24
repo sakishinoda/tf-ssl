@@ -176,7 +176,7 @@ def main():
     dims, x0 = hyperopt.get_dims()
 
     print("=== Beginning Search ===")
-    res = gp_minimize(hyperopt.objective, dims, n_calls=16, x0=x0, verbose=True)
+    res = gp_minimize(hyperopt.objective, dims, n_calls=11, x0=x0, verbose=True)
     print(res.fun, ":", *res.x)
 
     dump(res, hyperopt.params.logdir + hyperopt.params.id + '/hyperopt_res.gz')
