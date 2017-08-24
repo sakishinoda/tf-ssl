@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings
-from src.val import build_graph, measure_smoothness
+from src.val import build_graph, measure_smoothness, VERBOSE
 from src.train import evaluate_metric_list, update_decays, evaluate_metric
 from src import input_data
 import numpy as np
@@ -15,6 +15,8 @@ import numpy as np
 def main():
 
     p = process_cli_params(get_cli_params())
+    global VERBOSE
+    VERBOSE = p.verbose
 
     # -----------------------------
     # Set GPU device to use

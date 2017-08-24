@@ -32,13 +32,14 @@ class Hyperopt(object):
         # Set GPU device to use
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
 
         # Set seeds
         np.random.seed(p.seed)
         tf.set_random_seed(p.seed)
 
         # Load data
-        print("===  Loading Data ===")
         mnist = input_data.read_data_sets("MNIST_data",
                                           n_labeled=p.num_labeled,
                                           validation_size=p.validation,
@@ -57,7 +58,7 @@ class Hyperopt(object):
         error = tf.constant(100.0) - m['acc']
 
         print("=== Starting Session ===")
-        with tf.Session() as sess:
+        with tf.Session(config=config) as sess:
             init = tf.global_variables_initializer()
             sess.run(init)
             print("=== Training ===")
@@ -73,9 +74,9 @@ class Hyperopt(object):
 
                 if (i > 1) and ((i + 1) % int(p.test_frequency_in_epochs *
                                                   iter_per_epoch) == 0):
-            # print("=== Evaluating ===")
-
-                    val_errs.append(evaluate_metric(mnist.validation, sess, error, graph=g, params=p))
+                    val_err = evaluate_metric(mnist.validation, sess, error, graph=g, params=p)
+                    print((i+1)//iter_per_epoch, val_err, sep='\t')
+                    val_errs.append()
 
         val_err = min(val_errs)
 
@@ -126,6 +127,8 @@ class Hyperopt(object):
                                    }
         else:
             self.params.epsilon = {0: x[6]}
+
+        print("x:", x)
 
         return self.params
 

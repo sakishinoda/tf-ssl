@@ -28,6 +28,7 @@ def get_cli_params():
 
     # option to not save the model at all
     add('--do_not_save', action='store_true')
+    add('--verbose', action='store_true')
 
     # -------------------------
     # DATA
@@ -156,9 +157,6 @@ def process_cli_params(params):
                                                 dtype=int)
     params.rc_weights = enum_dict(
         parse_argstring(params.rc_weights, dtype=float))
-
-
-
 
     params.num_layers = len(params.encoder_layers) - 1
     params.epsilon = enum_dict(parse_argstring(params.epsilon))

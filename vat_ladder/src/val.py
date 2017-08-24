@@ -6,6 +6,8 @@ import tensorflow.contrib.layers as layers
 import math
 
 
+VERBOSE = False
+
 # -----------------------------
 # -----------------------------
 # LADDER CLASSES
@@ -190,7 +192,8 @@ class Encoder(object):
 
     def print_progress(self, l_out):
         el = self.encoder_layers
-        print("Layer {}: {} -> {}".format(l_out, el[l_out - 1], el[l_out]))
+        if VERBOSE:
+            print("Layer {}: {} -> {}".format(l_out, el[l_out - 1], el[l_out]))
 
     def generate_noise(self, inputs, l_out):
         return tf.random_normal(tf.shape(inputs)) * self.noise_sd
@@ -322,7 +325,8 @@ class VirtualAdversarialNoiseEncoder(Encoder):
 
     def print_progress(self, l_out):
         el = self.encoder_layers
-        print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1],
+        if VERBOSE:
+            print("Layer {}: {} -> {}, epsilon {}".format(l_out, el[l_out - 1],
                                                       el[l_out],
                                                       self.params.epsilon.get(
                                                           l_out - 1)))
@@ -441,8 +445,8 @@ class ConvEncoder(Encoder):
 
         for l_out in range(1, self.num_layers+1):
             l_in = l_out-1
-
-            print("Layer {}: {} -> {}".format(
+            if VERBOSE:
+                print("Layer {}: {} -> {}".format(
                 l_out, layer_spec[l_in]['f_in'],
                 layer_spec[l_out-1]['f_out']))
 
@@ -507,7 +511,8 @@ class ConvEncoder(Encoder):
 
 
             else:
-                print('Layer type not defined')
+                if VERBOSE:
+                    print('Layer type not defined')
                 m, v, _, _ = split_moments(h)
                 z = h
 
@@ -582,8 +587,8 @@ class Decoder(object):
         reuse = self.reuse
 
         join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
-
-        print("Layer {}: {} -> {}, denoising cost: {}".format(
+        if VERBOSE:
+            print("Layer {}: {} -> {}, denoising cost: {}".format(
             l, ls[l+1] if l + 1 < len(ls) else None,
             ls[l], denoising_cost[l]
         ))
@@ -789,13 +794,14 @@ class Model(object):
         self.train_flag = train_flag
 
         # Supervised components
-        print("=== Batch Norm === ")
+        if VERBOSE:
+            print("=== Batch Norm === ")
         self.bn_decay = self.params.static_bn
 
         self.bn = BatchNormLayers(self.params.encoder_layers,
                                   decay=self.bn_decay)
-
-        print("=== Clean Encoder ===")
+        if VERBOSE:
+            print("=== Clean Encoder ===")
         self.clean = self.get_encoder()
 
         self.num_layers = self.clean.num_layers
@@ -860,10 +866,12 @@ class VirtualAdversarialTraining(Model):
 class Ladder(Model):
     """"""
     def build_unsupervised(self):
-        print("=== Corrupted Encoder === ")
+        if VERBOSE:
+            print("=== Corrupted Encoder === ")
         self.corr = self.get_corrupted_encoder()
 
-        print("=== Decoder ===")
+        if VERBOSE:
+            print("=== Decoder ===")
         self.dec = self.get_decoder()
 
     def get_u_cost(self):
@@ -1026,12 +1034,14 @@ class Adversary(object):
         return vatfw.logits  # logits by default includes both labeled/unlabeled
 
     def generate_virtual_adversarial_perturbation(self, x, logit, is_training):
-        print("--- VAT Pass: Generating VAT perturbation ---")
+        if VERBOSE:
+            print("--- VAT Pass: Generating VAT perturbation ---")
         d = tf.random_normal(shape=tf.shape(x))
         for k in range(self.num_power_iters):
             d = self.xi * get_normalized_vector(d)
             logit_p = logit
-            print("Power Iteration: {}".format(k))
+            if VERBOSE:
+                print("Power Iteration: {}".format(k))
             logit_m = self.forward(x + d, update_batch_stats=False,
                                    is_training=is_training)
             dist = kl_divergence_with_logit(logit_p, logit_m)
@@ -1058,8 +1068,8 @@ class Adversary(object):
             x, logit, is_training=is_training)
         logit = tf.stop_gradient(logit)
         logit_p = logit
-
-        print("--- VAT Pass: Computing VAT Loss (KL Divergence) ---")
+        if VERBOSE:
+            print("--- VAT Pass: Computing VAT Loss (KL Divergence) ---")
         logit_m = self.forward(x + r_vadv, update_batch_stats=False,
                                is_training=is_training)
         loss = kl_divergence_with_logit(logit_p, logit_m)
@@ -1144,7 +1154,7 @@ class VATAdversary(Adversary):
 
         def bias(s, i):
             return tf.get_variable('b' + str(i), shape=s,
-                                   initializer=tf.zeros_initializer)
+                                   initializer=tf.zeros_initializer(dtype=tf.float32), dtype=tf.float32)
 
         ls = list(zip(params.encoder_layers[:-1], params.encoder_layers[1:]))
 
@@ -1171,6 +1181,7 @@ class VATAdversary(Adversary):
                               update_batch_stats=update_batch_stats)
 
         return tf.cond(is_training, training_logit, testing_logit)
+
 
 
 def get_vat_cost(model, train_flag, params):
@@ -1335,7 +1346,8 @@ def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
 
 def measure_smoothness(g, params):
     # Measure smoothness using clean logits
-    print("=== Measuring smoothness ===")
+    if VERBOSE:
+        print("=== Measuring smoothness ===")
     inputs = g['images']
     logits = g['ladder'].clean.logits
 
