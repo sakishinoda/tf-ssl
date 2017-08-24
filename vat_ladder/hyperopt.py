@@ -4,10 +4,8 @@ from src.val import build_graph
 from src.train import evaluate_metric
 from src import input_data
 import numpy as np
-import argparse
-from src.utils import parse_argstring, enum_dict, process_cli_params, get_cli_params
+from src.utils import process_cli_params, get_cli_params
 from skopt import gp_minimize, dump
-import sys
 from tqdm import tqdm
 
 class Hyperopt(object):
@@ -89,17 +87,14 @@ class Hyperopt(object):
             (500., 5000, 'log-uniform'),  # 0 rc_0
             (5.00, 50., 'log-uniform'),  # 1 rc_1
             (0.01, 1.0, 'log-uniform'),  # 2 rc_2:6
-            (0.01, 1.0),                # 3 corrupt_sd
-            (0.01, 1.0),                # 4 vadv_sd
-            (1, 2, 3, 4),               # 5 num_power_iters
-            (0.01, 10.0, 'log-uniform')  # 6: eps_0
+            (0.01, 10.0, 'log-uniform')  # 3: eps_0
         ]
-        x0 = [1000, 10, 0.1, 0.3, 0.5, 3, 1.0]
+        x0 = [1000, 10, 0.1, 1.0]
 
         if self.params.model == 'clw' or self.params.model == 'nlw':
             dims += [
-                (1e-3, 0.5, 'log-uniform'),  # 7 eps_1
-                (1e-5, 0.1, 'log-uniform'),  # 8 eps_2
+                (1e-3, 0.5, 'log-uniform'),  # 4 eps_1
+                (1e-5, 0.1, 'log-uniform'),  # 5 eps_2
             ]
             x0 += [0.1, 0.001]
 
@@ -110,23 +105,21 @@ class Hyperopt(object):
 
         # -------------------------
         # Optimize
+
         self.params.rc_weights = {0: x[0], 1: x[1],
                                   2: x[2], 3: x[2],
                                   4: x[2], 5: x[2],
                                   6: x[2]
                                   }
-        self.params.corrupt_sd = x[3]
-        self.params.vadv_sd = x[4]
-        self.params.num_power_iters = x[5]
 
         if self.params.model == 'clw' or self.params.model == 'nlw':
-            self.params.epsilon = {0: x[6], 1: x[7],
-                                   2: x[8], 3: x[8],
-                                   4: x[8], 5: x[8],
-                                   6: x[8]
+            self.params.epsilon = {0: x[3], 1: x[4],
+                                   2: x[5], 3: x[5],
+                                   4: x[5], 5: x[5],
+                                   6: x[5]
                                    }
         else:
-            self.params.epsilon = {0: x[6]}
+            self.params.epsilon = {0: x[3]}
 
         print("x:", x)
 
