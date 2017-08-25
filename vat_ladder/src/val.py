@@ -1544,12 +1544,12 @@ def build_vat_graph(params):
     # Training
     all_inputs = tf.placeholder(tf.float32, shape=(None, params.input_size))
     inputs = all_inputs[:params.batch_size]
-    inputs.set_shape(shape=(params.batch_size, params.input_size))
+    # inputs.set_shape(shape=(params.batch_size, params.input_size))
 
     outputs = tf.placeholder(tf.float32, shape=(None, 10))
 
     ul_inputs = all_inputs[params.batch_size:]
-    ul_inputs.set_shape(shape=(params.ul_batch_size, params.input_size))
+    # ul_inputs.set_shape(shape=(params.ul_batch_size, params.input_size))
 
     lr = tf.placeholder_with_default(params.initial_learning_rate, shape=[],
                                      name="learning_rate")

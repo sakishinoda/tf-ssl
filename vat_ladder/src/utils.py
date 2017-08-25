@@ -224,7 +224,7 @@ def get_cli_params():
     # -------------------------
     # Specify encoder layers
     add('--encoder_layers',
-                        default='784-1000-500-250-250-250-10')
+                        default='1000-500-250-250-250-10')
 
     # Standard deviation of the Gaussian noise to inject at each level
     add('--corrupt_sd', default=0.3, type=float)
@@ -312,6 +312,8 @@ def process_cli_params(params):
     else:
         params.encoder_layers = parse_argstring(params.encoder_layers,
                                                 dtype=int)
+
+    params.encoder_layers = [params.input_size].extend(params.encoder_layers)
     params.rc_weights = enum_dict(
         parse_argstring(params.rc_weights, dtype=float))
 

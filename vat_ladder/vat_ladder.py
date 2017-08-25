@@ -217,9 +217,9 @@ def main():
 
             # ---------------------------------------------
             # Compute error on testing set (10k examples)
-            test_acc_and_costs = \
+            test_aer_and_costs = \
                 eval_metrics(dataset.test, sess, [aer] + test_losses)
-            train_acc = eval_metrics(dataset.train.labeled_ds, sess, [aer])
+            train_aer = eval_metrics(dataset.train.labeled_ds, sess, [aer])
             train_costs = sess.run(train_losses,
                 feed_dict={g['images']: images,
                            g['labels']: labels,
@@ -230,7 +230,7 @@ def main():
             # train accuracy, train loss, train cross entropy,
             # train reconstruction loss, smoothness
 
-            log_i = [int(now), epoch_n] + test_acc_and_costs + train_acc + \
+            log_i = [int(now), epoch_n] + test_aer_and_costs + train_aer + \
                     train_costs
 
 

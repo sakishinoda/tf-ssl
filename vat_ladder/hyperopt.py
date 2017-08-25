@@ -2,7 +2,7 @@ import tensorflow as tf
 import os
 from src.val import build_graph
 from src.train import evaluate_metric
-from src import mnist
+from src.mnist import read_data_sets
 import numpy as np
 from src.utils import process_cli_params, get_cli_params
 from skopt import gp_minimize, dump
@@ -38,14 +38,14 @@ class Hyperopt(object):
         tf.set_random_seed(p.seed)
 
         # Load data
-        mnist = mnist.read_data_sets("MNIST_data",
+        dataset = read_data_sets("MNIST_data",
                                      n_labeled=p.num_labeled,
                                      validation_size=p.validation,
                                      one_hot=True,
                                      disjoint=False)
-        num_examples = mnist.train.num_examples
+        num_examples = dataset.train.num_examples
         if p.validation > 0:
-            mnist.test = mnist.validation
+            dataset.test = dataset.validation
         iter_per_epoch = (num_examples // p.batch_size)
         num_iter = iter_per_epoch * p.end_epoch
 
@@ -62,7 +62,7 @@ class Hyperopt(object):
             print("=== Training ===")
             for i in tqdm(range(num_iter)):
 
-                images, labels = mnist.train.next_batch(p.batch_size,
+                images, labels = dataset.train.next_batch(p.batch_size,
                                                         p.ul_batch_size)
                 _ = sess.run(
                     [g['train_step']],
@@ -72,7 +72,7 @@ class Hyperopt(object):
 
                 if (i > 1) and ((i + 1) % int(p.test_frequency_in_epochs *
                                                   iter_per_epoch) == 0):
-                    val_err = evaluate_metric(mnist.validation, sess, error, graph=g, params=p)
+                    val_err = evaluate_metric(dataset.validation, sess, error, graph=g, params=p)
                     print((i+1)//iter_per_epoch, val_err, sep='\t')
                     val_errs.append(val_err)
 
@@ -180,8 +180,8 @@ def main():
     print(res.fun, ":", *res.x)
 
     dump_path = hyperopt.params.logdir + hyperopt.params.id + '.res'
-    if not os.path.exists(dump_path):
-        os.makedirs(dump_path)
+    if not os.path.exists(hyperopt.params.logdir):
+        os.makedirs(hyperopt.params.logdir)
     dump(res, dump_path)
 
 
