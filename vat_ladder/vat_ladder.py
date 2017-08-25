@@ -241,10 +241,9 @@ def main():
 
 
     with open(desc_file, 'a') as f:
-        print("Final AER: ", sess.run(aer, feed_dict={
-            g['images']: dataset.test.images, g['labels']:
-                dataset.test.labels,
-            g['train_flag']: False}),
+
+        final_aer = eval_metric(dataset.test, sess, aer)
+        print("Final AER: ", final_aer,
               "%", file=f, flush=True)
 
     sess.close()
