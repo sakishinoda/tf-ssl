@@ -313,7 +313,7 @@ def process_cli_params(params):
         params.encoder_layers = parse_argstring(params.encoder_layers,
                                                 dtype=int)
 
-    params.encoder_layers = [params.input_size].extend(params.encoder_layers)
+    params.encoder_layers = [params.input_size] + params.encoder_layers
     params.rc_weights = enum_dict(
         parse_argstring(params.rc_weights, dtype=float))
 
