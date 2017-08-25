@@ -122,9 +122,9 @@ def main():
         # restore the parameters
         # and set epoch_n and i_iter
         g['saver'].restore(sess, ckpt.model_checkpoint_path)
-        epoch_n = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
-        i_iter = (epoch_n + 1) * (p.num_examples // p.ul_batch_size)
-        print("Restored Epoch ", epoch_n)
+        ep = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
+        i_iter = (ep + 1) * (p.num_examples // p.ul_batch_size)
+        print("Restored Epoch ", ep)
 
     else:
         # no checkpoint exists.
@@ -172,48 +172,44 @@ def main():
     train_dict = {g['beta1']: p.beta1, g['lr']: p.initial_learning_rate}
 
     start = time.time()
-    for i in tqdm(range(i_iter, p.num_iter)):
+    for ep in tqdm(range(p.end_epoch)):
 
-        images, labels = dataset.train.next_batch(p.batch_size, p.ul_batch_size)
-        train_dict.update({
-            g['images']: images,
-            g['labels']: labels,
-            g['train_flag']: True})
+        for i in range(p.iter_per_epoch):
 
-        _ = sess.run(
-            [g['train_step']],
-            feed_dict=train_dict)
+            images, labels = dataset.train.next_batch(p.batch_size, p.ul_batch_size)
+            train_dict.update({
+                g['images']: images,
+                g['labels']: labels,
+                g['train_flag']: True})
 
-        epoch_n = i // (p.num_examples // p.ul_batch_size)
-        # ---------------------------------------------
-        # Epoch completed?
-        if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
-            # update_decays(sess, epoch_n, iter=i, graph=g, params=p)
+            _ = sess.run(
+                [g['train_step']],
+                feed_dict=train_dict)
 
-            # Update learning rate and momentum
-            if ((epoch_n + 1) >= p.decay_start_epoch) and ((i + 1) % (
-                        p.iter_per_epoch * p.lr_decay_frequency) == 0):
-                # epoch_n + 1 because learning rate is set for next epoch
-                ratio = 1.0 * (p.end_epoch - (epoch_n + 1))
-                decay_epochs = p.end_epoch - p.decay_start_epoch
-                ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
 
-                train_dict[g['lr']] = (p.initial_learning_rate * ratio)
-                train_dict[g['beta1']] = p.beta1_during_decay
+        # Update learning rate and momentum
+        if ((ep + 1) >= p.decay_start_epoch) and ((i + 1) % (
+                    p.iter_per_epoch * p.lr_decay_frequency) == 0):
+            # epoch_n + 1 because learning rate is set for next epoch
+            ratio = 1.0 * (p.end_epoch - (ep + 1))
+            decay_epochs = p.end_epoch - p.decay_start_epoch
+            ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
+
+            train_dict[g['lr']] = (p.initial_learning_rate * ratio)
+            train_dict[g['beta1']] = p.beta1_during_decay
+
+        # For the last ten epochs, test every epoch
+        if (ep + 1) > (p.end_epoch - 10):
+            p.test_frequency_in_epochs = 1
 
         # ---------------------------------------------
         # Evaluate every test_frequency_in_epochs
-        if (i > 1) and ((i + 1) % int(p.test_frequency_in_epochs *
-                           p.iter_per_epoch) == 0):
-
-            # For the last ten epochs, test every epoch
-            if (i+1) > (p.num_iter - (p.iter_per_epoch * 10)):
-                p.test_frequency_in_epochs = 1
+        if int((ep + 1) % p.test_frequency_in_epochs) == 0:
 
             now = time.time() - start
 
             if not p.do_not_save:
-                g['saver'].save(sess, ckpt_dir + 'model.ckpt', epoch_n)
+                g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
 
             # ---------------------------------------------
             # Compute error on testing set (10k examples)
@@ -230,7 +226,7 @@ def main():
             # train accuracy, train loss, train cross entropy,
             # train reconstruction loss, smoothness
 
-            log_i = [int(now), epoch_n] + test_aer_and_costs + train_aer + \
+            log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
                     train_costs
 
 
