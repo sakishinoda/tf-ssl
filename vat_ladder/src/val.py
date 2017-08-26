@@ -1223,12 +1223,22 @@ def get_vat_cost(model, train_flag, params):
 # -----------------------------
 # -----------------------------
 
-def build_graph(params):
+
+
+
+def build_graph(params, is_training=True):
 
     # -----------------------------
     # Placeholder setup
     inputs_placeholder = tf.placeholder(
         tf.float32, shape=(None, params.input_size))
+
+    g, m, tp = build_graph_from_inputs(inputs_placeholder, params,
+                             is_training=is_training)
+    return g, m, tp
+
+
+def build_graph_from_inputs(inputs_placeholder, params, is_training=True):
 
     inputs = preprocess(inputs_placeholder, params)
     outputs = tf.placeholder(tf.float32)
@@ -1247,23 +1257,6 @@ def build_graph(params):
         loss = model.cost + model.u_cost
         s_cost = model.cost
         u_cost = model.u_cost
-
-    # elif params.model == "vat":
-    #     model = VATAdversary(params)
-    #     logit = model.forward(x=inputs[:params.batch_size], is_training=train_flag, update_batch_stats=True)
-    #     s_cost = ce_loss(logit=logit,y=outputs)
-    #
-    #     with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-    #         ul_x = inputs[params.batch_size:]
-    #         ul_logit = model.forward(ul_x, is_training=train_flag,
-    #                                  update_batch_stats=False)
-    #         vat_cost = model.virtual_adversarial_loss(ul_x, ul_logit)
-    #         loss = s_cost + vat_cost
-    #         u_cost = vat_cost
-    #
-    #     # model = VirtualAdversarialTraining(inputs, outputs, train_flag, params)
-    #     # vat_cost = model.u_cost
-    #     # loss = model.cost + model.u_cost
 
     elif params.model == "gamma":
         model = Gamma(inputs, outputs, train_flag, params)
@@ -1584,3 +1577,4 @@ def build_vat_graph(params):
     trainable_params = count_trainable_params()
 
     return g, m, trainable_params
+
