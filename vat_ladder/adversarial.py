@@ -65,56 +65,53 @@ def main(p):
 
     with tf.Session() as sess:
 
-        # ckpt = tf.train.get_checkpoint_state(ckpt_dir)
-        # print(ckpt)
-        # sess.run(tf.global_variables_initializer())
-        # if ckpt and ckpt.model_checkpoint_path:
-        ckpt_path = ckpt_dir + "model.ckpt-249"
+        ckpt = tf.train.get_checkpoint_state(ckpt_dir)
 
+        sess.run(tf.global_variables_initializer())
+        if ckpt and ckpt.model_checkpoint_path:
+            # if checkpoint exists,
+            # restore the parameters
+            # and set epoch_n and i_iter
+            model.g['saver'].restore(sess, ckpt.model_checkpoint_path)
+            print("Loaded model: ", ckpt.model_checkpoint_path)
+            results['checkpoint'] = ckpt.model_checkpoint_path
 
-        # if checkpoint exists,
-        # restore the parameters
-        # and set epoch_n and i_iter
-        print("Loaded model: ", ckpt_path)
-        model.g['saver'].restore(sess, ckpt_path)
-        results['checkpoint'] = ckpt_path
+            eval_par = {'batch_size': p.batch_size}
+            x = model.g['images']
+            y = model.g['labels']
+            num_layers = model.g['ladder'].clean.num_layers
+            model_preds = model.g['ladder'].clean.labeled.h[num_layers] # softmaxed
+            # model_preds = model.g['ladder'].clean.logits
+            # import IPython
+            # IPython.embed()
+            X_test = dataset.test.images
+            Y_test = dataset.test.labels
+            acc = model_eval(
+                sess, x=x, y=y,
+                predictions=model_preds,
+                X_test=X_test, Y_test=Y_test,
+                # X_test= dataset.train.labeled_ds.images,
+                # Y_test=dataset.train.labeled_ds.labels,
+                feed={model.g['train_flag']: False}, args=eval_par)
 
-        eval_par = {'batch_size': p.batch_size}
-        x = model.g['images']
-        y = model.g['labels']
-        num_layers = model.g['ladder'].clean.num_layers
-        model_preds = model.g['ladder'].clean.labeled.h[num_layers] # softmaxed
-        # model_preds = model.g['ladder'].clean.logits
-        # import IPython
-        # IPython.embed()
-        X_test = dataset.test.images
-        Y_test = dataset.test.labels
-        acc = model_eval(
-            sess, x=x, y=y,
-            predictions=model_preds,
-            X_test=X_test, Y_test=Y_test,
-            # X_test= dataset.train.labeled_ds.images,
-            # Y_test=dataset.train.labeled_ds.labels,
-            feed={model.g['train_flag']: False}, args=eval_par)
+            aer = 100 * (1-acc)
+            results['normal_aer'] = aer
+            print('Test AER on normal examples: {:0.4f} %'.format(aer))
 
-        aer = 100 * (1-acc)
-        results['normal_aer'] = aer
-        print('Test AER on normal examples: {:0.4f} %'.format(aer))
+            fgsm_params = {'eps': 0.3}
+            fgsm = FastGradientMethod(model, sess=sess)
 
-        fgsm_params = {'eps': 0.3}
-        fgsm = FastGradientMethod(model, sess=sess)
+            adv_x = fgsm.generate(x, **fgsm_params)
+            adv_x = tf.stop_gradient(adv_x)
+            preds_adv = model.get_probs(adv_x)
 
-        adv_x = fgsm.generate(x, **fgsm_params)
-        adv_x = tf.stop_gradient(adv_x)
-        preds_adv = model.get_probs(adv_x)
-
-        # Evaluate the accuracy of the MNIST model on adversarial examples
-        acc = model_eval(sess, x, y, preds_adv, X_test, Y_test,
-                         feed={model.g['train_flag']: False},
-                         args=eval_par)
-        aer = 100 * (1 - acc)
-        results['adv_aer'] = aer
-        print('Test AER on adversarial examples: {:0.4f} %'.format(aer))
+            # Evaluate the accuracy of the MNIST model on adversarial examples
+            acc = model_eval(sess, x, y, preds_adv, X_test, Y_test,
+                             feed={model.g['train_flag']: False},
+                             args=eval_par)
+            aer = 100 * (1 - acc)
+            results['adv_aer'] = aer
+            print('Test AER on adversarial examples: {:0.4f} %'.format(aer))
 
     return results
 
