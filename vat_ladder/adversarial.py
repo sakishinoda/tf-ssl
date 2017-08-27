@@ -5,7 +5,7 @@ from src.val import build_graph_from_inputs, build_graph
 from src.utils import get_cli_params, process_cli_params, parse_argstring
 from src.mnist import read_data_sets
 import tensorflow as tf
-
+import pickle
 
 class MyModel(CleverHansModel):
     def __init__(self, params):
@@ -144,7 +144,16 @@ def test_labeled_50():
 
     return results
 
+def save_obj(obj, name ):
+    with open('obj/'+ name + '.pkl', 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load_obj(name ):
+    with open('obj/' + name + '.pkl', 'rb') as f:
+        return pickle.load(f)
+
 if __name__ == '__main__':
     # p = process_cli_params(get_cli_params())
     # main(p)
-    test_labeled_50()
+    results = test_labeled_50()
+    save_obj(results, 'labeled-50')
