@@ -127,8 +127,8 @@ def test_labeled_50():
     p = process_cli_params(get_cli_params())
     p.epsilon = parse_argstring('1.0-0.1-0.001-0.001-0.001-0.001-0.001', float)
     p.rc_weights = parse_argstring('1000-10-0.1-0.1-0.1-0.1-0.1', float)
-    p.num_labeled = 50
-    p.batch_size = 50
+    # p.num_labeled = 50
+    p.batch_size = 50 if p.num_labeled is 50 else 100
     p.input_size = 784
     p.encoder_layers = [p.input_size, 1000, 500, 250, 250, 250, 10]
     p.lrelu_a = 0.1
@@ -142,6 +142,7 @@ def test_labeled_50():
             p.id = 'full_{}_labeled-{}'.format(model, p.num_labeled)
             results[model][seed] = main(p)
 
+    save_obj(results, 'labeled-{}'.format(p.num_labeled))
     return results
 
 def save_obj(obj, name ):
@@ -156,4 +157,4 @@ if __name__ == '__main__':
     # p = process_cli_params(get_cli_params())
     # main(p)
     results = test_labeled_50()
-    save_obj(results, 'labeled-50')
+
