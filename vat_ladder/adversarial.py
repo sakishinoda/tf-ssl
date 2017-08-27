@@ -131,6 +131,7 @@ def test_labeled_50():
     p.batch_size = 50
     p.input_size = 784
     p.encoder_layers = [p.input_size, 1000, 500, 250, 250, 250, 10]
+    p.lrelu_a = 0.1
     seeds = [8340, 8794, 2773, 967, 2368]
     models = ['n', 'nlw', 'ladder', 'c', 'clw']
     for model in models:
