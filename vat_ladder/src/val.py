@@ -1233,16 +1233,26 @@ def build_graph(params, is_training=True):
     inputs_placeholder = tf.placeholder(
         tf.float32, shape=(None, params.input_size))
 
-    g, m, tp = build_graph_from_inputs(inputs_placeholder, params,
-                             is_training=is_training)
+    outputs = tf.placeholder(tf.float32)
+    train_flag = tf.placeholder(tf.bool)
+
+    g, m, tp = build_graph_from_inputs(
+        inputs_placeholder,
+        outputs,
+        train_flag,
+        params,
+        is_training=is_training)
+
     return g, m, tp
 
 
-def build_graph_from_inputs(inputs_placeholder, params, is_training=True):
 
-    inputs = preprocess(inputs_placeholder, params)
-    outputs = tf.placeholder(tf.float32)
-    train_flag = tf.placeholder(tf.bool)
+def build_graph_from_inputs(inputs,
+                            outputs,
+                            train_flag,
+                            params, is_training=True):
+
+    inputs = preprocess(inputs, params)
 
     if params.model == "c" or params.model == "clw":
         model = Ladder(inputs, outputs, train_flag, params)
@@ -1280,25 +1290,27 @@ def build_graph_from_inputs(inputs_placeholder, params, is_training=True):
             tf.equal(model.predict, tf.argmax(outputs, 1)),
             "float")) * tf.constant(100.0)
 
-    # learning_rate = tf.Variable(params.initial_learning_rate, name='lr', trainable=False)
-    # beta1 = tf.Variable(params.beta1, name='beta1', trainable=False)
-    learning_rate = tf.placeholder_with_default(params.initial_learning_rate, shape=[], name='lr')
-    beta1 = tf.placeholder_with_default(params.beta1, shape=[], name='beta1')
+    if is_training:
+        learning_rate = tf.placeholder_with_default(params.initial_learning_rate, shape=[], name='lr')
+        beta1 = tf.placeholder_with_default(params.beta1, shape=[], name='beta1')
 
-    train_step = tf.train.AdamOptimizer(learning_rate,
-                                        beta1=beta1).minimize(loss)
+        train_step = tf.train.AdamOptimizer(learning_rate,
+                                            beta1=beta1).minimize(loss)
 
-    # add the updates of batch normalization statistics to train_step
-    bn_updates = tf.group(*model.bn.bn_assigns)
-    with tf.control_dependencies([train_step]):
-        train_step = tf.group(bn_updates)
+        # add the updates of batch normalization statistics to train_step
+        bn_updates = tf.group(*model.bn.bn_assigns)
+        with tf.control_dependencies([train_step]):
+            train_step = tf.group(bn_updates)
+    else:
+        learning_rate, beta1, train_step = None, None, None
+
 
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5,
                            max_to_keep=5)
 
     # Graph
     g = dict()
-    g['images'] = inputs_placeholder
+    g['images'] = inputs
     g['labels'] = outputs
     g['train_flag'] = train_flag
     g['ladder'] = model
