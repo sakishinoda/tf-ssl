@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-from src.val import build_graph
+from src.val import build_graph, build_vat_graph
 from src.train import evaluate_metric
 from src.mnist import read_data_sets
 import numpy as np
@@ -50,8 +50,11 @@ class Hyperopt(object):
         num_iter = iter_per_epoch * p.end_epoch
 
         # Build graph
+        if p.model == 'vat':
+            g, m, trainable_parameters = build_vat_graph(p)
+        else:
+            g, m, trainable_parameters = build_graph(p)
 
-        g, m, trainable_parameters = build_graph(p)
         val_errs = []
         error = tf.constant(100.0) - m['acc']
 
@@ -81,22 +84,38 @@ class Hyperopt(object):
         return val_err
 
     def get_dims(self):
-
-        dims = [
-            # rc_weights
-            (500., 5000, 'log-uniform'),  # 0 rc_0
-            (5.00, 50., 'log-uniform'),  # 1 rc_1
-            (0.01, 1.0, 'log-uniform'),  # 2 rc_2:6
-            (0.01, 10.0, 'log-uniform')  # 3: eps_0
-        ]
-        x0 = [1000, 10, 0.1, 1.0]
-
-        if self.params.model == 'clw' or self.params.model == 'nlw':
-            dims += [
-                (1e-3, 0.5, 'log-uniform'),  # 4 eps_1
-                (1e-5, 0.1, 'log-uniform'),  # 5 eps_2
+        if self.params.model == "vat":
+            dims = [
+                (0.01, 10.0, 'log-uniform')  # 0: eps
             ]
-            x0 += [0.1, 0.001]
+
+            x0 = [5.0]
+
+        elif self.params.model == "ladder":
+            dims = [
+                # rc_weights
+                (500., 5000, 'log-uniform'),  # 0 rc_0
+                (5.00, 50., 'log-uniform'),  # 1 rc_1
+                (0.01, 1.0, 'log-uniform')
+            ]
+            x0 = [1000, 10, 0.1]
+
+        else:
+            dims = [
+                # rc_weights
+                (500., 5000, 'log-uniform'),  # 0 rc_0
+                (5.00, 50., 'log-uniform'),  # 1 rc_1
+                (0.01, 1.0, 'log-uniform'),  # 2 rc_2:6
+                (0.01, 10.0, 'log-uniform')  # 3: eps_0
+            ]
+            x0 = [1000, 10, 0.1, 1.0]
+
+            if self.params.model == 'clw' or self.params.model == 'nlw':
+                dims += [
+                    (1e-3, 0.5, 'log-uniform'),  # 4 eps_1
+                    (1e-5, 0.1, 'log-uniform'),  # 5 eps_2
+                ]
+                x0 += [0.1, 0.001]
 
         return dims, x0
 
@@ -105,68 +124,43 @@ class Hyperopt(object):
 
         # -------------------------
         # Optimize
+        if self.params.model == "vat":
+            self.params.epsilon = {0: x[0]}
 
-        self.params.rc_weights = {0: x[0], 1: x[1],
-                                  2: x[2], 3: x[2],
-                                  4: x[2], 5: x[2],
-                                  6: x[2]
-                                  }
-
-        if self.params.model == 'clw' or self.params.model == 'nlw':
-            self.params.epsilon = {0: x[3], 1: x[4],
-                                   2: x[5], 3: x[5],
-                                   4: x[5], 5: x[5],
-                                   6: x[5]
-                                   }
         else:
-            self.params.epsilon = {0: x[3]}
+            self.params.rc_weights = {0: x[0], 1: x[1],
+                                      2: x[2], 3: x[2],
+                                      4: x[2], 5: x[2],
+                                      6: x[2]
+                                      }
+
+            if self.params.model == 'clw' or self.params.model == 'nlw':
+                self.params.epsilon = {0: x[3], 1: x[4],
+                                       2: x[5], 3: x[5],
+                                       4: x[5], 5: x[5],
+                                       6: x[5]
+                                       }
+            elif self.params.model == 'n' or self.params.model == 'c':
+                self.params.epsilon = {0: x[3]}
 
         print("x:", x)
-
         return self.params
 
 
+class HyperoptVAT(Hyperopt):
+    def get_dims(self):
 
-# class HyperoptPowerIters(Hyperopt):
-#     def convert_dims_to_params(self, x):
-#         self.params.num_power_iters = x
-#         return self.params
-#
-#     def get_default_params(self):
-#         super(HyperoptPowerIters, self).get_default_params()
-#
-#         if self.params.model == "c":
-#             self.params.rc_weights = enum_dict([898.44421, 20.73306, 0.17875, 0.31394, 0.02214, 0.39981, 0.04065])
-#             self.params.epsilon = enum_dict([0.03723])
-#         elif self.params.model == "clw":
-#             self.params.rc_weights = enum_dict([898.44421, 8.81609, 0.61101, 0.11661, 0.13746, 0.50335, 0.63461])
-#             self.params.epsilon = enum_dict([0.11002, 0.0093, 0.00508, 1e-05, 0.00073, 0.00113, 0.00019])
-#         elif self.params.model == "vat":
-#             self.params.epsilon = enum_dict([5.0])
-#             self.params.encoder_layers = parse_argstring(
-#                 "784-1200-600-300-150-10", dtype=int)
-#             self.params.beta1_during_decay = 0.5
-#             self.params.decay_start = 0.5
-#             self.params.decay_start_epoch = self.params.decay_start * \
-#                                             self.params.end_epoch
-#
-#
-#
-# def tune_single_parameter():
-#     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
-#     hyperopt = HyperoptPowerIters()
-#     dims = [1, 2, 3, 4, 5]
-#     res = {}
-#     for x in dims:
-#         res[x] = hyperopt.objective(x)
-#         print(x, res[x])
-#
-#     print("----------------------------------------")
-#     print("----------------------------------------")
-#     print("=== Complete ===")
-#     for k, v in res.items():
-#         print(k, v)
-#
+        dims = [
+            (0.01, 10.0, 'log-uniform') # 0: eps
+        ]
+
+        x0 = [5.0]
+
+        return dims, x0
+
+
+
+
 
 def main():
 
