@@ -123,6 +123,8 @@ class SemiDataSet(object):
         l_idx = np.random.choice(l_idx, size=num_labeled, replace=False)
 
         u_idx = np.setdiff1d(np.arange(n_total), l_idx, assume_unique=True)
+        self.l_idx = l_idx
+        self.u_idx = u_idx
 
         return images[l_idx], labels[l_idx], images[u_idx], labels[u_idx]
 

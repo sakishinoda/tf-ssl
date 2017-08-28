@@ -146,11 +146,16 @@ def test_hessian_ops():
 
 
 
+
+
 if __name__ == '__main__':
 
-    from src.svhn import read_data_sets
-    svhn = read_data_sets('../../data/svhn/')
-    IPython.embed()
+    from vat_ladder import test_data_splitting
+    test_data_splitting()
+
+    # from src.svhn import read_data_sets
+    # svhn = read_data_sets('../../data/svhn/')
+    # IPython.embed()
 
     # test_hessian_ops()
     # test_nargs()

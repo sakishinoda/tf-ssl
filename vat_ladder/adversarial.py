@@ -49,7 +49,7 @@ class MyModel(CleverHansModel):
             return g['ladder'].clean.labeled.h[num_layers]
 
 
-def main(p):
+def test_aer_on_normal_and_adv(p):
     results = {}
     tf.reset_default_graph()
 
@@ -140,7 +140,7 @@ def test_labeled_50():
         for seed in seeds:
             p.seed = seed
             p.id = 'full_{}_labeled-{}'.format(model, p.num_labeled)
-            results[model][seed] = main(p)
+            results[model][seed] = test_aer_on_normal_and_adv(p)
 
     save_obj(results, 'labeled-{}'.format(p.num_labeled))
     return results
