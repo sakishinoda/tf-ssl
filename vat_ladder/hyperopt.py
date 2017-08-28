@@ -147,19 +147,27 @@ class Hyperopt(object):
         return self.params
 
 
-class HyperoptVAT(Hyperopt):
-    def get_dims(self):
 
-        dims = [
-            (0.01, 10.0, 'log-uniform') # 0: eps
-        ]
+class HyperoptNPI(Hyperopt):
+    def convert_dims_to_params(self, x):
+        self.params.seed = x[0]
+        self.params.num_power_iters = x[1]
 
-        x0 = [5.0]
-
-        return dims, x0
+        return self.params
 
 
+def test_num_power_iters():
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
 
+    hyperopt = HyperoptNPI()
+    val_errs = {}
+
+    for npi in [1,2,3]:
+        val_errs[npi] = {}
+        for seed in [1, 11, 111]:
+            this_val_err = hyperopt.objective([seed, npi])
+            val_errs[npi][seed] = this_val_err
+            print(npi, seed, this_val_err)
 
 
 def main():
