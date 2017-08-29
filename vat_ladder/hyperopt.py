@@ -35,7 +35,7 @@ class Hyperopt(object):
 
         # Set seeds
         # np.random.seed(p.seed)
-        tf.set_random_seed(p.seed)
+        # tf.set_random_seed(p.seed)
 
         # Load data
         dataset = read_data_sets("MNIST_data",
