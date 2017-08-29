@@ -105,10 +105,10 @@ def test_nargs():
 
     print(bn_decay)
 
-from src.val import build_graph
+from src.lva import build_graph
 from src.utils import get_cli_params, process_cli_params
 from src import mnist
-from src.val import softmax_cross_entropy_with_logits
+from src.lva import softmax_cross_entropy_with_logits
 def test_hessian_ops():
     p = process_cli_params(get_cli_params())
     mnist = input_data.read_data_sets("MNIST_data",

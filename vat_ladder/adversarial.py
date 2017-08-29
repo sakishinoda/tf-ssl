@@ -1,7 +1,7 @@
 from cleverhans.model import Model as CleverHansModel
 from cleverhans.utils_tf import model_eval
 from cleverhans.attacks import FastGradientMethod
-from src.val import build_graph_from_inputs, build_graph
+from src.lva import build_graph_from_inputs, build_graph
 from src.utils import get_cli_params, process_cli_params, parse_argstring
 from src.mnist import read_data_sets
 import tensorflow as tf

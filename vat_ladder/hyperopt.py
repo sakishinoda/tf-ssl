@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-from src.val import build_graph, build_vat_graph
+from src.lva import build_graph, build_vat_graph
 from src.train import evaluate_metric
 from src.mnist import read_data_sets
 import numpy as np
@@ -168,6 +168,9 @@ def test_num_power_iters():
             this_val_err = hyperopt.objective([seed, npi])
             val_errs[npi][seed] = this_val_err
             print(npi, seed, this_val_err)
+
+
+
 
 
 def main():

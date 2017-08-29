@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings, count_trainable_params, preprocess
-from src.val import Ladder
+from src.lva import Ladder
 from src import mnist
 import numpy as np
 from src.train import update_decays

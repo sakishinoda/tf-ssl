@@ -1,3 +1,4 @@
+*.pkl
 models
 MNIST_data
 checkpoints

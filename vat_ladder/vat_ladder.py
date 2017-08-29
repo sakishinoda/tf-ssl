@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings
-from src.val import build_graph, measure_smoothness, build_vat_graph, VERBOSE
+from src.lva import build_graph, measure_smoothness, build_vat_graph, VERBOSE
 from src.train import evaluate_metric_list, update_decays, evaluate_metric
 import numpy as np
 
