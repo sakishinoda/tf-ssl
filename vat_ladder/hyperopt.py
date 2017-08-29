@@ -3,15 +3,20 @@ import os
 from src.lva import build_graph, build_vat_graph
 from src.train import evaluate_metric
 from src.mnist import read_data_sets
-import numpy as np
-from src.utils import process_cli_params, get_cli_params
+# import numpy as np
+from src.utils import process_cli_params, get_cli_params, parse_argstring
 from skopt import gp_minimize, dump
 from tqdm import tqdm
+import argparse
 
 class Hyperopt(object):
     def __init__(self):
         # Parse command line and default parameters
         self.params = process_cli_params(get_cli_params())
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--x0', default=None)
+        parser.add_argument('--y0', default=None, type=float)
+        parser.parse_args(namespace=self.params)
 
         # for k in sorted(self.params_dict.keys()):
         #     print(k, self.params_dict[k])
@@ -117,7 +122,12 @@ class Hyperopt(object):
                 ]
                 x0 += [0.1, 0.001]
 
-        return dims, x0
+        if self.params.x0 is not None:
+            x0 = parse_argstring(self.params.x0, dtype=float, sep=',')
+
+        y0 = self.params.y0
+
+        return dims, x0, y0
 
 
     def convert_dims_to_params(self, x):
@@ -178,10 +188,11 @@ def main():
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # filter out info, warnings
 
     hyperopt = Hyperopt()
-    dims, x0 = hyperopt.get_dims()
+    dims, x0, y0 = hyperopt.get_dims()
 
     print("=== Beginning Search ===")
-    res = gp_minimize(hyperopt.objective, dims, n_calls=11, x0=x0, verbose=True)
+    res = gp_minimize(hyperopt.objective, dims, n_calls=11, x0=x0,
+                      y0=y0, verbose=True)
     print(res.fun, ":", *res.x)
 
     dump_path = hyperopt.params.logdir + hyperopt.params.id + '.res'
