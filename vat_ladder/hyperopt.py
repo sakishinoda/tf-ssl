@@ -20,10 +20,11 @@ class Hyperopt(object):
 
     def objective(self, x):
 
-        print("----------------------------------------")
-        print("----------------------------------------")
-
         p = self.convert_dims_to_params(x)
+        if p.verbose:
+            print("----------------------------------------")
+            print("----------------------------------------")
+
 
         tf.reset_default_graph()
 
@@ -40,10 +41,10 @@ class Hyperopt(object):
 
         # Load data
         dataset = read_data_sets("MNIST_data",
-                                     n_labeled=p.num_labeled,
-                                     validation_size=p.validation,
-                                     one_hot=True,
-                                     disjoint=False)
+                                 n_labeled=p.num_labeled,
+                                 validation_size=p.validation,
+                                 one_hot=True,
+                                 disjoint=False)
         num_examples = dataset.train.num_examples
         if p.validation > 0:
             dataset.test = dataset.validation
@@ -59,15 +60,18 @@ class Hyperopt(object):
         val_errs = []
         error = tf.constant(100.0) - m['acc']
 
-        print("=== Starting Session ===")
+        if p.verbose:
+            print("=== Starting Session ===")
         with tf.Session(config=config) as sess:
             init = tf.global_variables_initializer()
             sess.run(init)
-            print("=== Training ===")
+            if p.verbose:
+                print("=== Training ===")
+
             for i in tqdm(range(num_iter)):
 
                 images, labels = dataset.train.next_batch(p.batch_size,
-                                                        p.ul_batch_size)
+                                                          p.ul_batch_size)
                 _ = sess.run(
                     [g['train_step']],
                     feed_dict={g['images']: images,
@@ -172,12 +176,16 @@ def test_num_power_iters():
 
     for npi in [1,2,3]:
         print('====================')
+
         val_errs[npi] = []
         for seed in [1, 11, 111]:
             this_val_err = hyperopt.objective([seed, npi])
             val_errs[npi].append(this_val_err)
             print(npi, seed, this_val_err)
         print('--------------------')
+
+    print('====================')
+    for npi in [1,2,3]:
         print(npi, mean(val_errs[npi]), stdev(val_errs[npi]))
 
 
