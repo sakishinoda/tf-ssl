@@ -13,10 +13,6 @@ class Hyperopt(object):
     def __init__(self):
         # Parse command line and default parameters
         self.params = process_cli_params(get_cli_params())
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--x0', default=None)
-        parser.add_argument('--y0', default=None, type=float)
-        parser.parse_args(namespace=self.params)
 
         # for k in sorted(self.params_dict.keys()):
         #     print(k, self.params_dict[k])

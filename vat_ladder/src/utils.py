@@ -274,6 +274,12 @@ def get_cli_params():
     add('--cnn_strides', default='1-1-1-2-1-1-1-2-1-1-1-0-0')
     add('--cnn_dims', default='32-32-32-32-16-16-16-16-8-8-8-8-1')
 
+    # -------------------------
+    # HYPEROPT
+    # -------------------------
+    parser.add_argument('--x0', default=None)
+    parser.add_argument('--y0', default=None, type=float)
+
     params = parser.parse_args()
 
     return params
