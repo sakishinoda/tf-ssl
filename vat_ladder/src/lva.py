@@ -1545,7 +1545,7 @@ def build_vat_graph(params):
         true = tf.argmax(y, 1)
         return tf.reduce_mean(tf.to_float(tf.equal(pred, true)))
 
-    params.epsilon = params.epsilon[0]
+
     # Training
     all_inputs = tf.placeholder(tf.float32, shape=(None, params.input_size))
     inputs = all_inputs[:params.batch_size]
