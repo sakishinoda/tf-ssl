@@ -174,7 +174,7 @@ def test_num_power_iters():
     hyperopt = HyperoptNPI()
     val_errs = {}
 
-    for npi in [1,2,3]:
+    for npi in [1,2,3,4]:
         print('====================')
 
         val_errs[npi] = []
