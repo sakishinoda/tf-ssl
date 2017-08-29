@@ -34,7 +34,7 @@ class Hyperopt(object):
         config.gpu_options.allow_growth = True
 
         # Set seeds
-        np.random.seed(p.seed)
+        # np.random.seed(p.seed)
         tf.set_random_seed(p.seed)
 
         # Load data
