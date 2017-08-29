@@ -154,6 +154,8 @@ class Hyperopt(object):
 
 
 
+from statistics import mean, stdev
+
 class HyperoptNPI(Hyperopt):
     def convert_dims_to_params(self, x):
         self.params.seed = x[0]
@@ -169,11 +171,14 @@ def test_num_power_iters():
     val_errs = {}
 
     for npi in [1,2,3]:
-        val_errs[npi] = {}
+        print('====================')
+        val_errs[npi] = []
         for seed in [1, 11, 111]:
             this_val_err = hyperopt.objective([seed, npi])
-            val_errs[npi][seed] = this_val_err
+            val_errs[npi].append(this_val_err)
             print(npi, seed, this_val_err)
+        print('--------------------')
+        print(npi, mean(val_errs[npi]), stdev(val_errs[npi]))
 
 
 
