@@ -279,6 +279,7 @@ def get_cli_params():
     # -------------------------
     parser.add_argument('--x0', default=None)
     parser.add_argument('--y0', default=None, type=float)
+    parser.add_argument('--npi', default='1-2-3-4')
 
     params = parser.parse_args()
 
