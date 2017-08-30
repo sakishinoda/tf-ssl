@@ -163,7 +163,7 @@ def main():
         # and set epoch_n and i_iter
         g['saver'].restore(sess, ckpt.model_checkpoint_path)
         ep = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
-        i_iter = (ep + 1) * (p.num_examples // p.ul_batch_size)
+        i_iter = (ep + 1) * p.iter_per_epoch
         print("Restored Epoch ", ep)
 
     else:
@@ -174,6 +174,7 @@ def main():
 
         init = tf.global_variables_initializer()
         sess.run(init)
+        i_iter = 0
 
     if p.tb is not False:
         train_writer = tf.summary.FileWriter(p.tb_dir + '/train', sess.graph)
@@ -212,66 +213,69 @@ def main():
     train_dict = {g['beta1']: p.beta1, g['lr']: p.initial_learning_rate}
 
     start = time.time()
-    for ep in tqdm(range(p.end_epoch)):
 
-        for i in range(p.iter_per_epoch):
+    for i in range(i_iter, p.iter_per_epoch * p.end_epoch):
 
-            images, labels = dataset.train.next_batch(p.batch_size, p.ul_batch_size)
-            train_dict.update({
-                g['images']: images,
-                g['labels']: labels,
-                g['train_flag']: True})
+        images, labels = dataset.train.next_batch(p.batch_size, p.ul_batch_size)
+        train_dict.update({
+            g['images']: images,
+            g['labels']: labels,
+            g['train_flag']: True})
 
-            _ = sess.run(
-                [g['train_step']],
-                feed_dict=train_dict)
+        _ = sess.run(
+            [g['train_step']],
+            feed_dict=train_dict)
 
 
-        # Update learning rate and momentum
-        if ((ep + 1) >= p.decay_start_epoch) and ((i + 1) % (
-                    p.iter_per_epoch * p.lr_decay_frequency) == 0):
-            # epoch_n + 1 because learning rate is set for next epoch
-            ratio = 1.0 * (p.end_epoch - (ep + 1))
-            decay_epochs = p.end_epoch - p.decay_start_epoch
-            ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
+        if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
+            # Epoch complete?
+            ep = i // p.iter_per_epoch
 
-            train_dict[g['lr']] = (p.initial_learning_rate * ratio)
-            train_dict[g['beta1']] = p.beta1_during_decay
+            # Update learning rate and momentum
+            if ((ep + 1) >= p.decay_start_epoch) and (
+                            ep % (p.lr_decay_frequency) == 0):
+                # epoch_n + 1 because learning rate is set for next epoch
+                ratio = 1.0 * (p.end_epoch - (ep + 1))
+                decay_epochs = p.end_epoch - p.decay_start_epoch
+                ratio = max(0., ratio / decay_epochs) if decay_epochs != 0 else 1.0
 
-        # For the last ten epochs, test every epoch
-        if (ep + 1) > (p.end_epoch - 10):
-            p.test_frequency_in_epochs = 1
+                train_dict[g['lr']] = (p.initial_learning_rate * ratio)
+                train_dict[g['beta1']] = p.beta1_during_decay
 
-        # ---------------------------------------------
-        # Evaluate every test_frequency_in_epochs
-        if int((ep + 1) % p.test_frequency_in_epochs) == 0:
-
-            now = time.time() - start
-
-            if not p.do_not_save:
-                g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
+            # For the last ten epochs, test every epoch
+            if (ep + 1) > (p.end_epoch - 10):
+                p.test_frequency_in_epochs = 1
 
             # ---------------------------------------------
-            # Compute error on testing set (10k examples)
-            test_aer_and_costs = \
-                eval_metrics(dataset.test, sess, [aer] + test_losses)
-            train_aer = eval_metrics(dataset.train.labeled_ds, sess, [aer])
-            train_costs = sess.run(train_losses,
-                feed_dict={g['images']: images,
-                           g['labels']: labels,
-                           g['train_flag']: False})
+            # Evaluate every test_frequency_in_epochs
+            if int((ep + 1) % p.test_frequency_in_epochs) == 0:
 
-            # Create log of:
-            # time, epoch number, test accuracy, test cross entropy,
-            # train accuracy, train loss, train cross entropy,
-            # train reconstruction loss, smoothness
+                now = time.time() - start
 
-            log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
-                    train_costs
+                if not p.do_not_save:
+                    g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
+
+                # ---------------------------------------------
+                # Compute error on testing set (10k examples)
+                test_aer_and_costs = \
+                    eval_metrics(dataset.test, sess, [aer] + test_losses)
+                train_aer = eval_metrics(dataset.train.labeled_ds, sess, [aer])
+                train_costs = sess.run(train_losses,
+                    feed_dict={g['images']: images,
+                               g['labels']: labels,
+                               g['train_flag']: False})
+
+                # Create log of:
+                # time, epoch number, test accuracy, test cross entropy,
+                # train accuracy, train loss, train cross entropy,
+                # train reconstruction loss, smoothness
+
+                log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
+                        train_costs
 
 
-            with open(log_file, 'a') as train_log:
-                print(*log_i, sep=',', flush=True, file=train_log)
+                with open(log_file, 'a') as train_log:
+                    print(*log_i, sep=',', flush=True, file=train_log)
 
 
 
