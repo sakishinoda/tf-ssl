@@ -284,7 +284,7 @@ def get_cli_params():
     # -------------------------
     # ADVERSARIAL ATTACKS
     # -------------------------
-    add('--ord', default=2, choices=['inf', '1'])
+    add('--ord', default=2, choices=['inf', '1', '2'])
 
     params = parser.parse_args()
 
