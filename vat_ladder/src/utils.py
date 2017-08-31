@@ -334,8 +334,8 @@ def process_cli_params(params):
 
     params.num_layers = len(params.encoder_layers) - 1
     params.epsilon = enum_dict(parse_argstring(params.epsilon))
-    if params.model == 'vat':
-        params.epsilon = params.epsilon[0]
+    # if params.model == 'vat':
+    #     params.epsilon = params.epsilon[0]
 
     return params
 
