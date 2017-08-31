@@ -333,7 +333,7 @@ def process_cli_params(params):
         parse_argstring(params.rc_weights, dtype=float))
 
     params.num_layers = len(params.encoder_layers) - 1
-    params.epsilon = enum_dict(parse_argstring(params.epsilon))
+    params.epsilon = enum_dict(parse_argstring(params.epsilon, dtype=float))
     # if params.model == 'vat':
     #     params.epsilon = params.epsilon[0]
 
