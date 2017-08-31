@@ -84,8 +84,7 @@ def test_aer_on_normal_and_adv(p):
             eval_par = {'batch_size': p.batch_size}
             x = model.g['images']
             y = model.g['labels']
-            num_layers = model.g['ladder'].clean.num_layers
-            model_preds = model.g['ladder'].clean.labeled.h[num_layers] # softmaxed
+            model_preds = g['softmax'] # softmaxed
             # model_preds = model.g['ladder'].clean.logits
             # import IPython
             # IPython.embed()
