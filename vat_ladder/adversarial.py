@@ -31,7 +31,7 @@ class MyModel(CleverHansModel):
                                               self.outputs,
                                               self.train_flag,
                                               self.params, is_training=False)
-            return g['ladder'].clean.logits
+            return g['logits']
 
     def get_probs(self, x):
         """
@@ -45,8 +45,8 @@ class MyModel(CleverHansModel):
                                               self.train_flag,
                                               self.params,
                                               is_training=False)
-            num_layers = g['ladder'].clean.num_layers
-            return g['ladder'].clean.labeled.h[num_layers]
+
+            return g['softmax']
 
 
 def test_aer_on_normal_and_adv(p):
@@ -122,7 +122,7 @@ class attrdict(dict):
         dict.__init__(self, *args, **kwargs)
         self.__dict__ = self
 
-def test_labeled_50():
+def test_adversarial():
     results = {}
     p = process_cli_params(get_cli_params())
     p.epsilon = parse_argstring('1.0-0.1-0.001-0.001-0.001-0.001-0.001', float)
@@ -133,7 +133,7 @@ def test_labeled_50():
     p.encoder_layers = [p.input_size, 1000, 500, 250, 250, 250, 10]
     p.lrelu_a = 0.1
     seeds = [8340, 8794, 2773, 967, 2368]
-    models = ['n', 'nlw', 'ladder', 'c', 'clw']
+    models = ['n', 'nlw', 'ladder', 'c', 'clw', 'vat']
     for model in models:
         p.model = model
         results[model] = {}
@@ -153,8 +153,22 @@ def load_obj(name ):
     with open(name + '.pkl', 'rb') as f:
         return pickle.load(f)
 
+def unpack(res):
+    from statistics import mean, stdev
+    for m, md in res.items():
+        adv = []
+        test = []
+        for s, sd in md.items():
+            adv.append(sd['adv_aer'])
+            test.append(sd['normal_aer'])
+        print(m, *['{:4.4f}'.format(x) for x in [mean(test), stdev(test),
+                                           mean(adv), stdev(adv)]])
+
+
+
+
 if __name__ == '__main__':
     # p = process_cli_params(get_cli_params())
     # main(p)
-    results = test_labeled_50()
+    results = test_adversarial()
 

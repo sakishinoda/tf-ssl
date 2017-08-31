@@ -1224,26 +1224,21 @@ def get_vat_cost(model, train_flag, params):
 # -----------------------------
 
 
-
-
 def build_graph(params, is_training=True):
-
     # -----------------------------
     # Placeholder setup
     inputs_placeholder = tf.placeholder(
         tf.float32, shape=(None, params.input_size))
 
     outputs = tf.placeholder(tf.float32)
-    train_flag = tf.placeholder(tf.bool)
+    train_flag = tf.placeholder_with_default(True, shape = [])
 
-    g, m, tp = build_graph_from_inputs(
+    return build_graph_from_inputs(
         inputs_placeholder,
         outputs,
         train_flag,
         params,
         is_training=is_training)
-
-    return g, m, tp
 
 
 
@@ -1251,7 +1246,16 @@ def build_graph_from_inputs(inputs,
                             outputs,
                             train_flag,
                             params, is_training=True):
+    if params.model == "vat":
+        return build_vat_graph_from_inputs(inputs, outputs, train_flag,
+                                           params, is_training)
+    else:
+        return build_ladder_graph_from_inputs(inputs, outputs, train_flag,
+                                              params, is_training)
 
+
+def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
+                                   is_training=True):
     inputs = preprocess(inputs, params)
 
     if params.model == "c" or params.model == "clw":
@@ -1318,6 +1322,8 @@ def build_graph_from_inputs(inputs,
     g['train_step'] = train_step
     g['lr'] = learning_rate
     g['beta1'] = beta1
+    g['softmax'] = model.clean.labeled.h[model.clean.num_layers]
+    g['logits'] = model.clean.logits
 
     # Metrics
     m = dict()
@@ -1332,48 +1338,10 @@ def build_graph_from_inputs(inputs,
     return g, m, trainable_params
 
 
-def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
-    prev_d = tf.random_normal(shape=tf.shape(x))
-    for k in range(num_power_iters):
-        d = xi * get_normalized_vector(prev_d)
-        logit_p = logit
-        logit_m = forward(x + d)
-        dist = kl_divergence_with_logit(logit_p, logit_m)
-        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
-        prev_d = tf.stop_gradient(grad)
 
-    prev_d, d = get_normalized_vector(prev_d), get_normalized_vector(d)
-
-    def dot(a, b): return tf.reduce_mean(tf.multiply(a, b), axis=1)
-
-    return dot(d, prev_d) / dot(prev_d, prev_d)
-
-
-def measure_smoothness(g, params):
-    # Measure smoothness using clean logits
-    if VERBOSE:
-        print("=== Measuring smoothness ===")
-    inputs = g['images']
-    logits = g['ladder'].clean.logits
-
-    def forward(x):
-        return Encoder(
-            inputs=x,
-            bn=g['ladder'].bn,
-            is_training=g['train_flag'],
-            params=params,
-            this_encoder_noise=0.0,
-            start_layer=0,
-            update_batch_stats=False,
-            scope='enc',
-            reuse=True).logits
-
-    return get_spectral_radius(
-        x=inputs, logit=logits, forward=forward, num_power_iters=5)
-
-
-
-def build_vat_graph(params):
+def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
+                                params,
+                                is_training):
     def lrelu(x, a=0.1):
         if a < 1e-16:
             return tf.nn.relu(x)
@@ -1532,12 +1500,13 @@ def build_vat_graph(params):
             vat_cost = virtual_adversarial_loss(ul_inputs, ul_logit)
             loss = nll_loss + vat_cost
 
+
         opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=beta1)
         tvars = tf.trainable_variables()
         grads_and_vars = opt.compute_gradients(loss, tvars)
         train_op = opt.apply_gradients(grads_and_vars)
 
-        return train_op, loss, nll_loss, vat_cost
+        return train_op, loss, nll_loss, vat_cost, logit
 
     def accuracy(x, y):
         logit = forward(x, is_training=False, update_batch_stats=False)
@@ -1547,12 +1516,8 @@ def build_vat_graph(params):
 
 
     # Training
-    all_inputs = tf.placeholder(tf.float32, shape=(None, params.input_size))
+    all_inputs = preprocess(inputs_placeholder, params)
     inputs = all_inputs[:params.batch_size]
-    # inputs.set_shape(shape=(params.batch_size, params.input_size))
-
-    outputs = tf.placeholder(tf.float32, shape=(None, 10))
-
     ul_inputs = all_inputs[params.batch_size:]
     # ul_inputs.set_shape(shape=(params.ul_batch_size, params.input_size))
 
@@ -1562,21 +1527,23 @@ def build_vat_graph(params):
                                         name='beta1')
 
     with tf.variable_scope('MLP', reuse=None) as scope:
-        train_op, loss, nll_loss, vat_cost = build_training_graph()
+        train_op, loss, nll_loss, vat_cost, logit = build_training_graph()
         scope.reuse_variables()
         acc_op = accuracy(inputs, outputs) * tf.constant(100.0)
 
     saver = tf.train.Saver()
 
     g = dict()
-    g['images'] = all_inputs
+    g['images'] = inputs_placeholder
     g['labels'] = outputs
-    g['train_flag'] = tf.placeholder_with_default(True, shape=[])
+    g['train_flag'] = train_flag
     g['ladder'] = None
     g['saver'] = saver
     g['train_step'] = train_op
     g['lr'] = lr
     g['beta1'] = beta1
+    g['logits'] = logit
+    g['softmax'] = tf.nn.softmax(logit)
 
     m = dict()
     m['loss'] = loss
@@ -1589,3 +1556,43 @@ def build_vat_graph(params):
 
     return g, m, trainable_params
 
+
+
+def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
+    prev_d = tf.random_normal(shape=tf.shape(x))
+    for k in range(num_power_iters):
+        d = xi * get_normalized_vector(prev_d)
+        logit_p = logit
+        logit_m = forward(x + d)
+        dist = kl_divergence_with_logit(logit_p, logit_m)
+        grad = tf.gradients(dist, [d], aggregation_method=2)[0]
+        prev_d = tf.stop_gradient(grad)
+
+    prev_d, d = get_normalized_vector(prev_d), get_normalized_vector(d)
+
+    def dot(a, b): return tf.reduce_mean(tf.multiply(a, b), axis=1)
+
+    return dot(d, prev_d) / dot(prev_d, prev_d)
+
+
+def measure_smoothness(g, params):
+    # Measure smoothness using clean logits
+    if VERBOSE:
+        print("=== Measuring smoothness ===")
+    inputs = g['images']
+    logits = g['ladder'].clean.logits
+
+    def forward(x):
+        return Encoder(
+            inputs=x,
+            bn=g['ladder'].bn,
+            is_training=g['train_flag'],
+            params=params,
+            this_encoder_noise=0.0,
+            start_layer=0,
+            update_batch_stats=False,
+            scope='enc',
+            reuse=True).logits
+
+    return get_spectral_radius(
+        x=inputs, logit=logits, forward=forward, num_power_iters=5)
