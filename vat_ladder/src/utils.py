@@ -260,7 +260,8 @@ def get_cli_params():
     add('--model', default="c", choices=["n", "nlw", "c", "clw", "ladder",
                                          "vat", "gamma"])
     add('--measure_smoothness', action='store_true')
-
+    add('--measure_vat', action='store_true', help='compute vat_cost but do '
+                                                   'not use for optimisation')
 
     # -------------------------
     # CNN LADDER

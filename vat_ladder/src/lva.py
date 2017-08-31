@@ -1282,7 +1282,7 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
     else:
         model = Ladder(inputs, outputs, train_flag, params)
         vat_cost = get_vat_cost(model, train_flag, params) if \
-            params.measure_smoothness else tf.zeros([])
+            params.measure_vat else tf.zeros([])
         loss = model.cost + model.u_cost
         s_cost = model.cost
         u_cost = model.u_cost
