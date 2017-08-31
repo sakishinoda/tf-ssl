@@ -81,7 +81,7 @@ def test_aer_on_normal_and_adv(p):
             # if checkpoint exists,
             # restore the parameters
             # and set epoch_n and i_iter
-            print("Loaded model: ", ckpt.model_checkpoint_path)
+            # print("Loaded model: ", ckpt.model_checkpoint_path)
             model.g['saver'].restore(sess, ckpt.model_checkpoint_path)
             results['checkpoint'] = extract_model_name_from_path(ckpt.model_checkpoint_path)
 
