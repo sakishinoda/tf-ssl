@@ -77,8 +77,8 @@ def test_aer_on_normal_and_adv(p):
             # if checkpoint exists,
             # restore the parameters
             # and set epoch_n and i_iter
-            model.g['saver'].restore(sess, ckpt.model_checkpoint_path)
             print("Loaded model: ", ckpt.model_checkpoint_path)
+            model.g['saver'].restore(sess, ckpt.model_checkpoint_path)
             results['checkpoint'] = ckpt.model_checkpoint_path
 
             eval_par = {'batch_size': p.batch_size}
@@ -134,8 +134,6 @@ def test_adversarial():
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
-
-
     p.epsilon = parse_argstring('1.0-0.1-0.001-0.001-0.001-0.001-0.001', float)
     p.rc_weights = parse_argstring('1000-10-0.1-0.1-0.1-0.1-0.1', float)
     # p.num_labeled = 50

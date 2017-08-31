@@ -1465,7 +1465,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
             grad = tf.gradients(dist, [d], aggregation_method=2)[0]
             d = tf.stop_gradient(grad)
 
-        return params.epsilon * get_normalized_vector(d)
+        return params.epsilon[0] * get_normalized_vector(d)
 
     def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss"):
         r_vadv = generate_virtual_adversarial_perturbation(x, logit,
@@ -1480,7 +1480,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
     def generate_adversarial_perturbation(x, loss):
         grad = tf.gradients(loss, [x], aggregation_method=2)[0]
         grad = tf.stop_gradient(grad)
-        return params.epsilon * get_normalized_vector(grad)
+        return params.epsilon[0] * get_normalized_vector(grad)
 
     def adversarial_loss(x, y, loss, is_training=True, name="at_loss"):
         r_adv = generate_adversarial_perturbation(x, loss)
