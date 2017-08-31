@@ -8,6 +8,7 @@ import tensorflow as tf
 import pickle
 import os
 
+
 class MyModel(CleverHansModel):
     def __init__(self, params):
         super(MyModel, self).__init__()
@@ -104,7 +105,15 @@ def test_aer_on_normal_and_adv(p):
             results['normal_aer'] = aer
             # print('Test AER on normal examples: {:0.4f} %'.format(aer))
 
-            fgsm_params = {'eps': 0.3}
+            if p.ord == 'inf':
+                import numpy as np
+                ord = np.inf
+            elif p.ord == '1':
+                ord = 1
+            else:
+                ord = 2
+
+            fgsm_params = {'eps': 0.3, 'ord': ord}
             fgsm = FastGradientMethod(model, sess=sess)
 
             adv_x = fgsm.generate(x, **fgsm_params)

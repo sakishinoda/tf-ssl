@@ -281,6 +281,11 @@ def get_cli_params():
     parser.add_argument('--y0', default=None, type=float)
     parser.add_argument('--npi', default='1-2-3-4')
 
+    # -------------------------
+    # ADVERSARIAL ATTACKS
+    # -------------------------
+    add('--ord', default=2, choices=['inf', '1'])
+
     params = parser.parse_args()
 
     return params
