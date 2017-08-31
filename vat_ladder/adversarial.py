@@ -49,6 +49,10 @@ class MyModel(CleverHansModel):
 
             return g['softmax']
 
+def extract_model_name_from_path(path):
+    model = (path.split('full_')[1]).split('/')[0].replace('_labeled-', '')
+    seed = path.split('seed-')[1].split('/')[0]
+    return model + '_seed-' + seed
 
 def test_aer_on_normal_and_adv(p):
 
@@ -79,15 +83,13 @@ def test_aer_on_normal_and_adv(p):
             # and set epoch_n and i_iter
             print("Loaded model: ", ckpt.model_checkpoint_path)
             model.g['saver'].restore(sess, ckpt.model_checkpoint_path)
-            results['checkpoint'] = ckpt.model_checkpoint_path
+            results['checkpoint'] = extract_model_name_from_path(ckpt.model_checkpoint_path)
 
             eval_par = {'batch_size': p.batch_size}
             x = model.g['images']
             y = model.g['labels']
             model_preds = model.g['softmax'] # softmaxed
-            # model_preds = model.g['ladder'].clean.logits
-            # import IPython
-            # IPython.embed()
+
             X_test = dataset.test.images
             Y_test = dataset.test.labels
             acc = model_eval(
@@ -100,7 +102,7 @@ def test_aer_on_normal_and_adv(p):
 
             aer = 100 * (1-acc)
             results['normal_aer'] = aer
-            print('Test AER on normal examples: {:0.4f} %'.format(aer))
+            # print('Test AER on normal examples: {:0.4f} %'.format(aer))
 
             fgsm_params = {'eps': 0.3}
             fgsm = FastGradientMethod(model, sess=sess)
@@ -115,7 +117,9 @@ def test_aer_on_normal_and_adv(p):
                              args=eval_par)
             aer = 100 * (1 - acc)
             results['adv_aer'] = aer
-            print('Test AER on adversarial examples: {:0.4f} %'.format(aer))
+            # print('Test AER on adversarial examples: {:0.4f} %'.format(aer))
+            print(results['checkpoint'], results['normal_aer'], results[
+                'adv_aer'], sep=',')
 
     return results
 
@@ -141,8 +145,8 @@ def test_adversarial():
     p.encoder_layers = [p.input_size, 1000, 500, 250, 250, 250, 10]
     p.lrelu_a = 0.1
     seeds = [8340, 8794, 2773, 967, 2368]
-    # models = ['n', 'nlw', 'ladder', 'c', 'clw', 'vat']
-    models = ['vat']
+    models = ['n', 'nlw', 'ladder', 'c', 'clw', 'vat']
+    # models = ['vat']
     for model in models:
         p.model = model
         results[model] = {}
