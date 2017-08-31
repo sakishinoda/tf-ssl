@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from src.utils import get_cli_params, process_cli_params, \
     order_param_settings
-from src.lva import build_graph, measure_smoothness, build_vat_graph, VERBOSE
+from src.lva import build_graph, measure_smoothness, VERBOSE
 from src.train import evaluate_metric_list, update_decays, evaluate_metric
 import numpy as np
 
@@ -101,10 +101,7 @@ def main():
 
     # -----------------------------
     # Build graph
-    if p.model == 'vat':
-        g, m, trainable_parameters = build_vat_graph(p)
-    else:
-        g, m, trainable_parameters = build_graph(p)
+    g, m, trainable_parameters = build_graph(p)
 
     # Collect losses
     train_losses = [m['loss'], m['cost'], m['uc'], m['vc']]
