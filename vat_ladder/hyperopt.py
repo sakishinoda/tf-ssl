@@ -1,9 +1,9 @@
 import tensorflow as tf
 import os
-from src.lva import build_graph, build_vat_graph
+from src.lva import build_graph
 from src.train import evaluate_metric
 from src.mnist import read_data_sets
-# import numpy as np
+import numpy as np
 from src.utils import process_cli_params, get_cli_params, parse_argstring
 from skopt import gp_minimize, dump
 from tqdm import tqdm
@@ -52,10 +52,7 @@ class Hyperopt(object):
         num_iter = iter_per_epoch * p.end_epoch
 
         # Build graph
-        if p.model == 'vat':
-            g, m, trainable_parameters = build_vat_graph(p)
-        else:
-            g, m, trainable_parameters = build_graph(p)
+        g, m, trainable_parameters = build_graph(p)
 
         val_errs = []
         error = tf.constant(100.0) - m['acc']
@@ -68,7 +65,7 @@ class Hyperopt(object):
             if p.verbose:
                 print("=== Training ===")
 
-            for i in tqdm(range(num_iter)):
+            for i in range(num_iter):
 
                 images, labels = dataset.train.next_batch(p.batch_size,
                                                           p.ul_batch_size)
@@ -176,16 +173,15 @@ def test_num_power_iters():
 
     npi_to_test = parse_argstring(hyperopt.params.npi, dtype=int)
     for npi in npi_to_test:
-        print('====================')
+
 
         val_errs[npi] = []
-        for seed in [1, 11, 111]:
+        for seed in [1, 11, 111, 1111, 11111]:
+            np.random.seed(seed)
             this_val_err = hyperopt.objective([seed, npi])
             val_errs[npi].append(this_val_err)
             print(npi, seed, this_val_err)
-        print('--------------------')
 
-    print('====================')
     for npi in npi_to_test:
         print(npi, mean(val_errs[npi]), stdev(val_errs[npi]))
 
