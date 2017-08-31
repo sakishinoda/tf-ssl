@@ -141,7 +141,8 @@ def test_adversarial():
     p.encoder_layers = [p.input_size, 1000, 500, 250, 250, 250, 10]
     p.lrelu_a = 0.1
     seeds = [8340, 8794, 2773, 967, 2368]
-    models = ['n', 'nlw', 'ladder', 'c', 'clw', 'vat']
+    # models = ['n', 'nlw', 'ladder', 'c', 'clw', 'vat']
+    models = ['vat']
     for model in models:
         p.model = model
         results[model] = {}
