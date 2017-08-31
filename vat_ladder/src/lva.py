@@ -1209,7 +1209,7 @@ def get_vat_cost(model, train_flag, params):
             vat_costs.append(get_layer_vat_cost(l))
         vat_cost = tf.add_n(vat_costs)
 
-    elif params.model == "c":
+    elif params.model == "c" or params.model == 'ladder':
         vat_cost = get_layer_vat_cost(0)
 
     else:
@@ -1281,7 +1281,8 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
 
     else:
         model = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = tf.zeros([])
+        vat_cost = get_vat_cost(model, train_flag, params) if \
+            p.measure_smoothness else tf.zeros([])
         loss = model.cost + model.u_cost
         s_cost = model.cost
         u_cost = model.u_cost
