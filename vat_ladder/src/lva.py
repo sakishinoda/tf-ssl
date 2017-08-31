@@ -1543,7 +1543,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
     g['lr'] = lr
     g['beta1'] = beta1
     g['logits'] = logits
-    g['softmax'] = tf.nn.softmax(logit)
+    g['softmax'] = tf.nn.softmax(logits)
 
     m = dict()
     m['loss'] = loss
