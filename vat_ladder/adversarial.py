@@ -6,6 +6,7 @@ from src.utils import get_cli_params, process_cli_params, parse_argstring
 from src.mnist import read_data_sets
 import tensorflow as tf
 import pickle
+import os
 
 class MyModel(CleverHansModel):
     def __init__(self, params):
@@ -50,6 +51,10 @@ class MyModel(CleverHansModel):
 
 
 def test_aer_on_normal_and_adv(p):
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
     results = {}
     tf.reset_default_graph()
 
@@ -63,7 +68,7 @@ def test_aer_on_normal_and_adv(p):
     id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
     ckpt_dir = "models/" + id_seed_dir
 
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
 
         ckpt = tf.train.get_checkpoint_state(ckpt_dir)
 
@@ -123,8 +128,14 @@ class attrdict(dict):
         self.__dict__ = self
 
 def test_adversarial():
+
     results = {}
     p = process_cli_params(get_cli_params())
+
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+
+
     p.epsilon = parse_argstring('1.0-0.1-0.001-0.001-0.001-0.001-0.001', float)
     p.rc_weights = parse_argstring('1000-10-0.1-0.1-0.1-0.1-0.1', float)
     # p.num_labeled = 50
