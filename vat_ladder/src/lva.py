@@ -1527,7 +1527,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
                                         name='beta1')
 
     with tf.variable_scope('MLP', reuse=None) as scope:
-        train_op, loss, nll_loss, vat_cost, logit = build_training_graph()
+        train_op, loss, nll_loss, vat_cost, logits = build_training_graph()
         scope.reuse_variables()
         acc_op = accuracy(inputs, outputs) * tf.constant(100.0)
 
@@ -1542,7 +1542,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
     g['train_step'] = train_op
     g['lr'] = lr
     g['beta1'] = beta1
-    g['logits'] = logit
+    g['logits'] = logits
     g['softmax'] = tf.nn.softmax(logit)
 
     m = dict()
