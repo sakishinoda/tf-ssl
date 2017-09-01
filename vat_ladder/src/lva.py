@@ -1424,11 +1424,14 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
 
         h = x
         for i, l in enumerate(ls):
-            h = lrelu(tf.matmul(h, weight(l, i)) + bias(l[-1], i))
+            h = tf.matmul(h, weight(l, i))
+            h = bn(h, l[-1], is_training=is_training,
+                   update_batch_stats=update_batch_stats,
+                   name='bn' + str(i))
+
             if i < len(ls) - 1:
-                h = bn(h, l[-1], is_training=is_training,
-                         update_batch_stats=update_batch_stats,
-                         name='bn' + str(i))
+                # + bias(l[-1], i)
+                h = lrelu(h)
                 if is_training:  # for stabilisation
                     h += tf.random_normal(tf.shape(h), stddev=0.5)
 
