@@ -1,6 +1,0 @@
-models/
-logs/
-tests/
-tmp*
-logs_archive/
-MNIST_data
