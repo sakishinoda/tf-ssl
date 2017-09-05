@@ -1,10 +1,9 @@
-# tf-ssl: TensorFlow Semi-Supervised Library
+# Deep Semi-Supervised Learning with Ladder Networks and Virtual Adversarial Training
 
-Implementations of the state-of-the-art for semi-supervised deep learning.
+This repository contains the source code for the thesis submitted in part requirement for the MSc Computational Statistics and Machine Learning at University College London.
 
 * Ladder TF implementation from: https://github.com/rinuboney/ladder 
 * Virtual Adversarial Training (VAT) TF implementation from original paper: https://github.com/takerum/vat_tf
-* Universal Adversarial Perturbations (UAP) TF implementation from original paper: https://github.com/LTS4/universal/
 
 
 Performance benchmarks on MNIST, CIFAR-10, CIFAR-100, SVHN below (and [here](http://www.sakishinoda.com/2017/07/05/semisupervised-deep-learning-classification-results.html)). 
