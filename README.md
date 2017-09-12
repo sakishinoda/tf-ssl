@@ -4,7 +4,7 @@ This repository contains the source code for the thesis submitted in part requir
 
 Performance benchmarks on MNIST, CIFAR-10, CIFAR-100, SVHN below (and [here](http://www.sakishinoda.com/2017/07/05/semisupervised-deep-learning-classification-results.html)). 
 
-
+Instructions for running experiments [here](https://github.com/sakishinoda/tf-ssl/blob/master/vat_ladder/README.md).
 ---
 
 
