@@ -4,6 +4,7 @@ from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.conv import *
 import tensorflow.contrib.layers as layers
 import math
+import numpy as np
 
 
 VERBOSE = False
