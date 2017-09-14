@@ -758,33 +758,34 @@ def gauss_combinator(z_c, u, size):
 
 # AMLP combinator
 def amlp_combinator(z_c, u, size):
-    in_dim, out_dim = 3, 4
-
-    w_init = np.asarray([[1., 1., 1., 1.],
-              [0., 0., 0., 0.],
-              [0., 0., 0., 0.]
-              ], dtype=np.float32)
-    b_init = np.zeros([out_dim,], dtype=np.float32)
 
     uz = tf.multiply(z_c, u)
     x = tf.stack([z_c, u, uz], axis=-1)
+
+    in_dim = 3
     x = tf.reshape(x, shape=[-1, in_dim])
 
-    res = tf.nn.xw_plus_b(x,
-                          tf.get_variable('w1', initializer=w_init),
-                          tf.get_variable('b1', initializer=b_init))
 
-    res = lrelu(res, a=0.1)
-
-    in_dim, out_dim = 4, 1
-    w_init = np.ones([in_dim, out_dim], dtype=np.float32) * 0.25
+    in_dim, out_dim = 3, 4
+    w_init = np.random.randn(in_dim, out_dim) * 0.025
+    # w_init = np.asarray([[1., 1., 1., 1.], [0., 0., 0., 0.],
+    #                      [0., 0., 0., 0.]], dtype=np.float32)
     b_init = np.zeros([out_dim,], dtype=np.float32)
 
-    res = tf.nn.xw_plus_b(res,
-                          tf.get_variable('w2', initializer=w_init),
-                          tf.get_variable('b2', initializer=b_init))
+    res = lrelu(tf.nn.xw_plus_b(x,
+                          tf.get_variable('w1', initializer=w_init),
+                          tf.get_variable('b1', initializer=b_init)))
 
-    res = lrelu(res, a=0.1)
+
+    in_dim, out_dim = 4, 1
+    # w_init = np.ones([in_dim, out_dim], dtype=np.float32) * 0.25
+    w_init = np.random.randn(in_dim, out_dim) * 0.025
+    b_init = np.zeros([out_dim,], dtype=np.float32)
+
+    res = lrelu(tf.nn.xw_plus_b(res,
+                          tf.get_variable('w2', initializer=w_init),
+                          tf.get_variable('b2', initializer=b_init)))
+
 
     im_size = u.get_shape().as_list()[1]
     res = tf.reshape(res, shape=[-1, im_size])
