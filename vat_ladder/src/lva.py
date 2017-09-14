@@ -790,7 +790,6 @@ def amlp_combinator(z_c, u, size):
 
 
 
-
 class Model(object):
     """
     Base class for models.
@@ -1331,6 +1330,7 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
         vat_cost = tf.zeros([])
         s_cost = model.cost
         u_cost = model.u_cost
+        loss = model.cost + model.u_cost
 
     else:
         model = Ladder(inputs, outputs, train_flag, params)
