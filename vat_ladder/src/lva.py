@@ -760,24 +760,24 @@ def gauss_combinator(z_c, u, size):
 def amlp_combinator(z_c, u, size):
     in_dim, out_dim = 3, 4
 
-    w_init = [[1., 1., 1., 1.],
+    w_init = np.asarray([[1., 1., 1., 1.],
               [0., 0., 0., 0.],
               [0., 0., 0., 0.]
-              ]
-    b_init = np.zeros([out_dim,])
+              ], dtype=np.float32)
+    b_init = np.zeros([out_dim,], dtype=np.float32)
 
     uz = tf.multiply(z_c, u)
     x = tf.stack([z_c, u, uz], axis=-1)
     x = tf.reshape(x, shape=[-1, in_dim])
 
     res = tf.nn.xw_plus_b(x,
-                          tf.get_variable('w1', initializer=np.asarray(w_init)),
+                          tf.get_variable('w1', initializer=w_init),
                           tf.get_variable('b1', initializer=b_init))
 
 
     in_dim, out_dim = 4, 1
-    w_init = np.ones([in_dim, out_dim]) * 0.25
-    b_init = np.zeros([out_dim,])
+    w_init = np.ones([in_dim, out_dim], dtype=np.float32) * 0.25
+    b_init = np.zeros([out_dim,], dtype=np.float32)
 
     res = tf.nn.xw_plus_b(res,
                           tf.get_variable('w2', initializer=w_init),
