@@ -774,6 +774,7 @@ def amlp_combinator(z_c, u, size):
                           tf.get_variable('w1', initializer=w_init),
                           tf.get_variable('b1', initializer=b_init))
 
+    res = lrelu(res, a=0.1)
 
     in_dim, out_dim = 4, 1
     w_init = np.ones([in_dim, out_dim], dtype=np.float32) * 0.25
@@ -783,6 +784,7 @@ def amlp_combinator(z_c, u, size):
                           tf.get_variable('w2', initializer=w_init),
                           tf.get_variable('b2', initializer=b_init))
 
+    res = lrelu(res, a=0.1)
 
     im_size = u.get_shape().as_list()[1]
     res = tf.reshape(res, shape=[-1, im_size])
