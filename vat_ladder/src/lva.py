@@ -729,6 +729,7 @@ class BatchNormLayers(object):
 # -----------------------------
 # COMBINATOR
 # -----------------------------
+# Vanilla combinator
 def gauss_combinator(z_c, u, size):
     "gaussian denoising function proposed in the original paper"
 
@@ -753,6 +754,40 @@ def gauss_combinator(z_c, u, size):
 
     z_est = (z_c - mu) * v + mu
     return z_est
+
+# AMLP combinator
+def amlp_combinator(z_c, u, size):
+    in_dim, out_dim = 3, 4
+
+    w_init = [[1., 1., 1., 1.],
+              [0., 0., 0., 0.],
+              [0., 0., 0., 0.]
+              ]
+    b_init = np.zeros([out_dim,])
+
+    uz = tf.multiply(z_c, u)
+    x = tf.stack([z_c, u, uz], axis=-1)
+    x = tf.reshape(x, shape=[-1, in_dim])
+
+    res = tf.nn.xw_plus_b(x,
+                          tf.get_variable('w1', initializer=np.asarray(w_init)),
+                          tf.get_variable('b1', initializer=b_init))
+
+
+    in_dim, out_dim = 4, 1
+    w_init = np.ones([in_dim, out_dim]) * 0.25
+    b_init = np.zeros([out_dim,])
+
+    res = tf.nn.xw_plus_b(res,
+                          tf.get_variable('w2', initializer=w_init),
+                          tf.get_variable('b2', initializer=b_init))
+
+
+    batch_size, im_size = u.get_shape().as_list()
+    res = tf.reshape(res, shape=[batch_size, im_size])
+    return res
+
+
 
 
 class Model(object):
@@ -900,6 +935,17 @@ class Ladder(Model):
         return Decoder(
             clean=self.clean, corr=self.corr, bn=self.bn,
             combinator=gauss_combinator,
+            encoder_layers=self.params.encoder_layers,
+            denoising_cost=self.params.rc_weights,
+            batch_size=self.params.batch_size,
+            scope='dec', reuse=None)
+
+# AMLP Ladder
+class AmlpLadder(Ladder):
+    def get_decoder(self):
+        return Decoder(
+            clean=self.clean, corr=self.corr, bn=self.bn,
+            combinator=amlp_combinator,
             encoder_layers=self.params.encoder_layers,
             denoising_cost=self.params.rc_weights,
             batch_size=self.params.batch_size,
@@ -1276,6 +1322,12 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
         model = Gamma(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
         loss = model.cost + model.u_cost
+        s_cost = model.cost
+        u_cost = model.u_cost
+
+    elif params.model == "amlp":
+        model = AmlpLadder(inputs, outputs, train_flag, params)
+        vat_cost = tf.zeros([])
         s_cost = model.cost
         u_cost = model.u_cost
 

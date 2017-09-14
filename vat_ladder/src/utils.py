@@ -180,7 +180,7 @@ def get_cli_params():
     # LOGGING
     # -------------------------
     add('--id', default='ladder')
-    add('--logdir', default='logs/')
+    add('--logdir', default='results/logs/')
     add('--write_to', default=None)
     # description to print
     add('--description', default=None)
