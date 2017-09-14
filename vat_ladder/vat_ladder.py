@@ -10,46 +10,6 @@ from src.train import evaluate_metric_list, update_decays, evaluate_metric
 import numpy as np
 
 
-def test_data_splitting():
-    p = process_cli_params(get_cli_params())
-    global VERBOSE
-    VERBOSE = p.verbose
-
-    # -----------------------------
-    # Set GPU device to use
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-
-    # Set seeds
-    np.random.seed(p.seed)
-    tf.set_random_seed(p.seed)
-
-    # Load data
-    print("===  Loading Data ===")
-    if p.dataset == 'svhn':
-        from src.svhn import read_data_sets
-        dataset = read_data_sets(
-            "../../data/svhn/",
-            n_labeled=p.num_labeled,
-            validation_size=p.validation,
-            one_hot=True,
-            disjoint=False,
-            downsample=True,
-            download_and_extract=True
-        )
-
-    else:
-        from src.mnist import read_data_sets
-        dataset = read_data_sets("MNIST_data",
-                         n_labeled=p.num_labeled,
-                         validation_size=p.validation,
-                         one_hot=True,
-                         disjoint=False)
-
-    print(dataset.train.l_idx)
-
 
 def main():
 
