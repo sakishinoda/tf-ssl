@@ -784,8 +784,8 @@ def amlp_combinator(z_c, u, size):
                           tf.get_variable('b2', initializer=b_init))
 
 
-    batch_size, im_size = u.get_shape().as_list()
-    res = tf.reshape(res, shape=[batch_size, im_size])
+    to_size = u.get_shape().as_list()[1:]
+    res = tf.reshape(res, shape=[-1].extend(to_size))
     return res
 
 
