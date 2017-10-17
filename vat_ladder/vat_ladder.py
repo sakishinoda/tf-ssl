@@ -11,9 +11,9 @@ import numpy as np
 
 
 
-def main():
+def main(p):
 
-    p = process_cli_params(get_cli_params())
+    p = process_cli_params(p)
     global VERBOSE
     VERBOSE = p.verbose
 
@@ -110,7 +110,7 @@ def main():
 
 
     # Resume from checkpoint
-    ckpt_dir = "checkpoints/" + id_seed_dir
+    ckpt_dir = p.ckptdir + id_seed_dir
     ckpt = tf.train.get_checkpoint_state(
         ckpt_dir)  # get latest checkpoint (if any)
 
@@ -247,7 +247,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    p = get_cli_params()
+    main(p)
 
 
 

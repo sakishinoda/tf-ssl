@@ -967,7 +967,7 @@ class Gamma(Ladder):
                 start_layer=0, update_batch_stats=True,
                 scope='enc', reuse=None)
         else:
-            super(Gamma, self).get_encoder()
+            return super(Gamma, self).get_encoder()
 
 
     def get_corrupted_encoder(self):
@@ -983,7 +983,7 @@ class Gamma(Ladder):
                 start_layer=start_layer, update_batch_stats=update_batch_stats,
                 scope=scope, reuse=reuse)
         else:
-            super(Gamma, self).get_corrupted_encoder()
+            return super(Gamma, self).get_corrupted_encoder()
 
     def get_decoder(self):
         return GammaDecoder(

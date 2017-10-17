@@ -181,6 +181,7 @@ def get_cli_params():
     # -------------------------
     add('--id', default='ladder')
     add('--logdir', default='results/logs/')
+    add('--ckptdir', default='checkpoints/')
     add('--write_to', default=None)
     # description to print
     add('--description', default=None)
@@ -362,3 +363,10 @@ def get_batch_ops(batch_size):
     labeled = lambda x: x[:batch_size] if x is not None else x
     unlabeled = lambda x: x[batch_size:] if x is not None else x
     return join, split_lu, labeled, unlabeled
+
+
+def dict2namespace(dict_):
+    p = argparse.Namespace()
+    for k, v in dict_.items():
+        p.k = v
+    return p
