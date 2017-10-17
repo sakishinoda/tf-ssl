@@ -113,9 +113,9 @@ def load_cifar10(data_dir):
     return train_images, train_labels, test_images, test_labels
 
 
-def read_data_sets(train_dir, n_labeled=1000, fake_data=False,
+def read_data_sets(train_dir, n_labeled=4000, fake_data=False,
                    one_hot=True, verbose=False, validation_size=0,
-                   disjoint=False, downsample=True, download_and_extract=True):
+                   disjoint=False):
 
     class DataSets(object):
         pass
@@ -124,8 +124,15 @@ def read_data_sets(train_dir, n_labeled=1000, fake_data=False,
 
     VALIDATION_SIZE = validation_size
 
-    if download_and_extract:
-        maybe_download_and_extract(data_dir=train_dir, downsample=downsample)
+
+    for x in ['train_images',
+              'train_labels',
+              'test_images',
+              'test_labels']:
+        filepath = os.path.join(train_dir, x)
+        if not os.path.exists(filepath):
+            maybe_download_and_extract(data_dir=train_dir)
+            break
 
     train_images, train_labels, test_images, test_labels = load_cifar10(
         train_dir)

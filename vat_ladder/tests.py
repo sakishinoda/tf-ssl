@@ -13,6 +13,7 @@ import numpy as np
 
 
 
+
 def test_data_splitting():
     p = process_cli_params(get_cli_params())
     global VERBOSE
@@ -189,11 +190,29 @@ def test_hessian_ops():
 
     # print(s.get_shape(), ul_s.get_shape())
 
+def test_cifar10():
+    from src.cifar10 import maybe_download_and_extract
+    maybe_download_and_extract('../../data/cifar10/')
+
+def test_conv_encoder():
+    from src.lva import Model, ConvEncoder
+    class ConvModel(Model):
+        def get_encoder(self):
+            return ConvEncoder(
+                inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+                params=self.params, this_encoder_noise=0.0,
+                start_layer=0, update_batch_stats=True,
+                scope='enc', reuse=None)
+
+
+
 
 if __name__ == '__main__':
 
+    test_cifar10()
+
     # from vat_ladder import test_data_splitting
-    test_data_splitting()
+    # test_data_splitting()
 
     # from src.svhn import read_data_sets
     # svhn = read_data_sets('../../data/svhn/')

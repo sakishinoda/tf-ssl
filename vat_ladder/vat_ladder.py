@@ -42,6 +42,16 @@ def main(p):
             download_and_extract=True
         )
 
+    elif p.dataset == 'cifar10':
+        from src.cifar10 import read_data_sets
+        dataset = read_data_sets(
+            "../../data/cifar10/",
+            n_labeled=p.num_labeled,
+            validation_size=p.validation,
+            one_hot=True,
+            disjoint=False
+        )
+
     else:
         from src.mnist import read_data_sets
         dataset = read_data_sets("MNIST_data",

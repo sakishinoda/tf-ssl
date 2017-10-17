@@ -1,3 +1,4 @@
+train
 *.pkl
 models
 MNIST_data

@@ -879,6 +879,14 @@ class Model(object):
         return None
 
 
+class ConvModel(Model):
+    def get_encoder(self):
+        return ConvEncoder(
+            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
+            params=self.params, this_encoder_noise=0.0,
+            start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None)
+
 class VirtualAdversarialTraining(Model):
 
     def get_encoder(self):
@@ -899,7 +907,6 @@ class VirtualAdversarialTraining(Model):
             x=self.unlabeled(self.inputs),
             logit=self.unlabeled(self.clean.logits),
             is_training=self.train_flag)
-
 
 
 
@@ -1336,6 +1343,13 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
         s_cost = model.cost
         u_cost = model.u_cost
         loss = model.cost + model.u_cost
+
+    elif params.model == "conv_baseline":
+        model = ConvModel(inputs, outputs, train_flag, params)
+        vat_cost = tf.zeros([])
+        s_cost = model.cost
+        u_cost = model.u_cost
+        loss = model.cost
 
     else:
         model = Ladder(inputs, outputs, train_flag, params)
