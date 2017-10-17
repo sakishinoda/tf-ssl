@@ -193,7 +193,7 @@ def get_cli_params():
     # -------------------------
     # DATA
     # -------------------------
-    add('--dataset', default='mnist', choices=['mnist', 'svhn'])
+    add('--dataset', default='mnist', choices=['mnist', 'svhn', 'cifar10'])
     add('--input_size', default=784, type=int)
     # -------------------------
     # EVALUATE
@@ -318,7 +318,7 @@ def process_cli_params(params):
         if params.dataset == "mnist":
             params.cnn_init_size = 28
             params.cnn_fan[0] = 1
-        elif params.dataset == "cifar":
+        elif params.dataset == "cifar10":
             params.cnn_init_size = 32
             params.cnn_fan[0] = 3
         else:

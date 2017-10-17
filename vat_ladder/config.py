@@ -2,14 +2,14 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "full"
-p.logdir            =   "train/mlpgamma/"
-p.ckptdir           =   "train/mlpgamma/"
+p.id                =   "test"
+p.logdir            =   "train/cifar10/"
+p.ckptdir           =   "train/cifar10/"
 p.write_to          =   "description"
 p.do_not_save       =   None
 p.verbose           =   True
 
-p.dataset	        =	"mnist"
+p.dataset	        =	"cifar10"
 p.input_size        =   784
 
 p.test_frequency_in_epochs	=	5
@@ -19,7 +19,7 @@ p.tb                        =   False
 p.which_gpu     =   0
 p.seed          =   8340
 p.end_epoch     =   150
-p.num_labeled   =   100
+p.num_labeled   =   4000
 p.batch_size    =   100
 p.ul_batch_size =   100
 
