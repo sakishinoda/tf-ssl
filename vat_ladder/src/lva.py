@@ -1344,7 +1344,7 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
         u_cost = model.u_cost
         loss = model.cost + model.u_cost
 
-    elif params.model == "conv_baseline":
+    elif params.model == "conv":
         model = ConvModel(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
         s_cost = model.cost

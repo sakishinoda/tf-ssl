@@ -92,9 +92,11 @@ def maybe_download_and_extract(data_dir, downsample=False):
     test_images = np.dot(test_images - mean, components.T)
 
     train_images = train_images.reshape(
-        (NUM_EXAMPLES_TRAIN, 3, 32, 32)).transpose((0, 2, 3, 1)).reshape((NUM_EXAMPLES_TRAIN, -1))
+        (NUM_EXAMPLES_TRAIN, 3, 32, 32)).transpose((0, 2, 3, 1))
+    #.reshape((NUM_EXAMPLES_TRAIN, -1))
     test_images = test_images.reshape(
-        (NUM_EXAMPLES_TEST, 3, 32, 32)).transpose((0, 2, 3, 1)).reshape((NUM_EXAMPLES_TEST, -1))
+        (NUM_EXAMPLES_TEST, 3, 32, 32)).transpose((0, 2, 3, 1))
+    #.reshape((NUM_EXAMPLES_TEST, -1))tn
 
     np.save('{}/train_images'.format(data_dir), train_images)
     np.save('{}/train_labels'.format(data_dir), train_labels)
@@ -125,14 +127,17 @@ def read_data_sets(train_dir, n_labeled=4000, fake_data=False,
     VALIDATION_SIZE = validation_size
 
 
-    for x in ['train_images',
-              'train_labels',
-              'test_images',
-              'test_labels']:
+    for x in ['train_images.npy',
+              'train_labels.npy',
+              'test_images.npy',
+              'test_labels.npy']:
         filepath = os.path.join(train_dir, x)
+
         if not os.path.exists(filepath):
             maybe_download_and_extract(data_dir=train_dir)
             break
+        else:
+            print(filepath, "found")
 
     train_images, train_labels, test_images, test_labels = load_cifar10(
         train_dir)

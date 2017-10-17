@@ -52,6 +52,7 @@ def main(p):
             disjoint=False
         )
 
+
     else:
         from src.mnist import read_data_sets
         dataset = read_data_sets("MNIST_data",

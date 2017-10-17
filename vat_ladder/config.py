@@ -41,11 +41,11 @@ p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "gamma"
+p.model                 =   "conv"  # conv encoder only
 p.measure_smoothness    =   False
 p.measure_vat           =   False
 
-p.cnn               =   False
+p.cnn               =   True
 p.cnn_layer_types   = \
     "c-c-c-max-c-c-c-max-c-c-c-avg-fc"
 p.cnn_fan           = \

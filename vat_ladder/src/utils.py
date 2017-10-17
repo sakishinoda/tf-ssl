@@ -302,7 +302,7 @@ def process_cli_params(params):
 
     params.decay_start_epoch = int(params.decay_start * params.end_epoch)
     params.eval_batch_size = params.batch_size  # this should be redundant
-    params.input_size = 768 if params.dataset == 'svhn' else 784
+
 
     if params.cnn:
         params.cnn_layer_types = parse_argstring(params.cnn_layer_types,
@@ -317,18 +317,29 @@ def process_cli_params(params):
 
         if params.dataset == "mnist":
             params.cnn_init_size = 28
-            params.cnn_fan[0] = 1
+            # params.cnn_fan[0] = 1
+            params.input_size = 1
         elif params.dataset == "cifar10":
             params.cnn_init_size = 32
-            params.cnn_fan[0] = 3
+            # params.cnn_fan[0] = 3
+            params.input_size = 3
         else:
             params.cnn_init_size = 28
+            params.input_size = 1
 
     else:
         params.encoder_layers = parse_argstring(params.encoder_layers,
                                                 dtype=int)
+        if params.dataset == 'mnist':
+            params.input_size = 784
+        elif params.dataset == 'svhn':
+            params.input_size = 768
+        elif params.dataset == 'cifar10':
+            params.input_size = 32 * 32
+        else:
+            params.input_size = 784
 
-    params.encoder_layers = [params.input_size] + params.encoder_layers
+        params.encoder_layers = [params.input_size] + params.encoder_layers
     params.rc_weights = enum_dict(
         parse_argstring(params.rc_weights, dtype=float))
 
