@@ -6,6 +6,55 @@ import IPython
 from tensorflow.examples.tutorials.mnist import input_data
 import argparse
 
+import tensorflow as tf
+import os
+from src.utils import get_cli_params, process_cli_params
+import numpy as np
+
+
+
+def test_data_splitting():
+    p = process_cli_params(get_cli_params())
+    global VERBOSE
+    VERBOSE = p.verbose
+
+    # -----------------------------
+    # Set GPU device to use
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
+    # Set seeds
+    np.random.seed(p.seed)
+    tf.set_random_seed(p.seed)
+
+    # Load data
+    print("===  Loading Data ===")
+    if p.dataset == 'svhn':
+        from src.svhn import read_data_sets
+        dataset = read_data_sets(
+            "../../data/svhn/",
+            n_labeled=p.num_labeled,
+            validation_size=p.validation,
+            one_hot=True,
+            disjoint=False,
+            downsample=True,
+            download_and_extract=True
+        )
+
+    else:
+        from src.mnist import read_data_sets
+        dataset = read_data_sets("MNIST_data",
+                         n_labeled=p.num_labeled,
+                         validation_size=p.validation,
+                         one_hot=True,
+                         disjoint=False)
+
+    print(dataset.train.l_idx)
+    print(np.sum(dataset.train.labeled_ds.labels, axis=0))
+
+
 def test_copying_by_strided_deconv():
     x = tf.placeholder(dtype=tf.float32, shape=[10,4,4,1])
     w = tf.ones(dtype=tf.float32, shape=[2,2,1,1])
@@ -105,10 +154,6 @@ def test_nargs():
 
     print(bn_decay)
 
-from src.lva import build_graph
-from src.utils import get_cli_params, process_cli_params
-from src import mnist
-from src.lva import softmax_cross_entropy_with_logits
 def test_hessian_ops():
     p = process_cli_params(get_cli_params())
     mnist = input_data.read_data_sets("MNIST_data",
@@ -145,12 +190,9 @@ def test_hessian_ops():
     # print(s.get_shape(), ul_s.get_shape())
 
 
-
-
-
 if __name__ == '__main__':
 
-    from vat_ladder import test_data_splitting
+    # from vat_ladder import test_data_splitting
     test_data_splitting()
 
     # from src.svhn import read_data_sets

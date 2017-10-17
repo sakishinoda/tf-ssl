@@ -4,6 +4,8 @@
 def evaluate_metric(dataset, sess, op, graph, params):
     metric = 0
     num_eval_iters = dataset.num_examples // params.batch_size
+    assert num_eval_iters > 0, "Number of evaluation iterations >=0, " \
+                               "make sure batch size is less than or equal to number of labelled examples."
     for _ in range(num_eval_iters):
         images, labels = dataset.next_batch(params.batch_size)
         init_feed = {graph['images']: images,

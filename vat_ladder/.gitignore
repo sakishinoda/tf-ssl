@@ -3,3 +3,4 @@ models
 MNIST_data
 checkpoints
 /MNIST_data/
+*.DS_Store

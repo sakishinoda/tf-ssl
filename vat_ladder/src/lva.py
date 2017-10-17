@@ -4,6 +4,7 @@ from src.utils import count_trainable_params, preprocess, get_batch_ops
 from src.conv import *
 import tensorflow.contrib.layers as layers
 import math
+import numpy as np
 
 
 VERBOSE = False
@@ -729,6 +730,7 @@ class BatchNormLayers(object):
 # -----------------------------
 # COMBINATOR
 # -----------------------------
+# Vanilla combinator
 def gauss_combinator(z_c, u, size):
     "gaussian denoising function proposed in the original paper"
 
@@ -753,6 +755,44 @@ def gauss_combinator(z_c, u, size):
 
     z_est = (z_c - mu) * v + mu
     return z_est
+
+# AMLP combinator
+def amlp_combinator(z_c, u, size):
+
+    uz = tf.multiply(z_c, u)
+    x = tf.stack([z_c, u, uz], axis=-1)
+
+    in_dim = 3
+    x = tf.reshape(x, shape=[-1, in_dim])
+
+
+    in_dim, out_dim = 3, 4
+    # w_init = tf.random_normal_initializer(stddev=0.025)
+    w_init = np.asarray([[1., 1., 1., 1.],
+                         [0., 0., 0., 0.],
+                         [0., 0., 0., 0.]], dtype=np.float32) + \
+             np.random.randn(in_dim, out_dim).astype(dtype=np.float32) * 0.025
+    b_init = np.zeros([out_dim,], dtype=np.float32)
+
+    res = lrelu(tf.nn.xw_plus_b(x,
+                          tf.get_variable('w1', initializer=w_init),
+                          tf.get_variable('b1', initializer=b_init)))
+
+
+    in_dim, out_dim = 4, 1
+    w_init = np.ones([in_dim, out_dim], dtype=np.float32) * 0.25  + \
+             np.random.randn(in_dim, out_dim).astype(dtype=np.float32) * 0.025
+    b_init = np.zeros([out_dim,], dtype=np.float32)
+
+    res = lrelu(tf.nn.xw_plus_b(res,
+                          tf.get_variable('w2', initializer=w_init),
+                          tf.get_variable('b2', initializer=b_init)))
+
+
+    im_size = u.get_shape().as_list()[1]
+    res = tf.reshape(res, shape=[-1, im_size])
+    return res
+
 
 
 class Model(object):
@@ -905,6 +945,17 @@ class Ladder(Model):
             batch_size=self.params.batch_size,
             scope='dec', reuse=None)
 
+# AMLP Ladder
+class AmlpLadder(Ladder):
+    def get_decoder(self):
+        return Decoder(
+            clean=self.clean, corr=self.corr, bn=self.bn,
+            combinator=amlp_combinator,
+            encoder_layers=self.params.encoder_layers,
+            denoising_cost=self.params.rc_weights,
+            batch_size=self.params.batch_size,
+            scope='dec', reuse=None)
+
 #  Gamma
 class Gamma(Ladder):
 
@@ -916,7 +967,7 @@ class Gamma(Ladder):
                 start_layer=0, update_batch_stats=True,
                 scope='enc', reuse=None)
         else:
-            super(Gamma, self).get_encoder()
+            return super(Gamma, self).get_encoder()
 
 
     def get_corrupted_encoder(self):
@@ -932,7 +983,7 @@ class Gamma(Ladder):
                 start_layer=start_layer, update_batch_stats=update_batch_stats,
                 scope=scope, reuse=reuse)
         else:
-            super(Gamma, self).get_corrupted_encoder()
+            return super(Gamma, self).get_corrupted_encoder()
 
     def get_decoder(self):
         return GammaDecoder(
@@ -1278,6 +1329,13 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
         loss = model.cost + model.u_cost
         s_cost = model.cost
         u_cost = model.u_cost
+
+    elif params.model == "amlp":
+        model = AmlpLadder(inputs, outputs, train_flag, params)
+        vat_cost = tf.zeros([])
+        s_cost = model.cost
+        u_cost = model.u_cost
+        loss = model.cost + model.u_cost
 
     else:
         model = Ladder(inputs, outputs, train_flag, params)
