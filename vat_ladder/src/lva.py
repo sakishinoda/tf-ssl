@@ -503,7 +503,10 @@ class ConvEncoder(Encoder):
                     z = z_pre
 
                 if l_out == self.num_layers:
-                    self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
+                    # self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
+                    # as in Rasmus et al, restrict variance of input to
+                    # softmax to unity
+                    self.logits = z + bn.beta[l_in]
                     h = tf.nn.softmax(self.logits)
                 elif self.lrelu_a > 0.0:
                     h = lrelu(z + bn.beta[l_in])
