@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "test"
+p.id                =   "Gamma4k"
 p.logdir            =   "train/cifar10/"
 p.ckptdir           =   "train/cifar10/"
 p.write_to          =   "description"
@@ -18,20 +18,20 @@ p.tb                        =   False
 
 p.which_gpu     =   0
 p.seed          =   8340
-p.end_epoch     =   150
+p.end_epoch     =   70
 p.num_labeled   =   4000
 p.batch_size    =   100
 p.ul_batch_size =   100
 
 p.initial_learning_rate =   0.002
-p.decay_start           =   0.67
+p.decay_start           =   0.86
 p.lr_decay_frequency    =   5
 p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
 p.encoder_layers	=	"1000-500-250-250-250-10"
 p.corrupt_sd	    =	0.2
-p.rc_weights        =   "0-0-0-0-0-0-10"
+p.rc_weights        =   "0-0-0-0-0-0-0-0-0-0-0-0-0-4.0"
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   False
@@ -41,7 +41,7 @@ p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "conv"  # conv encoder only
+p.model                 =   "gamma"
 p.measure_smoothness    =   False
 p.measure_vat           =   False
 
