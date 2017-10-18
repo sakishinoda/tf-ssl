@@ -20,8 +20,8 @@ p.which_gpu     =   0
 p.seed          =   8340
 p.end_epoch     =   70
 p.num_labeled   =   4000
-p.batch_size    =   100
-p.ul_batch_size =   100
+p.batch_size    =   256
+p.ul_batch_size =   256
 
 p.initial_learning_rate =   0.002
 p.decay_start           =   0.86
