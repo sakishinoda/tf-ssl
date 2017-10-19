@@ -396,6 +396,10 @@ class ConvEncoder(Encoder):
             elif layer_spec[l_in]['type'] == 'avg':
                 # Global average pooling
                 z_pre = tf.reduce_mean(h, reduction_indices=[1, 2])
+
+                z_pre *= np.float32(layer_spec[l_in]['f_in']) * np.float32(
+                    np.sqrt(3.))
+
                 if self.top_bn:
                     z, m, v = split_bn(
                         z_pre, is_training=is_training, l_out=l_out)
