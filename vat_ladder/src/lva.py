@@ -886,7 +886,7 @@ class ConvModel(Model):
     def get_encoder(self):
         return ConvEncoder(
             inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-            params=self.params, this_encoder_noise=0.0,
+            params=self.params, this_encoder_noise=self.params.corrupt_sd,
             start_layer=0, update_batch_stats=True,
             scope='enc', reuse=None)
 
