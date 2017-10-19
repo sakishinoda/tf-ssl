@@ -2,9 +2,9 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "C"
-p.logdir            =   "train/cifar10/"
-p.ckptdir           =   "train/cifar10/"
+p.id                =   "test"
+p.logdir            =   "train/conv_large/"
+p.ckptdir           =   "train/conv_large/"
 p.write_to          =   "description"
 p.do_not_save       =   None
 p.verbose           =   True
@@ -36,25 +36,25 @@ p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   False
 
-p.epsilon           =   "8.0"
+p.epsilon           =   "8.0-0.0-0.0-0.0-0.0-0.0-0.0"
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "n"
-p.decoder               =   "gamma"  # gamma, full, or None
+p.model                 =   "ff"
+p.decoder               =   "none"  # gamma, full, or None
 p.measure_smoothness    =   False
 p.measure_vat           =   False
 
 p.cnn               =   True
 p.cnn_layer_types   = \
-    "c-c-c-max-c-c-c-max-c-c-c-avg-fc"
+    "c-c-c-max-c-c-c-max-c-c-c-avg"
 p.cnn_fan           = \
-    "3-96-96-96-96-192-192-192-192-192-192-192-192-10"
+    "3-96-96-96-96-192-192-192-192-192-192-10-10"
 p.cnn_ksizes        = \
-    "3-3-3-3-3-3-3-3-3-1-1-0-0"
+    "3-3-3-3-3-3-3-3-3-1-1-0"
 p.cnn_strides       = \
-    "1-1-1-2-1-1-1-2-1-1-1-0-0"
+    "1-1-1-2-1-1-1-2-1-1-1-0"
 p.cnn_dims          = \
-    "32-32-32-32-16-16-16-16-8-8-8-8-1"
+    "32-32-32-32-16-16-16-16-8-8-8-1"
 
