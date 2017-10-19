@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 
-VERBOSE = True
+VERBOSE = False
 
 # -----------------------------
 # -----------------------------
