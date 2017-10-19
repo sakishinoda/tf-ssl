@@ -129,7 +129,7 @@ def maybe_download_and_extract(data_dir, downsample=False):
 
     # =============
     # ZCA on flattened data
-    print("Apply ZCA whitening")
+    print("Applying ZCA whitening...")
     components, mean, train_images = ZCA(train_images)
     np.save('{}/components'.format(data_dir), components)
     np.save('{}/mean'.format(data_dir), mean)
