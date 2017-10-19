@@ -376,8 +376,3 @@ def get_batch_ops(batch_size):
     return join, split_lu, labeled, unlabeled
 
 
-def dict2namespace(dict_):
-    p = argparse.Namespace()
-    for k, v in dict_.items():
-        p.k = v
-    return p

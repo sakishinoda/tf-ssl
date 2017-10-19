@@ -57,7 +57,7 @@ def ZCA(data, reg=1e-6):
     mdata = data - mean
     sigma = np.dot(mdata.T, mdata) / mdata.shape[0]
     U, S, V = linalg.svd(sigma)
-    components = np.dot(np.dot(U, np.diag(1 / np.sqrt(S) + reg)), U.T)
+    components = np.dot(np.dot(U, np.diag(1.0 / np.sqrt(S) + reg)), U.T)
     whiten = np.dot(data - mean, components.T)
     return components, mean, whiten
 
