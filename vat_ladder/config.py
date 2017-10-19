@@ -2,11 +2,11 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "test_topbn"
+p.id                =   "gamma"
 p.logdir            =   "train/conv_large/"
 p.ckptdir           =   "train/conv_large/"
 p.write_to          =   "description"
-p.do_not_save       =   None
+p.do_not_save       =   True
 p.verbose           =   True
 
 p.dataset	        =	"cifar10"
@@ -18,7 +18,7 @@ p.tb                        =   False
 
 p.which_gpu     =   0
 p.seed          =   8340
-p.end_epoch     =   20
+p.end_epoch     =   70
 p.num_labeled   =   4000
 p.batch_size    =   100
 p.ul_batch_size =   156
@@ -30,8 +30,9 @@ p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
 p.encoder_layers	=	"1000-500-250-250-250-10"
+p.input_noise_sd    =   0.3
 p.corrupt_sd	    =	0.3
-p.rc_weights        =   "0-0-0-0-0-0-0-0-0-0-0-0-0-4.0"
+p.rc_weights        =   "0-0-0-0-0-0-0-0-0-0-0-0-4.0"
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True
@@ -41,8 +42,8 @@ p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "ff"
-p.decoder               =   "none"  # gamma, full, or None
+p.model                 =   "ladder"
+p.decoder               =   "gamma"  # gamma, full, or None
 p.measure_smoothness    =   False
 p.measure_vat           =   False
 
