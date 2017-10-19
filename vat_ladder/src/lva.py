@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 
-VERBOSE = True
+VERBOSE = False
 
 # -----------------------------
 # -----------------------------
@@ -310,8 +310,8 @@ class ConvEncoder(Encoder):
 
         join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
 
-        h = inputs + tf.random_normal(tf.shape(inputs)) * self.noise_sd
-
+        h = inputs + self.generate_noise(inputs, start_layer)
+        self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
         layer_spec = self.layer_spec
 
         def split_moments(z_pre):
@@ -357,7 +357,7 @@ class ConvEncoder(Encoder):
             return z, m_u, v_u
 
 
-        for l_out in range(1, self.num_layers+1):
+        for l_out in range(start_layer + 1, self.num_layers+1):
             l_in = l_out-1
             if VERBOSE:
                 print("Layer {} ({}): {} -> {}".format(
@@ -1188,6 +1188,7 @@ def get_vat_cost(model, train_flag, params):
                 logit=unlabeled(model.corr.logits),  # should this be clean?
                 is_training=train_flag)
         )
+
 
     if params.model == "clw":
         vat_costs = []
