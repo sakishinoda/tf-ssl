@@ -396,15 +396,21 @@ class ConvEncoder(Encoder):
             elif layer_spec[l_in]['type'] == 'avg':
                 # Global average pooling
                 z_pre = tf.reduce_mean(h, reduction_indices=[1, 2])
-                m, v, _, _ = split_moments(z_pre)
-                z = z_pre
-                h = z
+                if self.top_bn:
+                    z, m, v = split_bn(
+                        z_pre, is_training=is_training, l_out=l_out)
+                else:
+                    m, v, _, _ = split_moments(z_pre)
+                    z = z_pre
+
                 if l_out == self.num_layers:
                     # self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
                     # as in Rasmus et al, restrict variance of input to
                     # softmax to unity
                     self.logits = z + bn.beta[l_in]
                     h = tf.nn.softmax(self.logits)
+                else:
+                    h = z
 
 
             # Fully connected layer

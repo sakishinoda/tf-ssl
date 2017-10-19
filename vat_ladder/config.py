@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "test"
+p.id                =   "test_topbn"
 p.logdir            =   "train/conv_large/"
 p.ckptdir           =   "train/conv_large/"
 p.write_to          =   "description"
@@ -34,9 +34,9 @@ p.corrupt_sd	    =	0.3
 p.rc_weights        =   "0-0-0-0-0-0-0-0-0-0-0-0-0-4.0"
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
-p.top_bn            =   False
+p.top_bn            =   True
 
-p.epsilon           =   "8.0-0.0-0.0-0.0-0.0-0.0-0.0"
+p.epsilon           =   "8.0-0-0-0-0-0-0-0-0-0-0-0-0-0"
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
