@@ -23,6 +23,34 @@ NUM_EXAMPLES_TRAIN = 50000
 NUM_EXAMPLES_TEST = 10000
 
 
+def cnorm(data, scale=55, epsilon=1e-8):
+    """
+    Global contrast normalisation function.
+    First convert to float32.
+    Centre and scale all pixels in an image by that image mean and std.
+
+    :param data:
+    :param scale:
+    :return:
+    """
+    assert len(data.shape) == 2, "Data not flattened"
+    scale = np.float32(scale)
+    epsilon = np.float32(epsilon)
+
+    # Convert to float32
+    data = np.require(data, dtype=np.float32)  # convert from uint8 to float
+
+    # Centre
+    data -= data.mean(axis=1)[:, np.newaxis]
+
+    # Scale
+    norms = np.sqrt(np.sum(data ** 2, axis=1)) / scale
+    norms[norms < epsilon] = np.float32(1.)
+    data /= norms[:, np.newaxis]
+
+    return data
+
+
 
 def ZCA(data, reg=1e-6):
     mean = np.mean(data, axis=0)
@@ -62,6 +90,7 @@ def maybe_download_and_extract(data_dir, downsample=False):
         print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
         tarfile.open(filepath, 'r:gz').extractall(dest_directory)
 
+    # =============
     # Training set
     print("Loading training data...")
     train_images = np.zeros((NUM_EXAMPLES_TRAIN, 3 * 32 * 32), dtype=np.float32)
@@ -71,26 +100,43 @@ def maybe_download_and_extract(data_dir, downsample=False):
         batch = unpickle(data_fn)
         train_images[i * 10000:(i + 1) * 10000] = batch['data']
         train_labels.extend(batch['labels'])
-    train_images = (train_images - 127.5) / 255.
-    train_labels = np.asarray(train_labels, dtype=np.int64)
 
+    # Contrast normalization (i.e. normalize all pixels in each image by the
+    # mean and standard deviation of that image)
+    # Data is already flattened
+    # train_images = (train_images - 127.5) / 255.
+    print("Contrast-normalizing training data...")
+    train_labels = np.asarray(train_labels, dtype=np.int64)
+    train_images = cnorm(train_images)
+
+    # Random ordering of training examples
     rand_ix = np.random.permutation(NUM_EXAMPLES_TRAIN)
     train_images = train_images[rand_ix]
     train_labels = train_labels[rand_ix]
 
+    # =============
+    # Testing set
     print("Loading test data...")
     test = unpickle(data_dir + '/cifar-10-batches-py/test_batch')
     test_images = test['data'].astype(np.float32)
-    test_images = (test_images - 127.5) / 255.
+    test_images = cnorm(test_images)
+
+    print("Contrast-normalizing testing data...")
+    # Convert to [0,1] float
+    # test_images = (test_images - 127.5) / 255.
     test_labels = np.asarray(test['labels'], dtype=np.int64)
     assert all(test_labels < 10), "Labels not in [0, 9]"
 
+    # =============
+    # ZCA on flattened data
     print("Apply ZCA whitening")
     components, mean, train_images = ZCA(train_images)
     np.save('{}/components'.format(data_dir), components)
     np.save('{}/mean'.format(data_dir), mean)
     test_images = np.dot(test_images - mean, components.T)
 
+    # =============
+    # Unflatten data
     train_images = train_images.reshape(
         (NUM_EXAMPLES_TRAIN, 3, 32, 32)).transpose((0, 2, 3, 1))
     #.reshape((NUM_EXAMPLES_TRAIN, -1))
@@ -158,6 +204,3 @@ def read_data_sets(train_dir, n_labeled=4000, fake_data=False,
     data_sets.test = DataSet(test_images, test_labels, preprocessed=True)
 
     return data_sets
-
-if __name__ == "__main__":
-    maybe_download_and_extract('../../data/cifar10/')

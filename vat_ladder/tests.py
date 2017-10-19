@@ -205,8 +205,6 @@ def test_conv_encoder():
                 scope='enc', reuse=None)
 
 
-
-
 if __name__ == '__main__':
 
     test_cifar10()
