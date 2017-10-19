@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 
-VERBOSE = False
+VERBOSE = True
 
 # -----------------------------
 # -----------------------------
@@ -200,94 +200,6 @@ class Encoder(object):
         return tf.random_normal(tf.shape(inputs)) * self.noise_sd
 
 
-# VAT Encoder
-class VATEncoder(Encoder):
-    def create_layers(self, inputs, bn, is_training, start_layer,
-                      update_batch_stats, scope, reuse):
-        # inputs = self.inputs
-        # bn = self.bn
-        # is_training = self.is_training
-        # start_layer = self.start_layer
-        # update_batch_stats = self.update_batch_stats
-        # scope = self.scope
-        # reuse = self.reuse
-
-        el = self.encoder_layers
-
-        join, split_lu, labeled, unlabeled = get_batch_ops(self.batch_size)
-        # Layer 0: inputs, size 784
-        h = inputs + self.generate_noise(inputs, start_layer)
-        self.labeled.z[start_layer], self.unlabeled.z[start_layer] = split_lu(h)
-
-        for l_out in range(start_layer + 1, self.num_layers + 1):
-            l_in = l_out - 1
-            # init_sd = 1 / math.sqrt(el[l_in]) # ladder
-            init_sd = 1 / math.sqrt(el[l_in] + el[l_out])  # vat
-            self.print_progress(l_out)
-
-            self.labeled.h[l_in], self.unlabeled.z[l_in] = split_lu(h)
-            # z_pre = tf.matmul(h, self.W[l-1])
-            z_pre = layers.fully_connected(
-                h,
-                num_outputs=el[l_out],
-                weights_initializer=tf.random_normal_initializer(
-                    stddev=init_sd),
-                biases_initializer=None,
-                activation_fn=None,
-                scope=scope + str(l_out),
-                reuse=reuse)
-
-            m, v = tf.nn.moments(z_pre, axes=[0])
-
-            # if training:
-            def training_batch_norm():
-                # Training batch normalization
-                # batch normalization for labeled and unlabeled examples is
-                # performed separately
-
-                z = bn.update_batch_normalization(z_pre, l_out) if \
-                    update_batch_stats else bn.batch_normalization(z_pre)
-
-                noise = self.generate_noise(z, l_out)
-                z += noise
-
-                return z
-
-            # else:
-            def eval_batch_norm():
-                # Evaluation batch normalization
-                # obtain average mean and variance and use it to normalize the batch
-                mean = bn.ema.average(bn.running_mean[l_in])
-                var = bn.ema.average(bn.running_var[l_in])
-                z = bn.batch_normalization(z_pre, mean, var)
-
-                return z
-
-            # perform batch normalization according to value of boolean "training" placeholder:
-            z = tf.cond(is_training, training_batch_norm, eval_batch_norm)
-
-            if l_out == self.num_layers:
-                # return pre-softmax logits in final layer
-                if self.top_bn:
-                    self.logits = bn.gamma[l_in] * z + bn.beta[l_in]
-                else:
-                    self.logits = z
-                h = tf.nn.softmax(self.logits)
-
-            elif self.lrelu_a > 0.0:
-                h = lrelu(z + bn.beta[l_in])
-
-            else:
-                # use ReLU activation in hidden layers
-                h = tf.nn.relu(z + bn.beta[l_in])
-
-            # save mean and variance of unlabeled examples for decoding
-            self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
-            self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(z)
-            self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
-
-
-
 # VAN Encoder
 class VirtualAdversarialNoiseEncoder(Encoder):
     def __init__(
@@ -299,7 +211,7 @@ class VirtualAdversarialNoiseEncoder(Encoder):
         self.clean_logits = clean_logits
 
         super(VirtualAdversarialNoiseEncoder, self).__init__(
-            inputs, bn, is_training, params,
+            inputs=inputs, bn=bn, is_training=is_training, params=params,
             this_encoder_noise=this_encoder_noise,
             start_layer=start_layer,
             update_batch_stats=update_batch_stats,
@@ -351,17 +263,18 @@ class VirtualAdversarialNoiseEncoder(Encoder):
 
 
 # ConvEncoder
-
 class ConvEncoder(Encoder):
-    def __init__(self, inputs, bn, is_training, params, this_encoder_noise=0.0,
-            start_layer=0, update_batch_stats=True, scope='enc', reuse=None):
+    def __init__(
+            self, inputs, bn, is_training, params,
+            this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None):
 
         self.layer_spec = self.make_layer_spec(params)
         self.lrelu_a = params.lrelu_a
         self.top_bn = params.top_bn
 
         super(ConvEncoder, self).__init__(
-            inputs, bn, is_training, params,
+            inputs=inputs, bn=bn, is_training=is_training, params=params,
             this_encoder_noise=this_encoder_noise,
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
@@ -447,8 +360,8 @@ class ConvEncoder(Encoder):
         for l_out in range(1, self.num_layers+1):
             l_in = l_out-1
             if VERBOSE:
-                print("Layer {}: {} -> {}".format(
-                l_out, layer_spec[l_in]['f_in'],
+                print("Layer {} ({}): {} -> {}".format(
+                l_out, layer_spec[l_in]['type'], layer_spec[l_in]['f_in'],
                 layer_spec[l_out-1]['f_out']))
 
             self.labeled.h[l_in], self.unlabeled.h[l_in] = split_lu(h)
@@ -520,11 +433,74 @@ class ConvEncoder(Encoder):
                 m, v, _, _ = split_moments(h)
                 z = h
 
-
+            if VERBOSE:
+                print(h.get_shape())
             # save mean and variance of unlabeled examples for decoding
             self.unlabeled.m[l_out], self.unlabeled.v[l_out] = m, v
             self.labeled.z[l_out], self.unlabeled.z[l_out] = split_lu(z)
             self.labeled.h[l_out], self.unlabeled.h[l_out] = split_lu(h)
+
+# VAN ConvEncoder
+class VirtualAdversarialNoiseConvEncoder(VirtualAdversarialNoiseEncoder,
+                                         ConvEncoder,
+                                         Encoder):
+    def __init__(
+            self, inputs, bn, is_training, params, clean_logits,
+            this_encoder_noise=0.0, start_layer=0, update_batch_stats=True,
+            scope='enc', reuse=None):
+
+        self.params = params
+        self.clean_logits = clean_logits
+        self.layer_spec = self.make_layer_spec(params)
+        self.lrelu_a = params.lrelu_a
+        self.top_bn = params.top_bn
+
+        Encoder.__init__(
+            self,
+            inputs=inputs, bn=bn, is_training=is_training, params=params,
+            this_encoder_noise=this_encoder_noise,
+            start_layer=start_layer, update_batch_stats=update_batch_stats,
+            scope=scope, reuse=reuse)
+
+
+
+
+def encoder(inputs, bn, is_training, params,
+            clean_logits=None,
+            this_encoder_noise=0.0,
+            start_layer=0,
+            update_batch_stats=True,
+            scope='enc',
+            reuse=None):
+
+
+    if clean_logits is not None:
+        van_enc = VirtualAdversarialNoiseConvEncoder if params.cnn else VirtualAdversarialNoiseEncoder
+        return van_enc(
+            inputs=inputs,
+            bn=bn,
+            is_training=is_training,
+            params=params,
+            clean_logits=clean_logits,
+            this_encoder_noise=this_encoder_noise,
+            start_layer=start_layer,
+            update_batch_stats=update_batch_stats,
+            scope=scope,
+            reuse=reuse
+        )
+    else:
+        enc = ConvEncoder if params.cnn else Encoder
+        return enc(
+            inputs=inputs,
+            bn=bn,
+            is_training=is_training,
+            params=params,
+            this_encoder_noise=this_encoder_noise,
+            start_layer=start_layer,
+            update_batch_stats=update_batch_stats,
+            scope=scope,
+            reuse=reuse
+        )
 
 
 
@@ -641,6 +617,18 @@ class GammaDecoder(Decoder):
         d_cost = self.create_layer(self.num_layers)
         self.d_cost.append(d_cost)
 
+
+def decoder(
+        clean, corr, bn, combinator, encoder_layers,
+        denoising_cost, batch_size=100, scope='dec', reuse=None,
+        decoder_type="full"):
+    if decoder_type == "gamma":
+        return GammaDecoder(clean, corr, bn, combinator, encoder_layers,
+                       denoising_cost, batch_size, scope, reuse)
+    else:
+        # TODO: ConvDecoder
+        return Decoder(clean, corr, bn, combinator, encoder_layers,
+                       denoising_cost, batch_size, scope, reuse)
 
 
 # -----------------------------
@@ -857,7 +845,7 @@ class Model(object):
         self.u_cost = self.get_u_cost()
 
     def get_encoder(self):
-        return Encoder(
+        return encoder(
             inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
             params=self.params, this_encoder_noise=0.0,
             start_layer=0, update_batch_stats=True,
@@ -876,40 +864,10 @@ class Model(object):
         return tf.reduce_mean(ce)
 
     def get_u_cost(self):
-        return None
+        return tf.zeros([])
 
     def build_unsupervised(self):
         return None
-
-
-class ConvModel(Model):
-    def get_encoder(self):
-        return ConvEncoder(
-            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-            params=self.params, this_encoder_noise=self.params.corrupt_sd,
-            start_layer=0, update_batch_stats=True,
-            scope='enc', reuse=None)
-
-class VirtualAdversarialTraining(Model):
-
-    def get_encoder(self):
-        return VATEncoder(
-            inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-            params=self.params, this_encoder_noise=self.params.vadv_sd,
-            start_layer=0, update_batch_stats=True,
-            scope='enc', reuse=None
-        )
-
-    def build_unsupervised(self):
-        self.adv = Adversary(
-            self.bn, self.params, layer_eps=self.params.epsilon[0],
-            start_layer=0)
-
-    def get_u_cost(self):
-        return self.adv.virtual_adversarial_loss(
-            x=self.unlabeled(self.inputs),
-            logit=self.unlabeled(self.clean.logits),
-            is_training=self.train_flag)
 
 
 
@@ -940,70 +898,36 @@ class Ladder(Model):
         scope = 'enc'
         reuse = True
         params = self.params
-        return Encoder(
+        clean_logits = self.clean.logits if (params.model == 'n' or
+                                             params.model == 'nlw') else None
+        return encoder(
             inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
             params=self.params, this_encoder_noise=params.corrupt_sd,
+            clean_logits=clean_logits,
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
 
     def get_decoder(self):
-        return Decoder(
+        return decoder(
             clean=self.clean, corr=self.corr, bn=self.bn,
             combinator=gauss_combinator,
             encoder_layers=self.params.encoder_layers,
             denoising_cost=self.params.rc_weights,
             batch_size=self.params.batch_size,
-            scope='dec', reuse=None)
+            scope='dec', reuse=None,
+            decoder_type=self.params.decoder)
 
 # AMLP Ladder
 class AmlpLadder(Ladder):
     def get_decoder(self):
-        return Decoder(
+        return decoder(
             clean=self.clean, corr=self.corr, bn=self.bn,
             combinator=amlp_combinator,
             encoder_layers=self.params.encoder_layers,
             denoising_cost=self.params.rc_weights,
             batch_size=self.params.batch_size,
-            scope='dec', reuse=None)
+            scope='dec', reuse=None, decoder_type="full")
 
-#  Gamma
-class Gamma(Ladder):
-
-    def get_encoder(self):
-        if self.params.cnn:
-            return ConvEncoder(
-                inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-                params=self.params, this_encoder_noise=0.0,
-                start_layer=0, update_batch_stats=True,
-                scope='enc', reuse=None)
-        else:
-            return super(Gamma, self).get_encoder()
-
-
-    def get_corrupted_encoder(self):
-        if self.params.cnn:
-            start_layer = 0
-            update_batch_stats = False
-            scope = 'enc'
-            reuse = True
-            params = self.params
-            return ConvEncoder(
-                inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-                params=params, this_encoder_noise=params.corrupt_sd,
-                start_layer=start_layer, update_batch_stats=update_batch_stats,
-                scope=scope, reuse=reuse)
-        else:
-            return super(Gamma, self).get_corrupted_encoder()
-
-    def get_decoder(self):
-        return GammaDecoder(
-            clean=self.clean, corr=self.corr, bn=self.bn,
-            combinator=gauss_combinator,
-            encoder_layers=self.params.encoder_layers,
-            denoising_cost=self.params.rc_weights,
-            batch_size=self.params.batch_size,
-            scope='dec', reuse=None
-        )
 
 #  VAN encoder
 class LadderWithVAN(Ladder):
@@ -1013,8 +937,9 @@ class LadderWithVAN(Ladder):
         scope = 'enc'
         reuse = True
         params = self.params
-        return VirtualAdversarialNoiseEncoder(
-            self.inputs, self.bn, self.train_flag, params, self.clean.logits,
+        return encoder(
+            self.inputs, self.bn, self.train_flag, params,
+            clean_logits=self.clean.logits,
             this_encoder_noise=params.corrupt_sd,
             start_layer=start_layer, update_batch_stats=update_batch_stats,
             scope=scope, reuse=reuse)
@@ -1082,7 +1007,7 @@ class Adversary(object):
 
     def forward(self, x, is_training, update_batch_stats=False):
         # always use a standard Gaussian-noise encoder
-        vatfw = Encoder(
+        vatfw = encoder(
             inputs=x,
             bn=self.bn,
             is_training=is_training,
@@ -1270,11 +1195,11 @@ def get_vat_cost(model, train_flag, params):
             vat_costs.append(get_layer_vat_cost(l))
         vat_cost = tf.add_n(vat_costs)
 
-    elif params.model == "c" or params.model == 'ladder':
+    elif params.model == "c" or params.model == "ladder":
         vat_cost = get_layer_vat_cost(0)
 
     else:
-        vat_cost = 0.0
+        vat_cost = tf.zeros([])
 
     return vat_cost
 
@@ -1319,52 +1244,18 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
                                    is_training=True):
     inputs = preprocess(inputs, params)
 
-    if params.model == "c" or params.model == "clw":
-        model = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_vat_cost(model, train_flag, params)
-        loss = model.cost + model.u_cost + vat_cost
-        s_cost = model.cost
-        u_cost = model.u_cost
-
-    elif params.model == "n" or params.model == "nlw":
-        model = LadderWithVAN(inputs, outputs, train_flag, params)
-        vat_cost = tf.zeros([])
-        loss = model.cost + model.u_cost
-        s_cost = model.cost
-        u_cost = model.u_cost
-
-    elif params.model == "gamma":
-        model = Gamma(inputs, outputs, train_flag, params)
-        vat_cost = tf.zeros([])
-        loss = model.cost + model.u_cost
-        s_cost = model.cost
-        u_cost = model.u_cost
-
-    elif params.model == "amlp":
-        model = AmlpLadder(inputs, outputs, train_flag, params)
-        vat_cost = tf.zeros([])
-        s_cost = model.cost
-        u_cost = model.u_cost
-        loss = model.cost + model.u_cost
-
-    elif params.model == "conv":
-        model = ConvModel(inputs, outputs, train_flag, params)
-        vat_cost = tf.zeros([])
-        s_cost = model.cost
-        u_cost = tf.zeros([])
-        loss = model.cost
-
+    if params.decoder == "none":
+        model = Model(inputs, outputs, train_flag, params)
     else:
         model = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_vat_cost(model, train_flag, params) if \
-            params.measure_vat else tf.zeros([])
-        loss = model.cost + model.u_cost
-        s_cost = model.cost
-        u_cost = model.u_cost
+
+    vat_cost = get_vat_cost(model, train_flag, params)
+    loss = model.cost + model.u_cost + vat_cost
+    s_cost = model.cost
+    u_cost = model.u_cost
 
     # -----------------------------
     # Loss, accuracy and training steps
-
     accuracy = tf.reduce_mean(
         tf.cast(
             tf.equal(model.predict, tf.argmax(outputs, 1)),
@@ -1662,7 +1553,7 @@ def measure_smoothness(g, params):
     logits = g['ladder'].clean.logits
 
     def forward(x):
-        return Encoder(
+        return encoder(
             inputs=x,
             bn=g['ladder'].bn,
             is_training=g['train_flag'],

@@ -258,7 +258,9 @@ def get_cli_params():
 
     # VAL SETTINGS
     # -------------------------
-    add('--model', default="c")
+    add('--model', default="c", choices=['c', 'clw', 'n', 'nlw', 'ladder'])
+    add('--decoder', default="full", choices=['gamma', 'full', 'none'])
+
     add('--measure_smoothness', action='store_true')
     add('--measure_vat', action='store_true', help='compute vat_cost but do '
                                                    'not use for optimisation')
