@@ -45,6 +45,7 @@ def conv(x, ksize, stride, f_in, f_out, padding='VALID', use_bias=False,
     if padding == 'FULL':
         p = ksize-1
         x  = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]])
+        padding = 'VALID'
 
 
     bound = math.sqrt(3.0 / max(1.0, (ksize*ksize*f_in)))
