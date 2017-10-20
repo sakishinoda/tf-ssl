@@ -71,7 +71,8 @@ def main(p):
     p.num_examples = num_examples
     if p.validation > 0:
         dataset.test = dataset.validation
-    p.iter_per_epoch = (num_examples // p.ul_batch_size)
+    p.iter_per_epoch = (num_examples // p.batch_size) \
+        if p.model == "supervised" else (num_examples // p.ul_batch_size)
 
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
