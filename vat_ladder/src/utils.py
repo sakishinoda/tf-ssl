@@ -232,6 +232,9 @@ def get_cli_params():
     # Standard deviation of the Gaussian noise to inject at each level
     add('--corrupt_sd', default=0.3, type=float)
 
+    # Standard deviation of the Gaussian noise to inject into clean images
+
+
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
 
@@ -258,7 +261,8 @@ def get_cli_params():
 
     # VAL SETTINGS
     # -------------------------
-    add('--model', default="c", choices=['c', 'clw', 'n', 'nlw', 'ladder'])
+    add('--model', default="c", choices=['c', 'clw', 'n', 'nlw', 'ladder',
+                                         'supervised'])
     add('--decoder', default="full", choices=['gamma', 'full', 'none'])
 
     add('--measure_smoothness', action='store_true')

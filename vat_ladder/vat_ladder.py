@@ -61,6 +61,12 @@ def main(p):
                          one_hot=True,
                          disjoint=False)
 
+
+    if p.model == "supervised":
+        labeled_ds = dataset.train.labeled_ds
+        dataset.train = dataset.train.labeled_ds
+
+
     num_examples = dataset.train.num_examples
     p.num_examples = num_examples
     if p.validation > 0:
@@ -164,7 +170,7 @@ def main(p):
     with open(desc_file, 'a') as f:
         print('================================', file=f, flush=True)
         print("Initial Train AER: ",
-              eval_metric(dataset.train.labeled_ds, sess, aer),
+              eval_metric(labeled_ds, sess, aer),
               "%", file=f, flush=True)
 
         # -----------------------------
@@ -227,7 +233,7 @@ def main(p):
                 # Compute error on testing set (10k examples)
                 test_aer_and_costs = \
                     eval_metrics(dataset.test, sess, [aer] + test_losses)
-                train_aer = eval_metrics(dataset.train.labeled_ds, sess, [aer])
+                train_aer = eval_metrics(labeled_ds, sess, [aer])
                 train_costs = sess.run(train_losses,
                     feed_dict={g['images']: images,
                                g['labels']: labels,
