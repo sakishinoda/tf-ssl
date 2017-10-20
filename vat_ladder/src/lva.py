@@ -367,8 +367,7 @@ class ConvEncoder(Encoder):
             self.labeled.h[l_in], self.unlabeled.h[l_in] = split_lu(h)
 
             # Convolutional layer
-            if layer_spec[l_in]['type'] == 'cv' or layer_spec[l_in]['type'] \
-                    == 'cf':
+            if layer_spec[l_in]['type'] in ['cv', 'cf', 'c']:
                 pad = 'VALID' if layer_spec[l_in]['type'] == 'cv' else 'FULL'
                 z_pre = conv(h,
                             ksize=layer_spec[l_in]['ksize'],

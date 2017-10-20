@@ -35,14 +35,14 @@ def fc(x, dim_in, dim_out, seed=None, name='fc', scope=None, reuse=None):
         return x
 
 
-def conv(x, ksize, stride, f_in, f_out, padding='VALID', use_bias=False,
+def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
          seed=None, name='conv', scope=None, reuse=None):
     shape = [ksize, ksize, f_in, f_out]
     # As used in VAT
     # initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
     # As used in Ladder
 
-    if padding == 'FULL':
+    if padding == 'FULL' and ksize > 1:
         p = ksize-1
         x  = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]])
         padding = 'VALID'
@@ -110,12 +110,12 @@ def avg_pool(x, ksize=2, stride=2):
     return tf.nn.avg_pool(x,
                           ksize=[1, ksize, ksize, 1],
                           strides=[1, stride, stride, 1],
-                          padding='SAME')
+                          padding='VALID')
 
 
 def max_pool(x, ksize=2, stride=2):
     return tf.nn.max_pool(x,
                           ksize=[1, ksize, ksize, 1],
                           strides=[1, stride, stride, 1],
-                          padding='SAME')
+                          padding='VALID')
 
