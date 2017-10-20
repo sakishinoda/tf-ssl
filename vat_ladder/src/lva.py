@@ -369,12 +369,15 @@ class ConvEncoder(Encoder):
             # Convolutional layer
             if layer_spec[l_in]['type'] == 'c':
                 z_pre = conv(h,
-                         ksize=layer_spec[l_in]['ksize'],
-                         stride=1,
-                         f_in=layer_spec[l_in]['f_in'],
-                         f_out=layer_spec[l_in]['f_out'],
-                         seed=None, name='c' + str(l_in),
-                         scope=self.scope, reuse=self.reuse)
+                            ksize=layer_spec[l_in]['ksize'],
+                            stride=1,
+                            f_in=layer_spec[l_in]['f_in'],
+                            f_out=layer_spec[l_in]['f_out'],
+                            seed=None,
+                            name='c' + str(l_in),
+                            scope=self.scope,
+                            reuse=self.reuse,
+                             use_bias=True)
                 z, m, v = split_bn(
                     z_pre, is_training=is_training, l_out=l_out)
 
