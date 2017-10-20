@@ -35,13 +35,17 @@ def fc(x, dim_in, dim_out, seed=None, name='fc', scope=None, reuse=None):
         return x
 
 
-def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
+def conv(x, ksize, stride, f_in, f_out, padding='VALID', use_bias=False,
          seed=None, name='conv', scope=None, reuse=None):
     shape = [ksize, ksize, f_in, f_out]
     # As used in VAT
     # initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
-
     # As used in Ladder
+
+    if padding == 'FULL':
+        p = ksize-1
+        x  = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]])
+
 
     bound = math.sqrt(3.0 / max(1.0, (ksize*ksize*f_in)))
     initializer = tf.random_uniform_initializer(minval=-bound, maxval=bound)
