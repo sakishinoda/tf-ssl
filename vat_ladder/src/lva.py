@@ -377,7 +377,8 @@ class ConvEncoder(Encoder):
                             name='c' + str(l_in),
                             scope=self.scope,
                             reuse=self.reuse,
-                             use_bias=True)
+                            use_bias=False,
+                             padding='VALID')
                 z, m, v = split_bn(
                     z_pre, is_training=is_training, l_out=l_out)
 
