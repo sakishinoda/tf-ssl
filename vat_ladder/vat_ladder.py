@@ -231,8 +231,14 @@ def train(p):
         i_iter = 0
 
     if p.tb is not False:
-        train_writer = tf.summary.FileWriter(p.tb_dir + '/train', sess.graph)
-        test_writer = tf.summary.FileWriter(p.tb_dir + '/test', sess.graph)
+        tb_dir = log_dir
+        tf.summary.scalar('aer', aer)
+        for k in ['loss', 'cost', 'uc', 'vc']:
+            tf.summary.scalar(k, m[k])
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(tb_dir, sess.graph)
+
+        # test_writer = tf.summary.FileWriter(p.tb_dir + '/test', sess.graph)
 
     # -----------------------------
     print("=== Training ===")
@@ -276,9 +282,11 @@ def train(p):
             g['labels']: labels,
             g['train_flag']: True})
 
-        _ = sess.run(
-            [g['train_step']],
-            feed_dict=train_dict)
+        if p.tb:
+            summary, _ = sess.run([merged, g['train_step']],feed_dict=train_dict)
+            train_writer.add_summary(summary, i)
+        else:
+            _ = sess.run([g['train_step']], feed_dict=train_dict)
 
 
         if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
@@ -296,40 +304,41 @@ def train(p):
                 train_dict[g['lr']] = (p.initial_learning_rate * ratio)
                 train_dict[g['beta1']] = p.beta1_during_decay
 
-            # For the last ten epochs, test every epoch
-            if (ep + 1) > (p.end_epoch - 10):
-                p.test_frequency_in_epochs = 1
 
-            # ---------------------------------------------
-            # Evaluate every test_frequency_in_epochs
-            if int((ep + 1) % p.test_frequency_in_epochs) == 0:
-
-                now = time.time() - start
-
-                if not p.do_not_save:
-                    g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
-
-                # ---------------------------------------------
-                # Compute error on testing set (10k examples)
-                test_aer_and_costs = \
-                    eval_metrics(dataset.test, sess, [aer] + test_losses)
-                train_aer = eval_metrics(labeled_ds, sess, [aer])
-                train_costs = sess.run(train_losses,
-                    feed_dict={g['images']: images,
-                               g['labels']: labels,
-                               g['train_flag']: False})
-
-                # Create log of:
-                # time, epoch number, test accuracy, test cross entropy,
-                # train accuracy, train loss, train cross entropy,
-                # train reconstruction loss, smoothness
-
-                log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
-                        train_costs
-
-
-                with open(log_file, 'a') as train_log:
-                    print(*log_i, sep=',', flush=True, file=train_log)
+            # # For the last ten epochs, test every epoch
+            # if (ep + 1) > (p.end_epoch - 10):
+            #     p.test_frequency_in_epochs = 1
+            #
+            # # ---------------------------------------------
+            # # Evaluate every test_frequency_in_epochs
+            # if int((ep + 1) % p.test_frequency_in_epochs) == 0:
+            #
+            #     now = time.time() - start
+            #
+            #     if not p.do_not_save:
+            #         g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
+            #
+            #     # ---------------------------------------------
+            #     # Compute error on testing set (10k examples)
+            #     test_aer_and_costs = \
+            #         eval_metrics(dataset.test, sess, [aer] + test_losses)
+            #     train_aer = eval_metrics(labeled_ds, sess, [aer])
+            #     train_costs = sess.run(train_losses,
+            #         feed_dict={g['images']: images,
+            #                    g['labels']: labels,
+            #                    g['train_flag']: False})
+            #
+            #     # Create log of:
+            #     # time, epoch number, test accuracy, test cross entropy,
+            #     # train accuracy, train loss, train cross entropy,
+            #     # train reconstruction loss, smoothness
+            #
+            #     log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
+            #             train_costs
+            #
+            #
+            #     with open(log_file, 'a') as train_log:
+            #         print(*log_i, sep=',', flush=True, file=train_log)
 
 
 
