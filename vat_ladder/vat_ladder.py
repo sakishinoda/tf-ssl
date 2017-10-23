@@ -304,15 +304,11 @@ def train(p):
             # Evaluate every test_frequency_in_epochs
             if int((ep + 1) % p.test_frequency_in_epochs) == 0:
 
-                test_summary = sess.run([test_summary], feed_dict={})
-
-                # now = time.time() - start
 
                 if not p.do_not_save:
                     g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
 
-
-
+                    # now = time.time() - start
                     #     # ---------------------------------------------
                     #     # Compute error on testing set (10k examples)
                     #     test_aer_and_costs = \
