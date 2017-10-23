@@ -144,8 +144,8 @@ def train(p):
     # Load data
     print("===  Loading Data ===")
     dataset = get_dataset(p)
+    labeled_ds = dataset.train.labeled_ds
     if p.model == "supervised":
-        labeled_ds = dataset.train.labeled_ds
         dataset.train = dataset.train.labeled_ds
 
     # -----------------------------
@@ -170,7 +170,7 @@ def train(p):
 
     if p.measure_smoothness:
         s = measure_smoothness(g, p)
-    #     print(s.get_shape())
+        #     print(s.get_shape())
         train_losses.append(tf.reduce_mean(s))
 
     # -----------------------------
@@ -219,13 +219,16 @@ def train(p):
 
     if p.tb is not False:
         tb_dir = log_dir
+
         tf.summary.scalar('aer', aer)
         for k in ['loss', 'cost', 'uc', 'vc']:
             tf.summary.scalar(k, m[k])
-        merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter(tb_dir, sess.graph)
 
-        # test_writer = tf.summary.FileWriter(p.tb_dir + '/test', sess.graph)
+        train_merged = tf.summary.merge_all()
+        test_merged = tf.summary.merge(['aer', 'cost'])
+
+        train_writer = tf.summary.FileWriter(tb_dir, sess.graph)
+        test_writer = tf.summary.FileWriter(tb_dir, sess.graph)
 
     # -----------------------------
     print("=== Training ===")
@@ -270,7 +273,7 @@ def train(p):
             g['train_flag']: True})
 
         if p.tb:
-            summary, _ = sess.run([merged, g['train_step']],feed_dict=train_dict)
+            summary, _ = sess.run([train_merged, g['train_step']],feed_dict=train_dict)
             train_writer.add_summary(summary, i)
         else:
             _ = sess.run([g['train_step']], feed_dict=train_dict)
@@ -295,37 +298,42 @@ def train(p):
             # # For the last ten epochs, test every epoch
             # if (ep + 1) > (p.end_epoch - 10):
             #     p.test_frequency_in_epochs = 1
-            #
-            # # ---------------------------------------------
-            # # Evaluate every test_frequency_in_epochs
-            # if int((ep + 1) % p.test_frequency_in_epochs) == 0:
-            #
-            #     now = time.time() - start
-            #
-            #     if not p.do_not_save:
-            #         g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
-            #
-            #     # ---------------------------------------------
-            #     # Compute error on testing set (10k examples)
-            #     test_aer_and_costs = \
-            #         eval_metrics(dataset.test, sess, [aer] + test_losses)
-            #     train_aer = eval_metrics(labeled_ds, sess, [aer])
-            #     train_costs = sess.run(train_losses,
-            #         feed_dict={g['images']: images,
-            #                    g['labels']: labels,
-            #                    g['train_flag']: False})
-            #
-            #     # Create log of:
-            #     # time, epoch number, test accuracy, test cross entropy,
-            #     # train accuracy, train loss, train cross entropy,
-            #     # train reconstruction loss, smoothness
-            #
-            #     log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
-            #             train_costs
-            #
-            #
-            #     with open(log_file, 'a') as train_log:
-            #         print(*log_i, sep=',', flush=True, file=train_log)
+
+
+            # ---------------------------------------------
+            # Evaluate every test_frequency_in_epochs
+            if int((ep + 1) % p.test_frequency_in_epochs) == 0:
+
+                test_summary = sess.run([test_summary], feed_dict={})
+
+                # now = time.time() - start
+
+                if not p.do_not_save:
+                    g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
+
+
+
+                    #     # ---------------------------------------------
+                    #     # Compute error on testing set (10k examples)
+                    #     test_aer_and_costs = \
+                    #         eval_metrics(dataset.test, sess, [aer] + test_losses)
+                    #     train_aer = eval_metrics(labeled_ds, sess, [aer])
+                    #     train_costs = sess.run(train_losses,
+                    #         feed_dict={g['images']: images,
+                    #                    g['labels']: labels,
+                    #                    g['train_flag']: False})
+                    #
+                    #     # Create log of:
+                    #     # time, epoch number, test accuracy, test cross entropy,
+                    #     # train accuracy, train loss, train cross entropy,
+                    #     # train reconstruction loss, smoothness
+                    #
+                    #     log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
+                    #             train_costs
+                    #
+                    #
+                    #     with open(log_file, 'a') as train_log:
+                    #         print(*log_i, sep=',', flush=True, file=train_log)
 
 
 
