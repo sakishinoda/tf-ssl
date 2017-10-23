@@ -31,11 +31,7 @@ def test(p):
     dataset = get_dataset(p)
     # -----------------------------
     # Calculate some parameters
-    num_examples = dataset.test.num_examples
     batch_size = p.batch_size
-    assert num_examples % batch_size == 0, "Number of examples is not " \
-                                           "divisible by batch size"
-    num_iters = num_examples // batch_size
 
     # -----------------------------
     # Build graph
@@ -61,6 +57,12 @@ def test(p):
     ep = int(model_path.split('/')[-1].split('-')[1])
     print("Restored Epoch ", ep)
 
+    # -----------------------------
+    # Test on test
+    num_examples = dataset.test.num_examples
+    assert num_examples % batch_size == 0, "Number of examples is not " \
+                                           "divisible by batch size"
+    num_iters = num_examples // batch_size
 
     this_aer = 0.0
     for _ in range(num_iters):
@@ -68,8 +70,22 @@ def test(p):
         test_dict = {g['images']: ims, g['labels']: lbs, g['train_flag']: False}
         this_aer += sess.run(aer, feed_dict=test_dict)
 
+    print("Final test AER: {}%".format( this_aer / num_iters))
 
-    print("Final average error rate: {}%".format( this_aer / num_iters))
+    # -----------------------------
+    # Test on train
+    num_examples = dataset.train.unlabeled_ds.num_examples
+    assert num_examples % batch_size == 0, "Number of examples is not " \
+                                           "divisible by batch size"
+    num_iters = num_examples // batch_size
+
+    this_aer = 0.0
+    for _ in range(num_iters):
+        ims, lbs = dataset.train.unlabeled_ds.next_batch(batch_size)
+        test_dict = {g['images']: ims, g['labels']: lbs, g['train_flag']: False}
+        this_aer += sess.run(aer, feed_dict=test_dict)
+
+    print("Final train AER: {}%".format(this_aer / num_iters))
 
     sess.close()
 
