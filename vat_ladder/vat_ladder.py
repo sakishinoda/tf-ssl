@@ -173,19 +173,6 @@ def train(p):
     #     print(s.get_shape())
         train_losses.append(tf.reduce_mean(s))
 
-    if p.tb is not False:
-        train_merged = tf.summary.merge([
-            tf.summary.scalar(x) for x in train_losses
-        ] + [tf.summary.scalar(aer)])
-        test_merged = tf.summary.merge([
-            tf.summary.scalar(x) for x in test_losses
-        ] + [tf.summary.scalar(aer)])
-
-        # Set up tensorboard logging
-        if not os.path.exists(p.tb):
-            os.makedirs(p.tb_dir)
-
-
     # -----------------------------
     print("===  Starting Session ===")
     sess = tf.Session(config=config)
