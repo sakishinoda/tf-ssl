@@ -73,7 +73,7 @@ def ZCA(data, n_components=3072, filter_bias=0.1):
 
     sqrt_eigs = np.sqrt(eigs)
     components = np.dot(eigv * (1.0 / sqrt_eigs), eigv.T)
-    whiten = np.dot(data - mean, P)
+    whiten = np.dot(data - mean, components)
     return components, mean, whiten
 
 
