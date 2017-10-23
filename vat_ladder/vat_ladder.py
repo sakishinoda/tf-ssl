@@ -48,16 +48,18 @@ def test(p):
     sess = tf.Session(config=config)
     id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
     ckpt_dir = p.ckptdir + id_seed_dir
-    ckpt = tf.train.get_checkpoint_state(
-        ckpt_dir)  # get latest checkpoint (if any)
 
-    if ckpt and ckpt.model_checkpoint_path:
-        # if checkpoint exists,
-        # restore the parameters
-        # and set epoch_n and i_iter
-        g['saver'].restore(sess, ckpt.model_checkpoint_path)
-        ep = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
-        print("Restored Epoch ", ep)
+    if p.test is True:
+        ckpt = tf.train.get_checkpoint_state(
+            ckpt_dir)  # get latest checkpoint (if any)
+        if ckpt and ckpt.model_checkpoint_path:
+            model_path = ckpt.model_checkpoint_path
+    else:
+        model_path = p.test
+
+    g['saver'].restore(sess, model_path)
+    ep = int(model_path.split('/')[-1].split('-')[1])
+    print("Restored Epoch ", ep)
 
 
     this_aer = 0.0

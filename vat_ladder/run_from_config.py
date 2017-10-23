@@ -15,7 +15,7 @@ def dict2namespace(dict_):
 parser = argparse.ArgumentParser()
 parser.add_argument('--cfg', default=None)
 parser.add_argument('--id', default=None)
-parser.add_argument('--test', action='store_true')
+parser.add_argument('--test', default=False, const=True, nargs='?')
 
 args = parser.parse_args()
 
@@ -28,9 +28,8 @@ else:
     if args.id is not None:
         p.id = args.id
 
-if args.test:
+if args.test is not False:
     p.test = args.test
-    
     test(p)
 
 else:
