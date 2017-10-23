@@ -42,9 +42,10 @@ def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
     # initializer = tf.contrib.layers.variance_scaling_initializer(seed=seed)
     # As used in Ladder
 
-    if padding == 'FULL' and ksize > 1:
-        p = ksize-1
-        x  = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]])
+    if padding == 'FULL':
+        if ksize > 1:
+            p = ksize-1
+            x  = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]])
         padding = 'VALID'
 
 
