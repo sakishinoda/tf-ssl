@@ -217,18 +217,6 @@ def train(p):
         sess.run(init)
         i_iter = 0
 
-    if p.tb is not False:
-        tb_dir = log_dir
-
-        tf.summary.scalar('aer', aer)
-        for k in ['loss', 'cost', 'uc', 'vc']:
-            tf.summary.scalar(k, m[k])
-
-        train_merged = tf.summary.merge_all()
-        test_merged = tf.summary.merge(['aer', 'cost'])
-
-        train_writer = tf.summary.FileWriter(tb_dir, sess.graph)
-        test_writer = tf.summary.FileWriter(tb_dir, sess.graph)
 
     # -----------------------------
     print("=== Training ===")
@@ -272,11 +260,8 @@ def train(p):
             g['labels']: labels,
             g['train_flag']: True})
 
-        if p.tb:
-            summary, _ = sess.run([train_merged, g['train_step']],feed_dict=train_dict)
-            train_writer.add_summary(summary, i)
-        else:
-            _ = sess.run([g['train_step']], feed_dict=train_dict)
+
+        _ = sess.run([g['train_step']], feed_dict=train_dict)
 
 
         if (i > 1) and ((i + 1) % p.iter_per_epoch == 0):
@@ -295,9 +280,9 @@ def train(p):
                 train_dict[g['beta1']] = p.beta1_during_decay
 
 
-            # # For the last ten epochs, test every epoch
-            # if (ep + 1) > (p.end_epoch - 10):
-            #     p.test_frequency_in_epochs = 1
+            # For the last ten epochs, test every epoch
+            if (ep + 1) > (p.end_epoch - 10):
+                p.test_frequency_in_epochs = 1
 
 
             # ---------------------------------------------
@@ -308,38 +293,36 @@ def train(p):
                 if not p.do_not_save:
                     g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
 
-                    # now = time.time() - start
-                    #     # ---------------------------------------------
-                    #     # Compute error on testing set (10k examples)
-                    #     test_aer_and_costs = \
-                    #         eval_metrics(dataset.test, sess, [aer] + test_losses)
-                    #     train_aer = eval_metrics(labeled_ds, sess, [aer])
-                    #     train_costs = sess.run(train_losses,
-                    #         feed_dict={g['images']: images,
-                    #                    g['labels']: labels,
-                    #                    g['train_flag']: False})
-                    #
-                    #     # Create log of:
-                    #     # time, epoch number, test accuracy, test cross entropy,
-                    #     # train accuracy, train loss, train cross entropy,
-                    #     # train reconstruction loss, smoothness
-                    #
-                    #     log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
-                    #             train_costs
-                    #
-                    #
-                    #     with open(log_file, 'a') as train_log:
-                    #         print(*log_i, sep=',', flush=True, file=train_log)
+                now = time.time() - start
+                # ---------------------------------------------
+                # Compute error on testing set (10k examples)
+                test_aer_and_costs = \
+                    eval_metrics(dataset.test, sess, [aer] + test_losses)
+                train_aer = eval_metrics(labeled_ds, sess, [aer])
+                train_costs = sess.run(train_losses,
+                    feed_dict={g['images']: images,
+                               g['labels']: labels,
+                               g['train_flag']: False})
+
+                # Create log of:
+                # time, epoch number, test accuracy, test cross entropy,
+                # train accuracy, train loss, train cross entropy,
+                # train reconstruction loss, smoothness
+
+                log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
+                        train_costs
+
+
+                with open(log_file, 'a') as train_log:
+                    print(*log_i, sep=',', flush=True, file=train_log)
 
 
 
 
     with open(desc_file, 'a') as f:
-
         final_aer = eval_metric(dataset.test, sess, aer)
         print("Final AER: ", final_aer,
               "%", file=f, flush=True)
-
     sess.close()
 
 
