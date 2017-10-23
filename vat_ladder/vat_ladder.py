@@ -31,9 +31,6 @@ def test(p):
     # Load data
     print("===  Loading Data ===")
     dataset = get_dataset(p)
-    # -----------------------------
-    # Calculate some parameters
-    batch_size = p.batch_size
 
     # -----------------------------
     # Build graph
@@ -65,6 +62,7 @@ def test(p):
 
         # Test on test
         num_examples = this_data.num_examples
+        batch_size = 100
         assert num_examples % batch_size == 0, "Number of examples is not " \
                                                "divisible by batch size"
         num_iters = num_examples // batch_size
