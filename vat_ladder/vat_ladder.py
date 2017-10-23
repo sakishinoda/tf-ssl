@@ -289,34 +289,32 @@ def train(p):
             # Evaluate every test_frequency_in_epochs
             if int((ep + 1) % p.test_frequency_in_epochs) == 0:
 
-
                 if not p.do_not_save:
                     g['saver'].save(sess, ckpt_dir + 'model.ckpt', ep)
 
                 now = time.time() - start
-                # ---------------------------------------------
-                # Compute error on testing set (10k examples)
-                test_aer_and_costs = \
-                    eval_metrics(dataset.test, sess, [aer] + test_losses)
-                train_aer = eval_metrics(labeled_ds, sess, [aer])
-                train_costs = sess.run(train_losses,
-                    feed_dict={g['images']: images,
-                               g['labels']: labels,
-                               g['train_flag']: False})
 
-                # Create log of:
-                # time, epoch number, test accuracy, test cross entropy,
-                # train accuracy, train loss, train cross entropy,
-                # train reconstruction loss, smoothness
-
-                log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
-                        train_costs
-
+                # # ---------------------------------------------
+                # # Compute error on testing set (10k examples)
+                # test_aer_and_costs = \
+                #     eval_metrics(dataset.test, sess, [aer] + test_losses)
+                # train_aer = eval_metrics(labeled_ds, sess, [aer])
+                # train_costs = sess.run(train_losses,
+                #     feed_dict={g['images']: images,
+                #                g['labels']: labels,
+                #                g['train_flag']: False})
+                #
+                # # Create log of:
+                # # time, epoch number, test accuracy, test cross entropy,
+                # # train accuracy, train loss, train cross entropy,
+                # # train reconstruction loss, smoothness
+                #
+                # log_i = [int(now), ep] + test_aer_and_costs + train_aer + \
+                #         train_costs
+                log_i = [int(now), ep]
 
                 with open(log_file, 'a') as train_log:
                     print(*log_i, sep=',', flush=True, file=train_log)
-
-
 
 
     with open(desc_file, 'a') as f:
