@@ -5,7 +5,7 @@ import sys
 import tarfile
 
 import numpy as np
-from scipy import linalg
+import scipy
 import glob
 import pickle
 import urllib.request, urllib.parse, urllib.error
@@ -52,14 +52,30 @@ def cnorm(data, scale=55, epsilon=1e-8):
 
 
 
-def ZCA(data, reg=1e-6):
+def ZCA(data, n_components=3072, filter_bias=0.1):
+
+    # Check data already flattened
+    assert data.shape[1] == n_components
+
+    assert n_components == np.product(data.shape[1:]), 'ZCA whitening components should be {} for convolutional data'.format(np.product(data.shape[1:]))
+
     mean = np.mean(data, axis=0)
-    mdata = data - mean
-    sigma = np.dot(mdata.T, mdata) / mdata.shape[0]
-    U, S, V = linalg.svd(sigma)
-    components = np.dot(np.dot(U, np.diag(1.0 / np.sqrt(S) + reg)), U.T)
-    whiten = np.dot(data - mean, components.T)
+    bias = filter_bias * scipy.sparse.identity(data.shape[1], 'float32')
+    cov = np.cov(data, rowvar=0, bias=1) + bias
+    eigs, eigv = scipy.linalg.eigh(cov)
+
+    assert not np.isnan(eigs).any()
+    assert not np.isnan(eigv).any()
+    assert eigs.min() > 0
+
+    eigs = eigs[-n_components:]
+    eigv = eigv[:, -n_components:]
+
+    sqrt_eigs = np.sqrt(eigs)
+    components = np.dot(eigv * (1.0 / sqrt_eigs), eigv.T)
+    whiten = np.dot(data - mean, P)
     return components, mean, whiten
+
 
 def unpickle(file):
     fp = open(file, 'rb')
@@ -133,7 +149,7 @@ def maybe_download_and_extract(data_dir, downsample=False):
     components, mean, train_images = ZCA(train_images)
     np.save('{}/components'.format(data_dir), components)
     np.save('{}/mean'.format(data_dir), mean)
-    test_images = np.dot(test_images - mean, components.T)
+    test_images = np.dot(test_images - mean, components)
 
     # =============
     # Unflatten data
