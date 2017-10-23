@@ -176,6 +176,7 @@ def get_cli_params():
     parser = argparse.ArgumentParser()
     add = parser.add_argument
 
+    add('--test', action='store_true')
     # -------------------------
     # LOGGING
     # -------------------------

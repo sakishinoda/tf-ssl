@@ -10,12 +10,8 @@ from src.train import evaluate_metric_list, update_decays, evaluate_metric
 import numpy as np
 
 
-
-def main(p):
-
+def test(p):
     p = process_cli_params(p)
-    global VERBOSE
-    VERBOSE = p.verbose
 
     # -----------------------------
     # Set GPU device to use
@@ -24,12 +20,60 @@ def main(p):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
+    # -----------------------------
     # Set seeds
     np.random.seed(p.seed)
     tf.set_random_seed(p.seed)
 
+    # -----------------------------
     # Load data
     print("===  Loading Data ===")
+    dataset = get_dataset(p)
+    # -----------------------------
+    # Calculate some parameters
+    num_examples = dataset.test.num_examples
+    batch_size = p.batch_size
+    assert num_examples % batch_size == 0, "Number of examples is not " \
+                                           "divisible by batch size"
+    num_iters = num_examples // batch_size
+
+    # -----------------------------
+    # Build graph
+    g, m, trainable_parameters = build_graph(p)
+    aer = tf.constant(100.0) - m['acc']
+
+
+    # -----------------------------
+    print("===  Starting Session ===")
+    sess = tf.Session(config=config)
+    id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
+    ckpt_dir = p.ckptdir + id_seed_dir
+    ckpt = tf.train.get_checkpoint_state(
+        ckpt_dir)  # get latest checkpoint (if any)
+
+    if ckpt and ckpt.model_checkpoint_path:
+        # if checkpoint exists,
+        # restore the parameters
+        # and set epoch_n and i_iter
+        g['saver'].restore(sess, ckpt.model_checkpoint_path)
+        ep = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[1])
+        print("Restored Epoch ", ep)
+
+
+    this_aer = 0.0
+    for _ in range(num_iters):
+        ims, lbs = dataset.test.next_batch(batch_size)
+        test_dict = {g['images']: ims, g['labels']: lbs, g['train_flag']: False}
+        this_aer += sess.run(aer, feed_dict=test_dict)
+
+
+    print("Final average error rate: {}%".format( this_aer / num_iters))
+
+    sess.close()
+
+
+
+def get_dataset(p):
     if p.dataset == 'svhn':
         from src.svhn import read_data_sets
         dataset = read_data_sets(
@@ -61,12 +105,36 @@ def main(p):
                          one_hot=True,
                          disjoint=False)
 
+    return dataset
 
+def train(p):
+
+    p = process_cli_params(p)
+    global VERBOSE
+    VERBOSE = p.verbose
+
+    # -----------------------------
+    # Set GPU device to use
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
+    # -----------------------------
+    # Set seeds
+    np.random.seed(p.seed)
+    tf.set_random_seed(p.seed)
+
+    # -----------------------------
+    # Load data
+    print("===  Loading Data ===")
+    dataset = get_dataset(p)
     if p.model == "supervised":
         labeled_ds = dataset.train.labeled_ds
         dataset.train = dataset.train.labeled_ds
 
-
+    # -----------------------------
+    # Calculate some parameters
     num_examples = dataset.train.num_examples
     p.num_examples = num_examples
     if p.validation > 0:
@@ -75,7 +143,6 @@ def main(p):
         if p.model == "supervised" else (num_examples // p.ul_batch_size)
 
     p.num_iter = p.iter_per_epoch * p.end_epoch
-
 
     # -----------------------------
     # Build graph
@@ -107,10 +174,8 @@ def main(p):
     # -----------------------------
     print("===  Starting Session ===")
     sess = tf.Session(config=config)
-    i_iter = 0
 
     # -----------------------------
-
     id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
 
     # Write logs to appropriate directory
@@ -125,7 +190,6 @@ def main(p):
               flush=True)
 
     log_file = log_dir + "train_log"
-
 
     # Resume from checkpoint
     ckpt_dir = p.ckptdir + id_seed_dir
@@ -266,7 +330,7 @@ def main(p):
 
 if __name__ == '__main__':
     p = get_cli_params()
-    main(p)
+    train(p)
 
 
 

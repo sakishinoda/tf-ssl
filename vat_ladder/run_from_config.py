@@ -1,5 +1,5 @@
 # import IPython
-from vat_ladder import main
+from vat_ladder import train, test
 import json
 import os
 import argparse
@@ -15,6 +15,8 @@ def dict2namespace(dict_):
 parser = argparse.ArgumentParser()
 parser.add_argument('--cfg', default=None)
 parser.add_argument('--id', default=None)
+parser.add_argument('--test', action='store_true')
+
 args = parser.parse_args()
 
 if args.cfg is None:
@@ -26,17 +28,22 @@ else:
     if args.id is not None:
         p.id = args.id
 
-# IPython.embed()
+if args.test:
+    p.test = args.test
+    
+    test(p)
 
-id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
-save_dir = p.logdir + id_seed_dir
-path = save_dir + 'config'
-# Write logs to appropriate directory
-if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
+else:
+    id_seed_dir = p.id + "/" + "seed-{}".format(p.seed) + "/"
+    save_dir = p.logdir + id_seed_dir
+    path = save_dir + 'config'
+    # Write logs to appropriate directory
 
-p_dict = vars(p)
-with open(path, 'w') as f:
-    json.dump(p_dict, f)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
-main(p)
+    p_dict = vars(p)
+    with open(path, 'w') as f:
+        json.dump(p_dict, f)
+
+    train(p)
