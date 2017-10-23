@@ -10,6 +10,8 @@ from src.train import evaluate_metric_list, update_decays, evaluate_metric
 import numpy as np
 
 
+
+
 def test(p):
     p = process_cli_params(p)
 
@@ -57,35 +59,32 @@ def test(p):
     ep = int(model_path.split('/')[-1].split('-')[1])
     print("Restored Epoch ", ep)
 
-    # -----------------------------
-    # Test on test
-    num_examples = dataset.test.num_examples
-    assert num_examples % batch_size == 0, "Number of examples is not " \
-                                           "divisible by batch size"
-    num_iters = num_examples // batch_size
-
-    this_aer = 0.0
-    for _ in range(num_iters):
-        ims, lbs = dataset.test.next_batch(batch_size)
-        test_dict = {g['images']: ims, g['labels']: lbs, g['train_flag']: False}
-        this_aer += sess.run(aer, feed_dict=test_dict)
-
-    print("Final test AER: {}%".format( this_aer / num_iters))
 
     # -----------------------------
-    # Test on train
-    num_examples = dataset.train.unlabeled_ds.num_examples
-    assert num_examples % batch_size == 0, "Number of examples is not " \
-                                           "divisible by batch size"
-    num_iters = num_examples // batch_size
+    def get_aer_on_dataset(this_data):
 
-    this_aer = 0.0
-    for _ in range(num_iters):
-        ims, lbs = dataset.train.unlabeled_ds.next_batch(batch_size)
-        test_dict = {g['images']: ims, g['labels']: lbs, g['train_flag']: False}
-        this_aer += sess.run(aer, feed_dict=test_dict)
+        # Test on test
+        num_examples = this_data.num_examples
+        assert num_examples % batch_size == 0, "Number of examples is not " \
+                                               "divisible by batch size"
+        num_iters = num_examples // batch_size
 
-    print("Final train AER: {}%".format(this_aer / num_iters))
+        this_aer = 0.0
+        for _ in range(num_iters):
+            ims, lbs = this_data.next_batch(batch_size)
+            test_dict = {g['images']: ims, g['labels']: lbs, g['train_flag']: False}
+            this_aer += sess.run(aer, feed_dict=test_dict)
+
+        return this_aer / num_iters
+
+
+    print("Final test AER: {:4.4f}%".format(get_aer_on_dataset(dataset.test)))
+
+    print("Final train AER (labeled): {:4.4f}%".format(get_aer_on_dataset(
+        dataset.train.labeled_ds)))
+
+    print("Final train AER (unlabeled): {:4.4f}%".format(get_aer_on_dataset(
+        dataset.train.unlabeled_ds)))
 
     sess.close()
 
