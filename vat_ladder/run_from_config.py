@@ -17,7 +17,12 @@ parser.add_argument('--cfg', default=None)
 parser.add_argument('--id', default=None)
 parser.add_argument('--test', default=False, const=True, nargs='?')
 
+_, unknown = parser.parse_known_args()
+for arg in unknown:
+    parser.add_argument(arg)
+
 args = parser.parse_args()
+
 
 if args.cfg is None:
     from config import p
