@@ -35,7 +35,7 @@ else:
 p_dict = vars(p)
 for k, v in vars(args).items():
     if v is not None:
-        p[k] = v
+        p_dict[k] = v
 
 if args.test is not False:
     p.test = args.test
