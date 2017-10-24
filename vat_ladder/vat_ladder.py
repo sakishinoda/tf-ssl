@@ -97,7 +97,7 @@ def get_dataset(p):
             validation_size=p.validation,
             one_hot=True,
             disjoint=False,
-            downsample=True,
+            downsample=False,
             download_and_extract=True
         )
 
