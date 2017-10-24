@@ -1323,7 +1323,7 @@ def get_vat_cost(model, train_flag, params):
             vat_costs.append(get_layer_vat_cost(l))
         vat_cost = tf.add_n(vat_costs)
 
-    elif params.model == "c" or params.model == "ladder":
+    elif params.model == "c":
         vat_cost = get_layer_vat_cost(0)
 
     else:
