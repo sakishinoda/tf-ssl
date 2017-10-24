@@ -25,8 +25,11 @@ else:
     with open(args.cfg, 'r') as f:
         json_dict = json.load(f)
     p = dict2namespace(json_dict)
-    if args.id is not None:
-        p.id = args.id
+
+p_dict = vars(p)
+for k, v in vars(args).items():
+    if v is not None:
+        p[k] = v
 
 if args.test is not False:
     p.test = args.test
