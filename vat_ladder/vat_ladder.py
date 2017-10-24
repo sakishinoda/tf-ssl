@@ -62,9 +62,9 @@ def test(p):
 
         # Test on test
         num_examples = this_data.num_examples
-        batch_size = 100
-        assert num_examples % batch_size == 0, "Number of examples is not " \
-                                               "divisible by batch size"
+        batch_size = p.batch_size
+        if num_examples % batch_size != 0:
+            print("Number of examples is not divisible by batch size")
         num_iters = num_examples // batch_size
 
         this_aer = 0.0
