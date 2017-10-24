@@ -73,7 +73,7 @@ def conv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
             return x
 
 
-def deconv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
+def deconv(x, ksize, stride, f_in, f_out, padding='VALID', use_bias=False,
            seed=None, name='deconv', scope=None, reuse=None):
 
 
@@ -106,6 +106,27 @@ def deconv(x, ksize, stride, f_in, f_out, padding='SAME', use_bias=False,
             return tf.nn.bias_add(x, bias)
         else:
             return x
+
+# Depool
+def depool(h):
+    """Deconvolution with a filter of ones and stride 2 upsamples with
+    copying to double the size."""
+    output_shape = h.get_shape().as_list()
+    output_shape[1] *= 2
+    output_shape[2] *= 2
+    c = output_shape[-1]
+    h = tf.nn.conv2d_transpose(
+        h,
+        filter=tf.ones([2, 2, c, c]),
+        output_shape=output_shape,
+        padding='VALID',
+        strides=[1, 2, 2, 1],
+        data_format='NHWC'
+    )
+    return h
+
+
+
 
 def avg_pool(x, ksize=2, stride=2):
     return tf.nn.avg_pool(x,

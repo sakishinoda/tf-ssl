@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 
-VERBOSE = False
+VERBOSE = True
 
 # -----------------------------
 # -----------------------------
@@ -642,15 +642,118 @@ class GammaDecoder(Decoder):
 def decoder(
         clean, corr, bn, combinator, encoder_layers,
         denoising_cost, batch_size=100, scope='dec', reuse=None,
-        decoder_type="full"):
+        decoder_type="full", layer_spec=None):
+
     if decoder_type == "gamma":
         return GammaDecoder(clean, corr, bn, combinator, encoder_layers,
                        denoising_cost, batch_size, scope, reuse)
+
+    elif layer_spec is not None:
+
+        return ConvDecoder(clean, corr, bn, combinator, encoder_layers,
+                       denoising_cost, batch_size, scope, reuse, layer_spec)
+
     else:
-        # TODO: ConvDecoder
         return Decoder(clean, corr, bn, combinator, encoder_layers,
                        denoising_cost, batch_size, scope, reuse)
 
+
+class ConvDecoder(Decoder):
+
+    def __init__(self, clean, corr, bn, combinator, encoder_layers,
+                 denoising_cost, batch_size, scope, reuse, layer_spec):
+        self.layer_spec = layer_spec
+        super(ConvDecoder, self).__init__(
+            clean, corr, bn, combinator, encoder_layers,
+            denoising_cost, batch_size, scope, reuse)
+
+
+    def create_layer(self, l_):
+        l = l_ - 1
+        ls = self.encoder_layers
+        denoising_cost = self.denoising_cost
+        batch_size = self.batch_size
+        clean = self.clean
+        corr = self.corr
+        bn = self.bn
+        combinator = self.combinator
+        num_layers = self.num_layers
+        scope = self.scope
+        reuse = self.reuse
+        layers = self.layer_spec
+
+
+        type_ = layers[l]['type']
+
+        join, split_lu, labeled, unlabeled = get_batch_ops(batch_size)
+        if VERBOSE:
+            print("Layer {}: {} -> {}, denoising cost: {}".format(
+            l, ls[l+1] if l + 1 < len(ls) else None,
+            ls[l], denoising_cost[l]
+        ))
+
+        z, z_c = clean.unlabeled.z[l], corr.unlabeled.z[l]
+        m, v = clean.unlabeled.m.get(l, 0), \
+               clean.unlabeled.v.get(l, 1 - 1e-10)
+
+
+        if l_ == num_layers:
+            u = unlabeled(corr.logits)
+
+        elif type_ == 'fc':
+            u = layers.fully_connected(
+                self.z_est[l+1],
+                num_outputs=ls[l],
+                activation_fn=None,
+                normalizer_fn=None,
+                weights_initializer=tf.random_normal_initializer(
+                    stddev=1 / math.sqrt(ls[l + 1])),
+                biases_initializer=None,
+                scope=scope + str(l),
+                reuse=reuse
+            )
+
+        elif type_ == 'avg':
+            h = self.z_est[l+1]
+            u = tf.reshape(h, [-1, 1, 1, layers[l]['f_out']])
+            u = tf.tile(u, [1, layers[l]['dim'], layers[l]['dim'], 1])
+
+        elif type_ in ['c', 'cv', 'cf']:
+            import IPython
+            IPython.embed()
+            u = deconv(self.z_est[l+1],
+                       ksize=layers[l]['ksize'],
+                       stride=layers[l]['stride'],
+                       f_in=layers[l]["f_out"],
+                       f_out=layers[l]["f_in"],
+                       name=layers[l]['type'] + str(l),
+                       scope=scope + str(l),
+                       reuse=reuse)
+
+        elif type_ == 'max':
+            u = depool(self.z_est[l+1])
+
+        else:
+            print('Layer type not defined')
+
+        u = bn.batch_normalization(u)
+
+        with tf.variable_scope('cmb' + str(l), reuse=None):
+            self.z_est[l] = combinator(z_c, u, ls[l])
+
+
+        z_est_bn = (self.z_est[l] - m) / v
+
+        # append the cost of this layer to d_cost
+        reduce_axes = list(range(1, len(z_est_bn.get_shape().as_list())))
+
+        d_cost = (tf.reduce_mean(
+            tf.reduce_sum(
+                tf.square(z_est_bn - z),
+                axis=reduce_axes
+            )) / ls[l]) * denoising_cost[l]
+
+        return d_cost
 
 # -----------------------------
 # BATCH NORMALIZATION
@@ -929,6 +1032,8 @@ class Ladder(Model):
             scope=scope, reuse=reuse)
 
     def get_decoder(self):
+        lspec = self.clean.layer_spec if self.params.cnn else None
+
         return decoder(
             clean=self.clean, corr=self.corr, bn=self.bn,
             combinator=gauss_combinator,
@@ -936,7 +1041,8 @@ class Ladder(Model):
             denoising_cost=self.params.rc_weights,
             batch_size=self.params.batch_size,
             scope='dec', reuse=None,
-            decoder_type=self.params.decoder)
+            decoder_type=self.params.decoder,
+            layer_spec=lspec)
 
 # AMLP Ladder
 class AmlpLadder(Ladder):

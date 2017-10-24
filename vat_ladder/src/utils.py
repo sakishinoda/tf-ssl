@@ -330,9 +330,15 @@ def process_cli_params(params):
             params.cnn_init_size = 32
             # params.cnn_fan[0] = 3
             params.input_size = 3
+        elif params.dataset == "svhn":
+            params.cnn_init_size = 32
+            params.input_size = 3
         else:
             params.cnn_init_size = 28
             params.input_size = 1
+
+        assert params.input_size == params.cnn_fan[0]
+        assert params.cnn_init_size == params.cnn_dims[0]
 
     else:
         params.encoder_layers = parse_argstring(params.encoder_layers,
@@ -347,6 +353,7 @@ def process_cli_params(params):
             params.input_size = 784
 
         params.encoder_layers = [params.input_size] + params.encoder_layers
+
     params.rc_weights = enum_dict(
         parse_argstring(params.rc_weights, dtype=float))
 

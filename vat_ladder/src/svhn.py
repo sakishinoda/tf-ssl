@@ -51,10 +51,10 @@ def maybe_download_and_extract(data_dir, downsample=False):
     train_data = loadmat(filepath_train_mat)
     train_x = (-127.5 + train_data['X']) / 255.
     train_x = train_x.transpose((3, 0, 1, 2))
-    if downsample:
-        train_x = get_downsampled_batch(train_x)
-    else:
-        train_x = train_x.reshape([train_x.shape[0], -1])
+    # if downsample:
+    #     train_x = get_downsampled_batch(train_x)
+    # else:
+    #     train_x = train_x.reshape([train_x.shape[0], -1])
     train_y = train_data['y'].flatten().astype(np.int32)
     train_y[train_y == 10] = 0
 
@@ -63,10 +63,10 @@ def maybe_download_and_extract(data_dir, downsample=False):
     test_data = loadmat(filepath_test_mat)
     test_x = (-127.5 + test_data['X']) / 255.  # centering
     test_x = test_x.transpose((3, 0, 1, 2))
-    if downsample:
-        test_x = get_downsampled_batch(test_x)
-    else:
-        test_x = test_x.reshape((test_x.shape[0], -1))
+    # if downsample:
+    #     test_x = get_downsampled_batch(test_x)
+    # else:
+    #     test_x = test_x.reshape((test_x.shape[0], -1))
     test_y = test_data['y'].flatten().astype(np.int32)
     test_y[test_y == 10] = 0
 
@@ -95,8 +95,18 @@ def read_data_sets(train_dir, n_labeled=1000, fake_data=False,
 
     VALIDATION_SIZE = validation_size
 
-    if download_and_extract:
-        maybe_download_and_extract(data_dir=train_dir, downsample=downsample)
+
+    for x in ['train_images.npy',
+              'train_labels.npy',
+              'test_images.npy',
+              'test_labels.npy']:
+        filepath = os.path.join(train_dir, x)
+        if not os.path.exists(filepath):
+            maybe_download_and_extract(data_dir=train_dir, downsample=downsample)
+            break
+        else:
+            print(filepath, "found")
+
 
     train_images, train_labels, test_images, test_labels = load_svhn(
         train_dir)
