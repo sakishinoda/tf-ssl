@@ -360,16 +360,24 @@ class ConvEncoder(Encoder):
 
         for l_out in range(start_layer + 1, self.num_layers+1):
             l_in = l_out-1
+            type_ = layer_spec[l_in]['type']
+
             if VERBOSE:
                 print("Layer {} ({}): {} -> {}".format(
-                l_out, layer_spec[l_in]['type'], layer_spec[l_in]['f_in'],
+                l_out, type_, layer_spec[l_in]['f_in'],
                 layer_spec[l_out-1]['f_out']))
 
             self.labeled.h[l_in], self.unlabeled.h[l_in] = split_lu(h)
 
             # Convolutional layer
-            if layer_spec[l_in]['type'] in ['cv', 'cf', 'c']:
-                pad = 'VALID' if layer_spec[l_in]['type'] == 'cv' else 'FULL'
+            if type_ in ['cv', 'cf', 'c']:
+                if type_ == 'cv':
+                    pad = 'VALID'
+                elif type_ == 'cf':
+                    pad = 'FULL'
+                else:
+                    pad = 'SAME'
+
                 z_pre = conv(h,
                             ksize=layer_spec[l_in]['ksize'],
                             stride=1,
@@ -390,7 +398,7 @@ class ConvEncoder(Encoder):
                     h = tf.nn.relu(z + bn.beta[l_in])
 
             # Max pooling layer
-            elif layer_spec[l_in]['type'] == 'max':
+            elif type_ == 'max':
                 z_pre = max_pool(h,
                              ksize=layer_spec[l_in]['ksize'],
                              stride=layer_spec[l_in]['stride'])
@@ -401,7 +409,7 @@ class ConvEncoder(Encoder):
                 h = z
 
             # Average pooling
-            elif layer_spec[l_in]['type'] == 'avg':
+            elif type_ == 'avg':
                 # Global average pooling
                 z_pre = tf.reduce_mean(h, reduction_indices=[1, 2])
 
@@ -426,7 +434,7 @@ class ConvEncoder(Encoder):
 
 
             # Fully connected layer
-            elif layer_spec[l_in]['type'] == 'fc':
+            elif type_ == 'fc':
                 z_pre = fc(h, layer_spec[l_in]['f_in'],
                        layer_spec[l_in]['f_out'],
                        seed=None, name='fc',
