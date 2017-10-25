@@ -1687,7 +1687,7 @@ def get_spectral_radius(x, logit, forward, num_power_iters=1, xi=1e-6):
 
     def dot(a, b): return tf.reduce_mean(tf.multiply(a, b), axis=1)
 
-    return dot(d, prev_d) / dot(prev_d, prev_d)
+    return abs(dot(d, prev_d) / dot(prev_d, prev_d))
 
 
 def measure_smoothness(g, params):

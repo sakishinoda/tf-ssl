@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "test"
+p.id                =   "lvan"
 p.logdir            =   "train/smooth/"
 p.ckptdir           =   "train/smooth/"
 p.write_to          =   "description"
@@ -11,40 +11,41 @@ p.verbose           =   True
 
 p.dataset	        =	"mnist"
 
-p.test_frequency_in_epochs	=	1
+p.test_frequency_in_epochs	=	5
 p.validation	            =	0
 p.tb                        =   False
 
 p.which_gpu     =   None
 p.seed          =   8340
-p.end_epoch     =   25
+p.end_epoch     =   150
 p.num_labeled   =   50
 p.batch_size    =   50
 p.ul_batch_size =   50
 
 p.initial_learning_rate =   0.002
-p.decay_start           =   0.8
-p.lr_decay_frequency    =   1
+p.decay_start           =   0.67
+p.lr_decay_frequency    =   5
 p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
 p.encoder_layers	=	[1000, 500, 250, 250, 250, 10]
 p.clean_sd          =   0.0
 p.corrupt_sd	    =	0.3
-p.rc_weights        =   [3883, 12.35, 0.0539, 0.0539, 0.0539, 0.0539, 0.0539]
+# p.rc_weights        =   [3883, 12.35, 0.0539, 0.0539, 0.0539, 0.0539, 0.0539]
+p.rc_weights        =   [1504, 16.15, 0.0381, 0.0381, 0.0381, 0.0381, 0.0381]
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True
 
-p.epsilon           =   [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                         0.0, 0.0, 0.0]
+p.epsilon           =   [0.0733, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                         0.0, 0.0, 0.0, 0.0]
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "ladder"  # c, clw, n, nlw, ladder, vat
+p.model                 =   "n"  # c, clw, n, nlw, ladder, vat
 p.decoder               =   "full"  # gamma, full, or None
-p.measure_smoothness    =   False
+p.measure_smoothness    =   True
 p.measure_vat           =   False
 
 p.cnn               =   False
