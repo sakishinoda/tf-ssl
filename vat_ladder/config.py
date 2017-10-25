@@ -42,7 +42,7 @@ p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "supervised"
+p.model                 =   "ladder"
 p.decoder               =   "none"  # gamma, full, or None
 p.measure_smoothness    =   False
 p.measure_vat           =   False
