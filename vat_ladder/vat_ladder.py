@@ -147,8 +147,6 @@ def train(p):
     print("===  Loading Data ===")
     dataset = get_dataset(p)
     labeled_ds = dataset.train.labeled_ds
-    if p.model == "supervised":
-        dataset.train = dataset.train.labeled_ds
 
     # -----------------------------
     # Calculate some parameters
@@ -157,7 +155,7 @@ def train(p):
     if p.validation > 0:
         dataset.test = dataset.validation
     p.iter_per_epoch = (num_examples // p.batch_size) \
-        if p.model == "supervised" else (num_examples // p.ul_batch_size)
+        if p.ul_batch_size == 0 else (num_examples // p.ul_batch_size)
 
     p.num_iter = p.iter_per_epoch * p.end_epoch
 
