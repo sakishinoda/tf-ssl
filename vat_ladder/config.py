@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "gamma"
+p.id                =   "GammaWithNoise"
 p.logdir            =   "train/svhn/"
 p.ckptdir           =   "train/svhn/"
 p.write_to          =   "description"
@@ -17,13 +17,13 @@ p.tb                        =   False
 
 p.which_gpu     =   None
 p.seed          =   8340
-p.end_epoch     =   70
+p.end_epoch     =   25
 p.num_labeled   =   1000
 p.batch_size    =   100
 p.ul_batch_size =   100
 
 p.initial_learning_rate =   0.002
-p.decay_start           =   0.86
+p.decay_start           =   0.8
 p.lr_decay_frequency    =   1
 p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
@@ -31,20 +31,8 @@ p.beta1_during_decay    =   0.9
 p.encoder_layers	=	"1000-500-250-250-250-10"
 p.clean_sd          =   0.3
 p.corrupt_sd	    =	0.3
-p.rc_weights        =   {0: 0.0,
-                         1: 0.0,
-                         2: 0.0,
-                         3: 0.0,
-                         4: 0.0,
-                         5: 0.0,
-                         6: 0.0,
-                         7: 0.0,
-                         8: 0.0,
-                         9: 0.0,
-                         10: 0.0,
-                         11: 0.0,
-                         12: 0.0,
-                         13: 100.0}
+p.rc_weights        =   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                         0.0, 0.0, 0.0, 10.0]
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True

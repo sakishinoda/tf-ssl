@@ -313,9 +313,8 @@ def parse_cli_params(params):
     else:
         params.encoder_layers = parse_argstring(params.encoder_layers,
                                                 dtype=int)
-    params.rc_weights = enum_dict(
-        parse_argstring(params.rc_weights, dtype=float))
-    params.epsilon = enum_dict(parse_argstring(params.epsilon, dtype=float))
+    params.rc_weights = parse_argstring(params.rc_weights, dtype=float)
+    params.epsilon = parse_argstring(params.epsilon, dtype=float)
 
     return params
 
@@ -343,8 +342,6 @@ def process_params(params):
         params.cnn_fan = [params.input_size] + params.cnn_fan
         params.encoder_layers = params.cnn_fan
 
-
-
     else:
         if params.dataset == 'mnist':
             params.input_size = 784
@@ -360,6 +357,8 @@ def process_params(params):
         params.encoder_layers = [params.input_size] + params.encoder_layers
 
     params.num_layers = len(params.encoder_layers) - 1
+    params.rc_weights = enum_dict(params.rc_weights)
+    params.epsilon = enum_dict(params.epsilon)
 
     return params
 
