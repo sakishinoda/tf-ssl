@@ -169,9 +169,9 @@ def train(p):
     aer = tf.constant(100.0) - m['acc']
 
     if p.measure_smoothness:
+        train_losses.append(m['sm'])  # Rvadv
         s = measure_smoothness(g, p)
-        #     print(s.get_shape())
-        train_losses.append(tf.reduce_mean(s))
+        train_losses.append(tf.reduce_mean(s))  # spectral radius
 
     # -----------------------------
     print("===  Starting Session ===")

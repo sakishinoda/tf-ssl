@@ -1313,11 +1313,11 @@ def get_vat_cost(model, train_flag, params):
     def unlabeled(x):
         return x[params.batch_size:] if x is not None else x
 
-    def get_layer_vat_cost(l):
+    def get_layer_vat_cost(l, eps):
 
         adv = Adversary(bn=model.bn,
                         params=params,
-                        layer_eps=params.epsilon[l],
+                        layer_eps=eps,
                         start_layer=l)
 
         # VAT on unlabeled only
@@ -1332,20 +1332,22 @@ def get_vat_cost(model, train_flag, params):
     if params.model == "clw":
         vat_costs = []
         for l in range(model.num_layers):
-            vat_costs.append(get_layer_vat_cost(l))
+            vat_costs.append(get_layer_vat_cost(l, params.epsilon[l]))
         vat_cost = tf.add_n(vat_costs)
 
     elif params.model == "c":
-        vat_cost = get_layer_vat_cost(0)
-
-    elif params.measure_smoothness is True:
-        vat_cost = tf.stop_gradient(get_layer_vat_cost(0))
+        vat_cost = get_layer_vat_cost(0, params.epsilon[0])
 
     else:
-
         vat_cost = tf.zeros([])
 
-    return vat_cost
+    if params.measure_smoothness is True:
+        smoothness = tf.stop_gradient(get_layer_vat_cost(0, 2.0))
+    else:
+        smoothness = tf.zeros([])
+
+
+    return vat_cost, smoothness
 
 
 
@@ -1391,9 +1393,10 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
     if params.decoder == "none":
         model = Model(inputs, outputs, train_flag, params)
         vat_cost = tf.zeros([])
+        smoothness = tf.zeros([])
     else:
         model = Ladder(inputs, outputs, train_flag, params)
-        vat_cost = get_vat_cost(model, train_flag, params)
+        vat_cost, smoothness = get_vat_cost(model, train_flag, params)
 
     loss = model.cost + model.u_cost + vat_cost
     s_cost = model.cost
@@ -1444,6 +1447,7 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
     m['uc'] = u_cost
     m['acc'] = accuracy
     m['vc'] = vat_cost
+    m['sm'] = smoothness
 
     trainable_params = count_trainable_params()
 
