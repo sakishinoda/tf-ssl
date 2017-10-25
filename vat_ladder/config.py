@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "GammaWithNoise"
+p.id                =   "GammaC"
 p.logdir            =   "train/svhn/"
 p.ckptdir           =   "train/svhn/"
 p.write_to          =   "description"
@@ -29,20 +29,21 @@ p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
 p.encoder_layers	=	"1000-500-250-250-250-10"
-p.clean_sd          =   0.3
+p.clean_sd          =   0.0
 p.corrupt_sd	    =	0.3
 p.rc_weights        =   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                         0.0, 0.0, 0.0, 10.0]
+                         0.0, 0.0, 0.0, 0.1]
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True
 
-p.epsilon           =   "8.0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+p.epsilon           =   [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                         0.0, 0.0, 0.0]
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "ladder"  # c, clw, n, nlw, ladder, vat
+p.model                 =   "c"  # c, clw, n, nlw, ladder, vat
 p.decoder               =   "gamma"  # gamma, full, or None
 p.measure_smoothness    =   False
 p.measure_vat           =   False
@@ -74,14 +75,14 @@ else:
 
 num_layers += 1
 if p.model != 'ladder':
-    assert isinstance(p.epsilon, dict)
-    assert len(p.epsilon.keys()) == num_layers, \
-        "{} epsilons vs expected {}".format(len(p.epsilon.keys()), num_layers)
+    assert isinstance(p.epsilon, list)
+    assert len(p.epsilon) == num_layers, \
+        "{} epsilons vs expected {}".format(len(p.epsilon), num_layers)
 
 elif p.model != 'vat':
-    assert isinstance(p.rc_weights, dict)
-    assert len(p.rc_weights.keys()) == num_layers, \
-        "{} weights vs expected {}".format(len(p.rc_weights.keys()),
+    assert isinstance(p.rc_weights, list)
+    assert len(p.rc_weights) == num_layers, \
+        "{} weights vs expected {}".format(len(p.rc_weights),
                                             num_layers)
 
 
