@@ -16,7 +16,7 @@ p.test_frequency_in_epochs	=	1
 p.validation	            =	0
 p.tb                        =   False
 
-p.which_gpu     =   0
+p.which_gpu     =   None
 p.seed          =   8340
 p.end_epoch     =   70
 p.num_labeled   =   1000
@@ -48,7 +48,7 @@ p.measure_smoothness    =   False
 p.measure_vat           =   False
 
 p.cnn               =   True
-p.cnn_layer_types   =   "c-c-c-max-c-c-c-max-c-c-c-avg-fc"
+p.cnn_layer_types   =   "c-c-c-max-c-c-c-max-cv-c-c-avg-fc"
 p.cnn_fan           =   "3-64-64-64-64-128-128-128-128-128-128-128-128-10"
 p.cnn_ksizes        =   "3-3-3-2-3-3-3-2-3-1-1-6-1"
 p.cnn_strides       =   "1-1-1-2-1-1-1-2-1-1-1-1-1"
