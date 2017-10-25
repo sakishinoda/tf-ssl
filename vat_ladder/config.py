@@ -2,7 +2,8 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "ladder"
+p.model             =   "nlw"  # c, clw, n, nlw, ladder, vat
+p.id                =   "lvanlw"
 p.logdir            =   "train/smooth/"
 p.ckptdir           =   "train/smooth/"
 p.write_to          =   "description"
@@ -31,27 +32,31 @@ p.beta1_during_decay    =   0.9
 p.encoder_layers	=	[1000, 500, 250, 250, 250, 10]
 p.clean_sd          =   0.0
 p.corrupt_sd	    =	0.3
-# p.rc_weights        =   [3883, 12.35, 0.0539, 0.0539, 0.0539, 0.0539, 0.0539]
 p.rc_weights        =   [1504, 16.15, 0.0381, 0.0381, 0.0381, 0.0381, 0.0381]
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True
 
 p.epsilon           =   [0.0733, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+if p.model == 'clw':
+    p.epsilon       =   [1., 0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
+elif p.model == 'nlw':
+    p.epsilon       =   [0.0733, 0.3897, 8.372e-2, 8.372e-2, 8.372e-2, 8.372e-2, 8.372e-2]
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "ladder"  # c, clw, n, nlw, ladder, vat
+
 p.decoder               =   "full"  # gamma, full, or None
 p.measure_smoothness    =   True
 p.measure_vat           =   False
 
 p.cnn               =   False
-# p.rc_weights        =   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-#                          0.0, 0.0, 0.0, 0.1]
-# p.epsilon           =   [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-#                          0.0, 0.0, 0.0]
+if p.cnn:
+    p.rc_weights        =   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                             0.0, 0.0, 0.0, 0.1]
+    p.epsilon           =   [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                             0.0, 0.0, 0.0]
 p.keep_prob         =   1.0
 p.cnn_layer_types   =   ['c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'cv', 'c', 'c', 'avg', 'fc']
 p.cnn_fan           =   [64, 64, 64, 64, 128, 128, 128, 128, 128, 128, 128, 128, 10]
