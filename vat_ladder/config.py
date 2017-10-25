@@ -24,7 +24,7 @@ p.batch_size    =   100
 p.ul_batch_size =   0
 
 p.initial_learning_rate =   0.002
-p.decay_start           =   0.5
+p.decay_start           =   0.86
 p.lr_decay_frequency    =   1
 p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
