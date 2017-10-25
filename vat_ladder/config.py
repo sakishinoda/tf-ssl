@@ -2,14 +2,14 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "GammaC"
-p.logdir            =   "train/svhn/"
-p.ckptdir           =   "train/svhn/"
+p.id                =   "test"
+p.logdir            =   "train/smooth/"
+p.ckptdir           =   "train/smooth/"
 p.write_to          =   "description"
 p.do_not_save       =   False
 p.verbose           =   True
 
-p.dataset	        =	"svhn"
+p.dataset	        =	"mnist"
 
 p.test_frequency_in_epochs	=	1
 p.validation	            =	0
@@ -18,9 +18,9 @@ p.tb                        =   False
 p.which_gpu     =   None
 p.seed          =   8340
 p.end_epoch     =   25
-p.num_labeled   =   1000
-p.batch_size    =   100
-p.ul_batch_size =   100
+p.num_labeled   =   50
+p.batch_size    =   50
+p.ul_batch_size =   50
 
 p.initial_learning_rate =   0.002
 p.decay_start           =   0.8
@@ -28,11 +28,10 @@ p.lr_decay_frequency    =   1
 p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
-p.encoder_layers	=	"1000-500-250-250-250-10"
+p.encoder_layers	=	[1000, 500, 250, 250, 250, 10]
 p.clean_sd          =   0.0
 p.corrupt_sd	    =	0.3
-p.rc_weights        =   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                         0.0, 0.0, 0.0, 0.1]
+p.rc_weights        =   [3883, 12.35, 0.0539, 0.0539, 0.0539, 0.0539]
 p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True
@@ -43,12 +42,16 @@ p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "c"  # c, clw, n, nlw, ladder, vat
-p.decoder               =   "gamma"  # gamma, full, or None
+p.model                 =   "ladder"  # c, clw, n, nlw, ladder, vat
+p.decoder               =   "full"  # gamma, full, or None
 p.measure_smoothness    =   False
 p.measure_vat           =   False
 
-p.cnn               =   True
+p.cnn               =   False
+# p.rc_weights        =   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+#                          0.0, 0.0, 0.0, 0.1]
+# p.epsilon           =   [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+#                          0.0, 0.0, 0.0]
 p.keep_prob         =   1.0
 p.cnn_layer_types   =   ['c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'cv', 'c', 'c', 'avg', 'fc']
 p.cnn_fan           =   [64, 64, 64, 64, 128, 128, 128, 128, 128, 128, 128, 128, 10]
