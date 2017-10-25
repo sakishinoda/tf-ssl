@@ -1338,7 +1338,11 @@ def get_vat_cost(model, train_flag, params):
     elif params.model == "c":
         vat_cost = get_layer_vat_cost(0)
 
+    elif params.measure_smoothness is True:
+        vat_cost = tf.stop_gradient(get_layer_vat_cost(0))
+
     else:
+
         vat_cost = tf.zeros([])
 
     return vat_cost
@@ -1706,4 +1710,4 @@ def measure_smoothness(g, params):
             reuse=True).logits
 
     return get_spectral_radius(
-        x=inputs, logit=logits, forward=forward, num_power_iters=5)
+        x=inputs, logit=logits, forward=forward, num_power_iters=1)
