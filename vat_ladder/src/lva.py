@@ -82,6 +82,7 @@ class Encoder(object):
         self.batch_size = params.batch_size
         self.encoder_layers = params.encoder_layers
         self.top_bn = params.top_bn
+        self.keep_prob = params.keep_prob
 
         self.noise_sd = this_encoder_noise
         self.start_layer = start_layer
@@ -272,7 +273,7 @@ class ConvEncoder(Encoder):
         self.layer_spec = self.make_layer_spec(params)
         self.lrelu_a = params.lrelu_a
         self.top_bn = params.top_bn
-        self.keep_prob = params.keep_prob
+
 
         super(ConvEncoder, self).__init__(
             inputs=inputs, bn=bn, is_training=is_training, params=params,
