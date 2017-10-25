@@ -17,8 +17,9 @@ def test(p):
 
     # -----------------------------
     # Set GPU device to use
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+    if p.which_gpu is not None:
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
@@ -130,8 +131,9 @@ def train(p):
 
     # -----------------------------
     # Set GPU device to use
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
+    if p.which_gpu is not None:
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
