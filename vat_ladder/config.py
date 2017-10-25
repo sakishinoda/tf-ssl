@@ -48,16 +48,24 @@ p.measure_smoothness    =   False
 p.measure_vat           =   False
 
 p.cnn               =   True
-p.cnn_layer_types   = \
-    "cv-cf-cf-max-cv-cf-cv-max-cv-cv-cv-avg"
-p.cnn_fan           = \
-    "3-96-96-96-96-192-192-192-192-192-192-10-10"
-p.cnn_ksizes        = \
-    "3-3-3-3-3-3-3-3-3-1-1-0"
-p.cnn_strides       = \
-    "1-1-1-2-1-1-1-2-1-1-1-0"
-p.cnn_dims          = \
-    "32-30-32-34-16-14-16-14-6-4-4-4"
+p.cnn_layer_types   =   "c-c-c-max-c-c-c-max-c-c-c-avg-fc"
+p.cnn_fan           =   "3-64-64-64-64-128-128-128-128-128-128-128-128-10"
+p.cnn_ksizes        =   "3-3-3-2-3-3-3-2-3-1-1-6-1"
+p.cnn_strides       =   "1-1-1-2-1-1-1-2-1-1-1-1-1"
+p.cnn_dims          =   "32-32-32-32-16-16-16-16-8-6-6-6-1-1"
+
+
+# CIFAR10
+# p.cnn_layer_types   = \
+#     "cv-cf-cf-max-cv-cf-cv-max-cv-cv-cv-avg"
+# p.cnn_fan           = \
+#     "3-96-96-96-96-192-192-192-192-192-192-10-10"
+# p.cnn_ksizes        = \
+#     "3-3-3-3-3-3-3-3-3-1-1-0"
+# p.cnn_strides       = \
+#     "1-1-1-2-1-1-1-2-1-1-1-0"
+# p.cnn_dims          = \
+#     "32-30-32-34-16-14-16-14-6-4-4-4"
     # "32-32-32-32-16-16-16-16-8-8-8-1"
 
 
