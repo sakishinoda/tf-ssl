@@ -325,23 +325,23 @@ def process_params(params):
     params.eval_batch_size = params.batch_size  # this should be redundant
 
     if params.cnn:
-        params.encoder_layers = params.cnn_fan
 
         if params.dataset == "mnist":
             params.cnn_init_size = 28
             params.input_size = 1
-
         elif params.dataset == "cifar10":
             params.cnn_init_size = 32
             params.input_size = 3
-
         elif params.dataset == "svhn":
             params.cnn_init_size = 32
             params.input_size = 3
-
         else:
             params.cnn_init_size = 28
             params.input_size = 1
+
+        params.cnn_fan = [params.input_size] + params.cnn_fan
+        params.encoder_layers = params.cnn_fan
+
 
 
     else:
@@ -356,8 +356,9 @@ def process_params(params):
         else:
             params.input_size = 784
 
-    params.num_layers = len(params.encoder_layers)
-    params.encoder_layers = [params.input_size] + params.encoder_layers
+        params.encoder_layers = [params.input_size] + params.encoder_layers
+
+    params.num_layers = len(params.encoder_layers) - 1
 
     return params
 
