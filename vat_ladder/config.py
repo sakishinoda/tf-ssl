@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "lvan"
+p.id                =   "ladder"
 p.logdir            =   "train/smooth/"
 p.ckptdir           =   "train/smooth/"
 p.write_to          =   "description"
@@ -37,13 +37,12 @@ p.static_bn	        =	0.99
 p.lrelu_a	        =	0.1
 p.top_bn            =   True
 
-p.epsilon           =   [0.0733, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                         0.0, 0.0, 0.0, 0.0]
+p.epsilon           =   [0.0733, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
-p.model                 =   "n"  # c, clw, n, nlw, ladder, vat
+p.model                 =   "ladder"  # c, clw, n, nlw, ladder, vat
 p.decoder               =   "full"  # gamma, full, or None
 p.measure_smoothness    =   True
 p.measure_vat           =   False
