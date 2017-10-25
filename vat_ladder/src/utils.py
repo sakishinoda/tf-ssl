@@ -232,8 +232,8 @@ def get_cli_params():
     # Standard deviation of the Gaussian noise to inject at each level
     add('--corrupt_sd', default=0.3, type=float)
 
-    # Standard deviation of the Gaussian noise to inject into clean images
-
+    # Standard deviation of the Gaussian noise to inject in clean encoder
+    add('--clean_sd', default=0.0, type=float)
 
     # Default RC cost corresponds to the gamma network
     add('--rc_weights', default='2000-20-0.2-0.2-0.2-0.2-0.2')
@@ -275,6 +275,7 @@ def get_cli_params():
     add('--cnn', action='store_true')
 
     # arguments for the cnn encoder/decoder
+    add('--keep_prob', default=1.0, type=float)  # add dropout at maxpools
     add('--cnn_layer_types', default='c-c-c-max-c-c-c-max-c-c-c-avg-fc')
     add('--cnn_fan', default='3-96-96-96-96-192-192-192-192-192-192-192-192-10')
     add('--cnn_ksizes', default='3-3-3-3-3-3-3-3-3-1-1-0-0')

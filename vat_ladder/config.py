@@ -29,7 +29,7 @@ p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
 p.encoder_layers	=	"1000-500-250-250-250-10"
-p.input_noise_sd    =   0.3
+p.clean_sd          =   0.0
 p.corrupt_sd	    =	0.3
 p.rc_weights        =   {0: 0.0,
                          1: 0.0,
@@ -60,6 +60,7 @@ p.measure_smoothness    =   False
 p.measure_vat           =   False
 
 p.cnn               =   True
+p.keep_prob         =   0.5
 p.cnn_layer_types   =   ['c', 'c', 'c', 'max', 'c', 'c', 'c', 'max', 'cv', 'c', 'c', 'avg', 'fc']
 p.cnn_fan           =   [64, 64, 64, 64, 128, 128, 128, 128, 128, 128, 128, 128, 10]
 p.cnn_ksizes        =   [3, 3, 3, 2, 3, 3, 3, 2, 3, 1, 1, 6, 1]

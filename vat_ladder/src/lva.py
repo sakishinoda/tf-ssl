@@ -272,6 +272,7 @@ class ConvEncoder(Encoder):
         self.layer_spec = self.make_layer_spec(params)
         self.lrelu_a = params.lrelu_a
         self.top_bn = params.top_bn
+        self.keep_prob = params.keep_prob
 
         super(ConvEncoder, self).__init__(
             inputs=inputs, bn=bn, is_training=is_training, params=params,
@@ -393,6 +394,8 @@ class ConvEncoder(Encoder):
                 z_pre = max_pool(h,
                              ksize=layer_spec[l_in]['ksize'],
                              stride=layer_spec[l_in]['stride'])
+                if self.keep_prob < 1.0:
+                    z_pre = tf.nn.dropout(z_pre, keep_prob=self.keep_prob)
                 z, m, v = split_bn(
                     z_pre, is_training=is_training, l_out=l_out)
                 h = z
@@ -971,7 +974,7 @@ class Model(object):
     def get_encoder(self):
         return encoder(
             inputs=self.inputs, bn=self.bn, is_training=self.train_flag,
-            params=self.params, this_encoder_noise=self.params.corrupt_sd,
+            params=self.params, this_encoder_noise=self.params.clean_sd,
             start_layer=0, update_batch_stats=True,
             scope='enc', reuse=None)
 
