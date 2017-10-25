@@ -2,7 +2,7 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.id                =   "baseline"
+p.id                =   "gamma"
 p.logdir            =   "train/svhn/"
 p.ckptdir           =   "train/svhn/"
 p.write_to          =   "description"
@@ -21,7 +21,7 @@ p.seed          =   8340
 p.end_epoch     =   70
 p.num_labeled   =   1000
 p.batch_size    =   100
-p.ul_batch_size =   0
+p.ul_batch_size =   100
 
 p.initial_learning_rate =   0.002
 p.decay_start           =   0.86
@@ -43,7 +43,7 @@ p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
 p.model                 =   "ladder"  # c, clw, n, nlw, ladder, vat
-p.decoder               =   "none"  # gamma, full, or None
+p.decoder               =   "gamma"  # gamma, full, or None
 p.measure_smoothness    =   False
 p.measure_vat           =   False
 
