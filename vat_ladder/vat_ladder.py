@@ -3,7 +3,7 @@ import tensorflow as tf
 import os
 import time
 from tqdm import tqdm
-from src.utils import get_cli_params, process_cli_params, \
+from src.utils import get_cli_params, process_params, \
     order_param_settings
 from src.lva import build_graph, measure_smoothness, VERBOSE
 from src.train import evaluate_metric_list, update_decays, evaluate_metric
@@ -13,7 +13,7 @@ import numpy as np
 
 
 def test(p):
-    p = process_cli_params(p)
+    p = process_params(p)
 
     # -----------------------------
     # Set GPU device to use
@@ -125,7 +125,7 @@ def get_dataset(p):
 
 def train(p):
 
-    p = process_cli_params(p)
+    p = process_params(p)
     global VERBOSE
     VERBOSE = p.verbose
 

@@ -2,7 +2,7 @@ from cleverhans.model import Model as CleverHansModel
 from cleverhans.utils_tf import model_eval
 from cleverhans.attacks import FastGradientMethod
 from src.lva import build_graph_from_inputs, build_graph
-from src.utils import get_cli_params, process_cli_params, parse_argstring
+from src.utils import get_cli_params, process_params, parse_argstring
 from src.mnist import read_data_sets
 import tensorflow as tf
 import pickle
@@ -142,7 +142,7 @@ class attrdict(dict):
 def test_adversarial():
 
     results = {}
-    p = process_cli_params(get_cli_params())
+    p = process_params(get_cli_params())
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(p.which_gpu)

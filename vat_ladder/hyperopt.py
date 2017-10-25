@@ -4,7 +4,7 @@ from src.lva import build_graph
 from src.train import evaluate_metric
 from src.mnist import read_data_sets
 import numpy as np
-from src.utils import process_cli_params, get_cli_params, parse_argstring
+from src.utils import process_params, get_cli_params, parse_argstring
 from skopt import gp_minimize, dump
 from tqdm import tqdm
 import argparse
@@ -12,7 +12,7 @@ import argparse
 class Hyperopt(object):
     def __init__(self):
         # Parse command line and default parameters
-        self.params = process_cli_params(get_cli_params())
+        self.params = process_params(get_cli_params())
 
         # for k in sorted(self.params_dict.keys()):
         #     print(k, self.params_dict[k])

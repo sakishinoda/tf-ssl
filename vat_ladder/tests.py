@@ -8,14 +8,14 @@ import argparse
 
 import tensorflow as tf
 import os
-from src.utils import get_cli_params, process_cli_params
+from src.utils import get_cli_params, process_params
 import numpy as np
 
 
 
 
 def test_data_splitting():
-    p = process_cli_params(get_cli_params())
+    p = process_params(get_cli_params())
     global VERBOSE
     VERBOSE = p.verbose
 
@@ -156,7 +156,7 @@ def test_nargs():
     print(bn_decay)
 
 def test_hessian_ops():
-    p = process_cli_params(get_cli_params())
+    p = process_params(get_cli_params())
     mnist = input_data.read_data_sets("MNIST_data",
                                       n_labeled=p.num_labeled,
                                       validation_size=p.validation,

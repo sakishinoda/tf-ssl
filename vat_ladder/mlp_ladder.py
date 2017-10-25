@@ -3,7 +3,7 @@ import tensorflow as tf
 import os
 import time
 from tqdm import tqdm
-from src.utils import get_cli_params, process_cli_params, \
+from src.utils import get_cli_params, process_params, \
     order_param_settings, count_trainable_params, preprocess
 from src.lva import Ladder
 from src import mnist
@@ -13,7 +13,7 @@ from src.train import update_decays
 
 def main():
 
-    params = process_cli_params(get_cli_params())
+    params = process_params(get_cli_params())
 
     # -----------------------------
     # Set GPU device to use
