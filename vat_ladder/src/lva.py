@@ -1392,11 +1392,10 @@ def build_ladder_graph_from_inputs(inputs, outputs, train_flag, params,
 
     if params.decoder == "none":
         model = Model(inputs, outputs, train_flag, params)
-        vat_cost = tf.zeros([])
-        smoothness = tf.zeros([])
     else:
         model = Ladder(inputs, outputs, train_flag, params)
-        vat_cost, smoothness = get_vat_cost(model, train_flag, params)
+
+    vat_cost, smoothness = get_vat_cost(model, train_flag, params)
 
     loss = model.cost + model.u_cost + vat_cost
     s_cost = model.cost
