@@ -37,7 +37,10 @@ else:
 p_dict = vars(p)
 for k, v in vars(args).items():
     if v is not None:
-        p_dict[k] = int(v)
+        try:
+            p_dict[k] = int(v)
+        except ValueError:
+            p_dict[k] = v
 
 if args.test is not False:
     p.test = args.test
