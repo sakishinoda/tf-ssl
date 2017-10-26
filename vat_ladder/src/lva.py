@@ -1321,14 +1321,14 @@ def get_vat_cost(model, train_flag, params):
                         start_layer=l)
 
         try:
-            logits = model.corr.logits
+            enc = model.corr
         except AttributeError:
-            logits = model.clean.logits
+            enc = model.clean
         # VAT on unlabeled only
         return (
             adv.virtual_adversarial_loss(
-                x=model.corr.unlabeled.z[l],
-                logit=unlabeled(logits),  # should this be clean?
+                x=enc.unlabeled.z[l],
+                logit=unlabeled(enc.logits),  # should this be clean?
                 is_training=train_flag)
         )
 
