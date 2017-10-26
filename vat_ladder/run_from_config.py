@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--cfg', default=None)
 parser.add_argument('--id', default=None)
 parser.add_argument('--test', default=False, const=True, nargs='?')
+parser.add_argument('--seed', default=None, type=int)
 
 _, unknown = parser.parse_known_args()
 for arg in unknown:
@@ -32,10 +33,11 @@ else:
         json_dict = json.load(f)
     p = dict2namespace(json_dict)
 
+
 p_dict = vars(p)
 for k, v in vars(args).items():
     if v is not None:
-        p_dict[k] = v
+        p_dict[k] = v if k is not "seed" else int(v)
 
 if args.test is not False:
     p.test = args.test

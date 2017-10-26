@@ -12,7 +12,7 @@ p.verbose           =   True
 
 p.dataset	        =	"mnist"
 
-p.test_frequency_in_epochs	=	5
+p.test_frequency_in_epochs	=	1
 p.validation	            =	0
 p.tb                        =   False
 
@@ -25,7 +25,7 @@ p.ul_batch_size =   50
 
 p.initial_learning_rate =   0.002
 p.decay_start           =   0.67
-p.lr_decay_frequency    =   5
+p.lr_decay_frequency    =   1
 p.beta1                 =   0.9
 p.beta1_during_decay    =   0.9
 
