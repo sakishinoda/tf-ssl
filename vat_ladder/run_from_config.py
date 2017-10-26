@@ -37,7 +37,7 @@ else:
 p_dict = vars(p)
 for k, v in vars(args).items():
     if v is not None:
-        p_dict[k] = v if k is not "seed" else int(v)
+        p_dict[k] = int(v)
 
 if args.test is not False:
     p.test = args.test
