@@ -1673,6 +1673,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
     m['uc'] = tf.zeros([])
     m['acc'] = acc_op
     m['vc'] = vat_cost
+    m['sm'] = vat_cost
 
     trainable_params = count_trainable_params()
 
