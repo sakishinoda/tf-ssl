@@ -1654,26 +1654,27 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
         acc_op = accuracy(inputs, outputs) * tf.constant(100.0)
 
     saver = tf.train.Saver()
-
-    class Container(object):
-        def __init__(self):
-            pass
-
-    fake_ladder = Container()
-    fake_ladder.clean = Container()
-    fake_ladder.clean.logits = logits
+    #
+    # class Container(object):
+    #     def __init__(self):
+    #         pass
+    #
+    # fake_ladder = Container()
+    # fake_ladder.clean = Container()
+    # fake_ladder.clean.logits = logits
 
     g = dict()
     g['images'] = inputs_placeholder
     g['labels'] = outputs
     g['train_flag'] = train_flag
-    g['ladder'] = fake_ladder
+    g['ladder'] = None
     g['saver'] = saver
     g['train_step'] = train_op
     g['lr'] = lr
     g['beta1'] = beta1
     g['logits'] = logits
     g['softmax'] = tf.nn.softmax(logits)
+    g['forward'] = forward
 
     m = dict()
     m['loss'] = loss
@@ -1710,20 +1711,25 @@ def measure_smoothness(g, params):
     # Measure smoothness using clean logits
     if VERBOSE:
         print("=== Measuring smoothness ===")
-    inputs = g['images']
-    logits = g['ladder'].clean.logits
 
-    def forward(x):
-        return encoder(
-            inputs=x,
-            bn=g['ladder'].bn,
-            is_training=g['train_flag'],
-            params=params,
-            this_encoder_noise=0.0,
-            start_layer=0,
-            update_batch_stats=False,
-            scope='enc',
-            reuse=True).logits
+    inputs = g['images']
+    logits = g['logits']
+
+    if params.model == "vat":
+        forward = g['forward']
+
+    else:
+        def forward(x):
+            return encoder(
+                inputs=x,
+                bn=g['ladder'].bn,
+                is_training=g['train_flag'],
+                params=params,
+                this_encoder_noise=0.0,
+                start_layer=0,
+                update_batch_stats=False,
+                scope='enc',
+                reuse=True).logits
 
     return get_spectral_radius(
         x=inputs, logit=logits, forward=forward, num_power_iters=1)
