@@ -1655,11 +1655,19 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
 
     saver = tf.train.Saver()
 
+    class Container(object):
+        def __init__(self):
+            pass
+
+    fake_ladder = Container()
+    fake_ladder.clean = Container()
+    fake_ladder.clean.logits = logits
+
     g = dict()
     g['images'] = inputs_placeholder
     g['labels'] = outputs
     g['train_flag'] = train_flag
-    g['ladder'] = None
+    g['ladder'] = fake_ladder
     g['saver'] = saver
     g['train_step'] = train_op
     g['lr'] = lr
