@@ -1712,24 +1712,23 @@ def measure_smoothness(g, params):
     if VERBOSE:
         print("=== Measuring smoothness ===")
 
+    if params.model == 'vat':
+        return tf.zeros([])
+
     inputs = g['images']
     logits = g['logits']
 
-    if params.model == "vat":
-        forward = g['forward']
-
-    else:
-        def forward(x):
-            return encoder(
-                inputs=x,
-                bn=g['ladder'].bn,
-                is_training=g['train_flag'],
-                params=params,
-                this_encoder_noise=0.0,
-                start_layer=0,
-                update_batch_stats=False,
-                scope='enc',
-                reuse=True).logits
+    def forward(x):
+        return encoder(
+            inputs=x,
+            bn=g['ladder'].bn,
+            is_training=g['train_flag'],
+            params=params,
+            this_encoder_noise=0.0,
+            start_layer=0,
+            update_batch_stats=False,
+            scope='enc',
+            reuse=True).logits
 
     return get_spectral_radius(
         x=inputs, logit=logits, forward=forward, num_power_iters=1)
