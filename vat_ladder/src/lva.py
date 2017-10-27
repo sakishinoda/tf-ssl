@@ -1611,6 +1611,8 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
         loss = ce_loss(logit, y)
         return loss
 
+
+
     def build_training_graph():
         logit = forward(inputs)
 
@@ -1652,6 +1654,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
         train_op, loss, nll_loss, vat_cost, logits = build_training_graph()
         scope.reuse_variables()
         acc_op = accuracy(inputs, outputs) * tf.constant(100.0)
+        all_logits = forward(all_inputs)
 
     saver = tf.train.Saver()
     #
@@ -1674,7 +1677,11 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
     g['beta1'] = beta1
     g['logits'] = logits
     g['softmax'] = tf.nn.softmax(logits)
+
+    # VAT specific (for measuring smoothness using spectral radius )
     g['forward'] = forward
+    g['all_logits'] = all_logits
+
 
     m = dict()
     m['loss'] = loss
@@ -1712,23 +1719,32 @@ def measure_smoothness(g, params):
     if VERBOSE:
         print("=== Measuring smoothness ===")
 
-    if params.model == 'vat':
-        return tf.zeros([])
 
     inputs = g['images']
-    logits = g['logits']
 
-    def forward(x):
-        return encoder(
-            inputs=x,
-            bn=g['ladder'].bn,
-            is_training=g['train_flag'],
-            params=params,
-            this_encoder_noise=0.0,
-            start_layer=0,
-            update_batch_stats=False,
-            scope='enc',
-            reuse=True).logits
+    if params.model == 'vat':
+        logits = g['all_logits']
+
+        def forward(x):
+            with tf.variable_scope('MLP', reuse=True) as scope:
+                return g['forward'](x, is_training=False, update_batch_stats=False)
+
+
+    else:
+
+        logits = g['logits']
+
+        def forward(x):
+            return encoder(
+                inputs=x,
+                bn=g['ladder'].bn,
+                is_training=g['train_flag'],
+                params=params,
+                this_encoder_noise=0.0,
+                start_layer=0,
+                update_batch_stats=False,
+                scope='enc',
+                reuse=True).logits
 
     return get_spectral_radius(
         x=inputs, logit=logits, forward=forward, num_power_iters=1)
