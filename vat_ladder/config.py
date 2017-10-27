@@ -2,8 +2,8 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.model             =   "ladder"  # c, clw, n, nlw, ladder, vat
-p.id                =   "gamma"
+p.model             =   "vat"  # c, clw, n, nlw, ladder, vat
+p.id                =   "vat"
 p.logdir            =   "train/smooth/"
 p.ckptdir           =   "train/smooth/"
 p.write_to          =   "description"
@@ -42,12 +42,14 @@ if p.model == 'clw':
     p.epsilon       =   [1., 0.1, 0.001, 0.001, 0.001, 0.001, 0.001]
 elif p.model == 'nlw':
     p.epsilon       =   [0.0733, 0.3897, 8.372e-2, 8.372e-2, 8.372e-2, 8.372e-2, 8.372e-2]
+elif p.model == 'vat':
+    p.epsilon       =   [5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 p.num_power_iters	=	3
 p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
 
-p.decoder               =   "gamma"  # gamma, full, or None
+p.decoder               =   "none"  # gamma, full, or None
 p.measure_smoothness    =   True
 p.measure_vat           =   False
 
