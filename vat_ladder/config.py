@@ -2,8 +2,8 @@ from argparse import Namespace
 
 p = Namespace()
 
-p.model             =   "nlw"  # c, clw, n, nlw, ladder, vat
-p.id                =   "lvanlw"
+p.model             =   "ladder"  # c, clw, n, nlw, ladder, vat
+p.id                =   "gamma"
 p.logdir            =   "train/smooth/"
 p.ckptdir           =   "train/smooth/"
 p.write_to          =   "description"
@@ -21,7 +21,7 @@ p.seed          =   8340
 p.end_epoch     =   150
 p.num_labeled   =   50
 p.batch_size    =   50
-p.ul_batch_size =   50
+p.ul_batch_size =   150
 
 p.initial_learning_rate =   0.002
 p.decay_start           =   0.67
@@ -47,7 +47,7 @@ p.xi	            =	1e-6
 p.vadv_sd	        =	0.5
 
 
-p.decoder               =   "full"  # gamma, full, or None
+p.decoder               =   "gamma"  # gamma, full, or None
 p.measure_smoothness    =   True
 p.measure_vat           =   False
 
