@@ -1575,7 +1575,10 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
                                           keep_dims=True))
         return d
 
-    def generate_virtual_adversarial_perturbation(x, logit, is_training=True):
+    def generate_virtual_adversarial_perturbation(x, logit, is_training=True,
+                                                  epsilon=None):
+        if epsilon is None:
+            epsilon = params.epsilon[0]
         d = tf.random_normal(shape=tf.shape(x))
 
         for _ in range(params.num_power_iters):
@@ -1587,11 +1590,12 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
             grad = tf.gradients(dist, [d], aggregation_method=2)[0]
             d = tf.stop_gradient(grad)
 
-        return params.epsilon[0] * get_normalized_vector(d)
+        return epsilon* get_normalized_vector(d)
 
-    def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss"):
-        r_vadv = generate_virtual_adversarial_perturbation(x, logit,
-                                                           is_training=is_training)
+    def virtual_adversarial_loss(x, logit, is_training=True, name="vat_loss",
+                                 epsilon=None):
+        r_vadv = generate_virtual_adversarial_perturbation(
+            x, logit, is_training=is_training, epsilon=epsilon)
         logit = tf.stop_gradient(logit)
         logit_p = logit
         logit_m = forward(x + r_vadv, update_batch_stats=False,
@@ -1655,6 +1659,8 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
         scope.reuse_variables()
         acc_op = accuracy(inputs, outputs) * tf.constant(100.0)
         all_logits = forward(all_inputs)
+        all_vat_cost = virtual_adversarial_loss(all_inputs, all_logits,
+                                                epsilon=2.0)
 
     saver = tf.train.Saver()
     #
@@ -1689,7 +1695,7 @@ def build_vat_graph_from_inputs(inputs_placeholder, outputs, train_flag,
     m['uc'] = tf.zeros([])
     m['acc'] = acc_op
     m['vc'] = vat_cost
-    m['sm'] = vat_cost
+    m['sm'] = all_vat_cost
 
     trainable_params = count_trainable_params()
 
